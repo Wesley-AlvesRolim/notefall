@@ -2,7 +2,7 @@ import { audioBufferToWav } from 'smplr'
 import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
 import { AudioRenderAborted } from './errors'
-import { renderSongAudio, type AudioRenderProgress } from './renderAudio'
+import { renderSongAudio, type AudioRenderProgress, type UserAudioTrack } from './renderAudio'
 import { defaultExportFileName, triggerDownload } from './download'
 
 /**
@@ -38,13 +38,7 @@ export async function exportSongToWav(
     fileName?: string
     onProgress?: (p: AudioRenderProgress) => void
     signal?: AbortSignal
-    userAudio?: {
-      buffer: AudioBuffer
-      offsetSec: number
-      volume: number
-      trimStartSec: number
-      trimEndSec: number | null
-    } | null
+    userAudio?: UserAudioTrack | null
   },
 ): Promise<AudioExportResult> {
   try {

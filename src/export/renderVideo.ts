@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
 import type { ParsedSong } from '../midi/types'
-import { buildSpeedMap, midiToTimeline } from '../midi/speedMap'
 import type { Settings } from '../store'
 import { VirtualClock, resetActiveClock, setActiveClock } from '../audio/clock'
 import { audioEngine } from '../audio/engine'
@@ -9,13 +8,8 @@ import { getR3FState } from '../scene/exportBridge'
 import { AudioRenderAborted, VideoRenderAborted } from './errors'
 import { renderSongAudio } from './renderAudio'
 import { MAX_ENCODE_QUEUE, raceWithAbort, yieldToEventLoop } from './async'
-
-/**
- * Match the audio render's tail. Falling notes already past the hit
- * line still rise (history mode), landing flashes finish, and the
- * reverb wash fades.
- */
-const TAIL_SECONDS = 5
+import { computeExportTimeline } from './timeline'
+import type { UserAudioTrack } from './synth/types'
 
 /** AAC-LC codec string for the AudioEncoder configure() call. */
 const AAC_CODEC_STRING = 'mp4a.40.2'
@@ -69,13 +63,7 @@ export type VideoRenderOptions = {
    * pass doesn't see the audio buffer directly. Ignored when
    * `audio === null` (no audio track wanted).
    */
-  userAudio?: {
-    buffer: AudioBuffer
-    offsetSec: number
-    volume: number
-    trimStartSec: number
-    trimEndSec: number | null
-  } | null
+  userAudio?: UserAudioTrack | null
   signal?: AbortSignal
   onProgress?: (p: VideoRenderProgress) => void
 }
@@ -280,26 +268,11 @@ export async function renderSongVideo(
       avc: { format: 'avc' },
     })
 
-    // Effective end-of-timeline mirrors the audio render: when the
-    // user-provided accompaniment extends past the MIDI we render
-    // additional frames so the final visual still matches the audio
-    // tail (otherwise the video would freeze on its last MIDI frame
-    // while the audio kept playing).
-    const audioTrimEnd = userAudio
-      ? Math.min(userAudio.buffer.duration, userAudio.trimEndSec ?? userAudio.buffer.duration)
-      : 0
-    const audioEnd = userAudio ? userAudio.offsetSec + audioTrimEnd : 0
-    const midiTrimEnd = settings.midiTrimEndSec ?? song.duration
-    // Speed automation can stretch the MIDI past its natural length;
-    // walk the map to get the actual timeline end.
-    const speedMap = buildSpeedMap(settings.midiSpeedAutomation)
-    const midiTrimEndTimeline = midiToTimeline(speedMap, midiTrimEnd)
-    // Mirror renderAudio: MIDI is shifted by `settings.midiOffsetSec`
-    // on the export timeline so the rendered video extends past the
-    // delayed song end. Trim ends shrink the rendered window so we
-    // don't burn frames on a silent tail.
-    const totalDuration =
-      Math.max(midiTrimEndTimeline + settings.midiOffsetSec, audioEnd) + TAIL_SECONDS
+    // Same window as the audio render (MIDI offset / trim / speed
+    // automation / accompaniment tail + TAIL_SECONDS) so the final
+    // visual matches the audio tail instead of freezing on the last
+    // MIDI frame while the audio keeps playing.
+    const { totalDuration } = computeExportTimeline(song, settings, userAudio ?? null)
     const totalFrames = Math.max(1, Math.ceil(totalDuration * fps))
     const usPerFrame = Math.round(1_000_000 / fps)
     const keyframeInterval = Math.max(1, Math.round(KEYFRAME_INTERVAL_SECONDS * fps))

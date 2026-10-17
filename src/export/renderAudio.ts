@@ -1,11 +1,15 @@
 import { Scheduler } from 'smplr'
 import type { ParsedSong } from '../midi/types'
-import { buildSpeedMap, midiToTimeline } from '../midi/speedMap'
+import { midiToTimeline } from '../midi/speedMap'
 import type { Settings } from '../store'
 import { createPiano } from '../audio/sampler'
 import { evaluateVelocityCurve } from '../audio/velocityCurve'
 import { raceWithAbort } from './async'
 import { AudioRenderAborted } from './errors'
+import { computeExportTimeline } from './timeline'
+import type { AudioRenderProgress, UserAudioTrack } from './synth/types'
+
+export type { AudioRenderProgress, UserAudioTrack }
 
 /**
  * Offline render of `song` with the given `settings` into a stereo
@@ -30,15 +34,6 @@ import { AudioRenderAborted } from './errors'
 // for-sample with what the user heard during preview.
 const LOOKAHEAD = 0.015
 const STOP_BUFFER = 0.02
-// Same SONG_TAIL_SECONDS as the engine — the visual layer's reverb wash
-// + landing flashes need this window to play out, and offline audio
-// must match so the wash isn't trimmed mid-decay.
-const TAIL_SECONDS = 5
-
-export type AudioRenderProgress =
-  | { phase: 'loading'; loaded: number; total: number }
-  | { phase: 'rendering'; progress: number }
-  | { phase: 'done' }
 
 /**
  * Convert pedal CC events into closed [start,end] sustain ranges. A note
@@ -91,37 +86,12 @@ export async function renderSongAudio(
   sampleRate: number,
   onProgress?: (p: AudioRenderProgress) => void,
   signal?: AbortSignal,
-  userAudio?: {
-    buffer: AudioBuffer
-    offsetSec: number
-    volume: number
-    trimStartSec: number
-    trimEndSec: number | null
-  } | null,
+  userAudio?: UserAudioTrack | null,
 ): Promise<AudioBuffer> {
   if (signal?.aborted) throw new AudioRenderAborted()
-  // Effective end is the later of the MIDI end and (when present) the
-  // user-provided accompaniment's tail, so the render captures the
-  // whole sync window even when the audio extends past the song. The
-  // MIDI is shifted by `midiOffsetSec` so its end on the export
-  // timeline is `song.duration + midiOffsetSec`. Trim ends collapse
-  // the timeline to the trimmed window so we don't render silent
-  // padding.
-  const midiOffset = settings.midiOffsetSec
-  const midiTrimStart = settings.midiTrimStartSec
-  const midiTrimEnd = settings.midiTrimEndSec ?? song.duration
-  // Speed automation maps MIDI-time to a stretched / compressed
-  // timeline. Apply the same mapping the realtime engine uses so an
-  // export comes out sample-identical to live playback.
-  const speedMap = buildSpeedMap(settings.midiSpeedAutomation)
-  const midiTrimEndTimeline = midiToTimeline(speedMap, midiTrimEnd)
-  const audioTrimStart = userAudio ? Math.max(0, userAudio.trimStartSec) : 0
-  const audioTrimEnd = userAudio
-    ? Math.min(userAudio.buffer.duration, userAudio.trimEndSec ?? userAudio.buffer.duration)
-    : 0
-  const audioEnd = userAudio ? userAudio.offsetSec + audioTrimEnd : 0
-  const songEnd = Math.max(midiTrimEndTimeline + midiOffset, audioEnd)
-  const totalDuration = songEnd + TAIL_SECONDS
+  const timeline = computeExportTimeline(song, settings, userAudio ?? null)
+  const { speedMap, midiOffset, midiTrimStart, midiTrimEnd, audioTrimStart, audioTrimEnd, totalDuration } =
+    timeline
   const length = Math.max(1, Math.ceil(totalDuration * sampleRate))
 
   const ctx = new OfflineAudioContext({
