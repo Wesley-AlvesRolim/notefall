@@ -10,7 +10,7 @@ Browser-based piano visualizer. Notes fall onto an 88-key keyboard while a MIDI 
 - `@tonejs/midi` for parse/serialize; `tone` only for AudioContext lifecycle
 - `react-aria-components` + Tailwind for UI; `zustand` for state
 - IndexedDB for recordings; Web MIDI API for hardware input
-- `mp4-muxer` + WebCodecs (`VideoEncoder` / `AudioEncoder`) for offline MP4 export
+- `mp4-muxer` / `webm-muxer` + WebCodecs (`VideoEncoder` / `AudioEncoder`) for offline MP4 / WebM export
 
 ## Layout
 
@@ -28,8 +28,12 @@ src/
 ├ scene/         Canvas + EditTools (paused) / PlayToggleArea (playing) +
 │                exportBridge (R3F state getter for the offline video pass)
 ├ export/        renderAudio (OfflineAudioContext → AudioBuffer / WAV),
-│                renderVideo (frame-stepped R3F → AVC + AAC → mp4-muxer),
-│                exportAudio / exportVideo (download wrappers)
+│                renderVideo (frame-stepped R3F → encoders → muxer),
+│                exportAudio / exportVideo (download wrappers),
+│                timeline (shared render window), async / errors / download helpers
+│  ├ synth/      offline piano: load + settings, pedal ranges, note / accompaniment scheduling
+│  └ codec/      VIDEO_CODECS presets, encoder config + probe, audio encode loop,
+│                muxer factory (MP4 / WebM), preflight
 └ ui/            Layout, Toolbar, Inspector, Viewport, SeekBar, ConfirmModal,
                  ExportSettingsDialog, ExportProgressModal
 ```
@@ -220,7 +224,7 @@ npm run typecheck
 
 ## Export (`src/export/`)
 
-Offline render of the loaded song to either a WAV (audio only), silent MP4 (video only), or A/V MP4. Triggered from File → Export… → settings dialog (`ExportSettingsDialog`); progress + cancel surfaced via `ExportProgressModal` with wall-clock-derived ETA.
+Offline render of the loaded song to either a WAV (audio only), a silent video (video only), or an A/V video. Video is MP4 (H.264 + AAC) or WebM (VP9 / AV1 + Opus), picked per export. Triggered from File → Export… → settings dialog (`ExportSettingsDialog`); progress + cancel surfaced via `ExportProgressModal` with wall-clock-derived ETA.
 
 ### `audio/clock.ts` — pluggable time source
 
@@ -228,11 +232,17 @@ Module-level `Clock` with `setActiveClock` / `resetActiveClock` / `now()`. Defau
 
 Recorder + MIDI input intentionally still call `performance.now()` directly — they only run during live performance, never under a virtualised clock.
 
-### Audio render (`renderAudio.ts`)
+### Shared helpers
 
-Builds a fresh `OfflineAudioContext` at the chosen sample rate, brings up `createPiano(ctx)` with the **infinite-lookahead Scheduler**, walks the song's notes + pedal events to schedule note-on / note-off on the AudioContext clock (with the same lookahead / stop-buffer / pedal-sustain semantics as the realtime tick), and `await ctx.startRendering()`. Returns an `AudioBuffer`.
+- **`timeline.ts`** — `computeExportTimeline(song, settings, userAudio)` is the single source of the rendered window (MIDI offset, trim, speed automation, accompaniment tail, `TAIL_SECONDS = 5`). Audio and video both call it, so the two tracks always span the same length. Change the window here, never inline in a renderer.
+- **`async.ts`** — `raceWithAbort(p, signal, onAbort)` takes an error factory so each pipeline keeps its own abort type (`AudioRenderAborted` / `VideoRenderAborted` in `errors.ts`); also `yieldToEventLoop` and `MAX_ENCODE_QUEUE`.
+- **`download.ts`** — `triggerDownload` + `defaultExportFileName(songName, ext)`.
 
-Pedal sustain becomes declarative offline: `buildPedalRanges(events)` collapses the song's pedal CC into `[downStart, downEnd]` ranges, then any note whose natural off-time falls inside a range is held until that range's end (mirrors the realtime engine's `pedalHeld` deferred-release behaviour).
+### Audio render (`renderAudio.ts` + `synth/`)
+
+`renderAudio.ts` is orchestration only. Builds a fresh `OfflineAudioContext` at the chosen sample rate, brings up the piano via `synth/piano.ts` (`loadOfflinePiano`: `createPiano(ctx)` with the **infinite-lookahead Scheduler**, then applies settings), schedules via `synth/schedule.ts` (`scheduleSongNotes` with the same lookahead / stop-buffer / pedal-sustain semantics as the realtime tick; `scheduleUserAudio` for the accompaniment), and `await ctx.startRendering()`. Returns an `AudioBuffer`. Shared constants (`LOOKAHEAD`, `STOP_BUFFER`, `DEFAULT_SAMPLE_RATE`) live in `synth/consts.ts`.
+
+Pedal sustain becomes declarative offline: `buildPedalRanges(events)` (`synth/pedal.ts`) collapses the song's pedal CC into `[downStart, downEnd]` ranges, then any note whose natural off-time falls inside a range is held until that range's end (mirrors the realtime engine's `pedalHeld` deferred-release behaviour).
 
 `AbortSignal` plumbing: `raceWithAbort` wraps both the sample fetch (`await piano.load`) and `ctx.startRendering()` so Cancel is responsive even mid-load. The underlying work continues in the background and gets GC'd along with the abandoned `OfflineAudioContext`.
 
@@ -240,31 +250,39 @@ Default sample rate: 44.1 kHz (vs 48 kHz). Convolution reverb is the dominant co
 
 ### Video render (`renderVideo.ts`)
 
-Single function `renderSongVideo(song, settings, options)` produces a complete MP4 Blob with both video + audio tracks (or video only when `options.audio === null`).
+Single function `renderSongVideo(song, settings, options)` produces a complete MP4 or WebM Blob (per `options.codec`) with both video + audio tracks (or video only when `options.audio === null`).
 
 **Pipeline:**
+0. **Preflight** (`codec/preflight.ts`, `assertEncodersSupported`): probe the exact video + audio encoder configs with `isConfigSupported` before any render work, and throw a specific message naming the other codecs. Browsers can ship WebCodecs yet lack a codec (Firefox-based browsers have no AAC encoder, so MP4 + audio fails there; their H.264 video depends on the OpenH264 plugin).
 1. Snapshot R3F state (renderer size, pixel ratio, frameloop, camera aspect, `state.clock` flags) for the `finally`-block restoration.
 2. **Disarm `THREE.Clock`**: stop it + set `autoStart=false` + zero `elapsedTime`/`oldTime`. Without this, R3F's `getDelta()` (called unconditionally before the `frameloop="never"` override) accumulates wall-clock seconds into `elapsedTime`. The override's `delta = timestamp - elapsedTime` then drifts with units mismatched against our virtual timeline and **eventually goes negative** — sending Keyboard's exp-decay glow into NaN/Infinity (~1 minute into a render the keyboard saturates and clips to black). With autoStart off, getDelta returns 0 and the override owns the timeline.
 3. Install a `VirtualClock` and call `audioEngine.beginExportPlayback()`.
-4. Build a single `mp4-muxer` with both video + audio track configs.
+4. Build one muxer via `createMuxer` (`codec/muxer.ts`): `mp4-muxer` for H.264, `webm-muxer` for VP9 / AV1, behind a small `MuxerLike` interface (`addVideoChunk` / `addAudioChunk` / `finalize(): Blob`).
 5. **Audio render runs in parallel** with the video pass — `renderSongAudio(...)` returns a Promise that's not awaited until step 7. The OfflineAudioContext processes off the main thread; the video frame loop runs on the main thread; total wall-clock = max(audio, video) instead of sum.
 6. Resize renderer's drawing buffer to export resolution, switch to `frameloop="never"`. Frame loop:
    - `clock.setTime(t)` — virtual time in seconds
    - `r3f.advance(t, true)` — fires all useFrames + renders. **Pass seconds, not milliseconds**: useFrame consumers (Keyboard's `1 - exp(-delta/decay)` glow) treat delta as seconds, and the `frameloop="never"` override sets `delta = timestamp - elapsedTime` directly.
    - `new VideoFrame(canvas, { timestamp })` → `videoEncoder.encode(...)`
    - **Yield to event loop every frame** via `MessageChannel.postMessage` (`yieldToEventLoop()`). Without this, the synchronous loop monopolises the main thread and Cancel-button clicks never fire. `setTimeout(0)` would compound the spec's nested-timeout 4 ms clamp into many seconds across an 18 000-frame render; MessageChannel has no clamp.
-7. Await audio buffer → AudioEncoder → AAC chunks (1024 samples per chunk in `f32-planar` layout) → muxer.
+7. Await audio buffer → AudioEncoder (AAC or Opus) → `encodeAudioBuffer` (`codec/audio.ts`: 1024-sample `f32-planar` chunks with queue backpressure) → muxer.
 8. Flush both encoders, `muxer.finalize()`, return Blob.
 
-**Codec selection:** `pickAvcCodecString(w, h, fps)` picks an H.264 high-profile level by macroblocks-per-second budget (4.0 for 1080p30, 4.1 for 1080p60, 5.0 for 4K30, 5.1 for 4K60) so `VideoEncoder.configure()` doesn't reject mismatched levels.
+**Codec presets** (`codec/codecs.ts`): `VIDEO_CODECS` maps `h264` / `vp9` / `av1` to container, extension, MIME, audio codec and audio sample rate, plus a `pickCodecString(w, h, fps)` that steps the level by throughput so `VideoEncoder.configure()` doesn't reject mismatched levels (H.264 by macroblocks/s, VP9 / AV1 by luma samples/s). `videoEncoderConfig(...)` (`codec/video.ts`) builds the encoder config; only H.264 gets `avc: { format: 'avc' }`.
+
+| Codec | Container | Audio | Audio rate |
+|---|---|---|---|
+| `h264` | MP4 | AAC-LC (`mp4a.40.2`) | 44.1 kHz |
+| `vp9` / `av1` | WebM | Opus | 48 kHz (Opus rejects 44.1 kHz) |
+
+`audioConfigFor(codec)` (`exportVideo.ts`) returns the matching audio track config — always use it instead of a fixed 44.1 kHz, or Opus export fails. To add a codec: extend `VideoCodec`, add a `VIDEO_CODECS` entry, handle its container in `createMuxer`, and add the `export.codec.<id>` i18n strings.
 
 **Progress** is a single weighted-sum bar: `audioWeight × audioFraction + videoWeight × videoFraction`. Audio weight collapses to 0 when no audio track is wanted, so the bar becomes pure video progress. The audio fraction is itself a weighted sum of three sub-phases (loading 35% / offline render 55% / AAC encode 10%) so it's monotonic.
 
-**Browser support:** WebCodecs (`VideoEncoder` + `AudioEncoder` + `VideoFrame` + `AudioData`) is the binding constraint. Available on Chrome / Edge / Safari 16.4+; Firefox is still rolling out (early 2026). `isVideoExportSupported()` gates the dialog's video options.
+**Browser support:** WebCodecs (`VideoEncoder` + `AudioEncoder` + `VideoFrame` + `AudioData`) is the binding constraint. Available on Chrome / Edge / Safari 16.4+; Firefox is still rolling out (early 2026). `isVideoExportSupported()` gates the dialog's video options. Per-codec availability varies on top of that: `probeVideoCodecs()` checks each preset (1080p30 video + its paired audio codec) so the dialog can disable the ones the browser can't encode.
 
 ### Settings dialog + progress modal (`ui/Export*.tsx`)
 
-`ExportSettingsDialog` — single configuration form with format radio (Video+audio / Video only / Audio only), resolution / fps / quality (when video), and an estimated-size readout. Defaults persist across the session via `Toolbar`'s `exportDefaults` state. Dismissable; no in-flight work to lose.
+`ExportSettingsDialog` — single configuration form with format radio (Video+audio / Video only / Audio only), codec / resolution / fps / quality (when video), and an estimated-size readout. Each open runs `probeVideoCodecs()`: unsupported codecs are disabled and an unavailable selection moves to the first usable one (order `h264` → `vp9` → `av1`). The file extension (`Toolbar`'s `buildExportFileName`) follows `VIDEO_CODECS[codec].config.ext`. Defaults persist across the session via `Toolbar`'s `exportDefaults` state. Dismissable; no in-flight work to lose.
 
 `ExportProgressModal` — shared by all three export paths. Shows title, phase label, progress bar, percentage, and ETA (`elapsed × (1/progress - 1)`, suppressed below 5% progress so the readout doesn't snap from a wildly wrong huge number). Non-dismissable; Cancel button aborts the controller.
 
@@ -277,7 +295,7 @@ Anonymous, opt-out usage analytics via **PostHog EU Cloud**. The only outbound d
 - **Hard invariant** (enforced in `index.ts` + documented in `events.ts`): only the closed event set in `events.ts` is sent; numeric magnitudes are **bucketed** (`noteBucket` / `durationBucket` / `pinCountBucket`) so a song can't be fingerprinted; never filenames/paths/free-text/error-message bodies. Mirrors the Help menu's existing "never user content" rule.
 - **`analyticsEnabled()` is the single gate**: needs a `VITE_POSTHOG_KEY` AND `import.meta.env.PROD` AND not `navigator.doNotTrack` AND not the persisted opt-out. Dev / local clones / no-key builds never even `import('posthog-js')` — true no-op. Re-checked on every `track()` so flipping DNT / opt-out mid-session takes effect with no reload.
 - **PostHog config**: EU host, `autocapture` + `capture_pageview` + session-recording all OFF, `person_profiles: 'identified_only'` (we never `identify()` → anonymous), `persistence: 'localStorage'` (no cookies → no consent banner, retention still works).
-- **Wiring**: `initAnalytics()` + `app_loaded` in `App.tsx` (capability flags only). Events fired at chokepoints: `store.ts` (`playback_*`, `note_edited` — one per committed `applySongEdit`, no op label; `undo`/`redo`; `settings_pin_added`/`settings_reset`), `recordControl.ts`, `projects/actions.ts` (`song_opened` with a `SongSource` enum, `project_*`, `error_surfaced` with a context enum — no message text), Toolbar export handlers (`export_started`/`export_finished` with format/res/fps/quality + outcome), and `markLivePlay()` (deduped once per input type per session) from `Keyboard.tsx` / `pcInput.ts` / `midiInput.ts`.
+- **Wiring**: `initAnalytics()` + `app_loaded` in `App.tsx` (capability flags only). Events fired at chokepoints: `store.ts` (`playback_*`, `note_edited` — one per committed `applySongEdit`, no op label; `undo`/`redo`; `settings_pin_added`/`settings_reset`), `recordControl.ts`, `projects/actions.ts` (`song_opened` with a `SongSource` enum, `project_*`, `error_surfaced` with a context enum — no message text), Toolbar export handlers (`export_started`/`export_finished` with format — `wav` or `<codec>_av` / `<codec>_video` — plus codec/res/fps/quality + outcome), and `markLivePlay()` (deduped once per input type per session) from `Keyboard.tsx` / `pcInput.ts` / `midiInput.ts`.
 - **Opt-out**: `nf:analytics-optout` in localStorage; Help-menu toggle (`Toolbar.tsx`) mirrors it. `setAnalyticsOptOut` also calls PostHog `opt_in/out_capturing`.
 - **Env**: `VITE_POSTHOG_KEY` / `VITE_POSTHOG_HOST` (default `https://eu.i.posthog.com`) in `.env.example` / `.env.production`. Blank key ⇒ analytics absent.
 
