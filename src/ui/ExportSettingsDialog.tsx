@@ -12,20 +12,23 @@ import {
   RadioGroup,
 } from 'react-aria-components'
 import {
-  DEFAULT_AUDIO_CONFIG,
   VIDEO_QUALITIES,
   VIDEO_RESOLUTIONS,
+  audioConfigFor,
   computeVideoBitrateKbps,
   type VideoFps,
   type VideoQualityId,
   type VideoResolutionId,
 } from '../export/exportVideo'
+import { VIDEO_CODECS, probeVideoCodecs } from '../export/renderVideo'
+import type { VideoCodec } from '../export/codec/types'
 import { playExportCompleteChime } from '../audio/exportChime'
 
 export type ExportFormat = 'video-audio' | 'video-only' | 'audio-only'
 
 export type ExportSettingsValues = {
   format: ExportFormat
+  codec: VideoCodec
   resolution: VideoResolutionId
   fps: VideoFps
   quality: VideoQualityId
@@ -35,6 +38,7 @@ export type ExportSettingsValues = {
 
 export const DEFAULT_EXPORT_SETTINGS: ExportSettingsValues = {
   format: 'video-audio',
+  codec: 'h264',
   resolution: '1080p',
   fps: 60,
   quality: 'high',
@@ -76,6 +80,9 @@ export function ExportSettingsDialog({
 }) {
   const { t } = useTranslation('dialogs')
   const [format, setFormat] = useState<ExportFormat>(defaults.format)
+  const [codec, setCodec] = useState<VideoCodec>(defaults.codec)
+  // null while the async encoder probe is running.
+  const [codecSupport, setCodecSupport] = useState<Record<VideoCodec, boolean> | null>(null)
   const [resolution, setResolution] = useState<VideoResolutionId>(defaults.resolution)
   const [fps, setFps] = useState<VideoFps>(defaults.fps)
   const [quality, setQuality] = useState<VideoQualityId>(defaults.quality)
@@ -90,6 +97,7 @@ export function ExportSettingsDialog({
   useEffect(() => {
     if (isOpen) {
       setFormat(defaults.format)
+      setCodec(defaults.codec)
       setResolution(defaults.resolution)
       setFps(defaults.fps)
       setQuality(defaults.quality)
@@ -104,6 +112,23 @@ export function ExportSettingsDialog({
       setFormat('audio-only')
     }
   }, [isOpen, videoExportSupported, format])
+
+  // Probe which codecs this browser can encode each time the dialog
+  // opens, then move off an unavailable selection to the first usable one.
+  useEffect(() => {
+    if (!isOpen || !videoExportSupported) return
+    let cancelled = false
+    void probeVideoCodecs().then((support) => {
+      if (cancelled) return
+      setCodecSupport(support)
+      setCodec((cur) =>
+        support[cur] ? cur : ((['h264', 'vp9', 'av1'] as VideoCodec[]).find((c) => support[c]) ?? cur),
+      )
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, videoExportSupported])
 
   const showVideoOptions = format !== 'audio-only'
 
@@ -120,15 +145,15 @@ export function ExportSettingsDialog({
     } else {
       bitrateKbps += computeVideoBitrateKbps(resolution, fps, quality)
       if (format === 'video-audio') {
-        bitrateKbps += DEFAULT_AUDIO_CONFIG?.bitrateKbps ?? 0
+        bitrateKbps += audioConfigFor(codec)?.bitrateKbps ?? 0
       }
     }
     const bytes = (bitrateKbps * songDuration * 1000) / 8
     return Math.max(1, Math.round(bytes / (1024 * 1024)))
-  }, [format, resolution, fps, quality, songDuration])
+  }, [format, codec, resolution, fps, quality, songDuration])
 
   const handleExport = () => {
-    onExport({ format, resolution, fps, quality, playSoundOnComplete })
+    onExport({ format, codec, resolution, fps, quality, playSoundOnComplete })
   }
 
   return (
@@ -175,6 +200,21 @@ export function ExportSettingsDialog({
 
           {showVideoOptions && (
             <>
+              <RadioGroup
+                value={codec}
+                onChange={(v) => setCodec(v as VideoCodec)}
+                className="flex flex-col gap-1.5"
+              >
+                <Label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                  {t('export.codec.label')}
+                </Label>
+                {(Object.keys(VIDEO_CODECS) as VideoCodec[]).map((id) => (
+                  <FormatRadio key={id} value={id} disabled={codecSupport ? !codecSupport[id] : false}>
+                    {t(`export.codec.${id}`)}
+                  </FormatRadio>
+                ))}
+              </RadioGroup>
+
               <RadioGroup
                 value={resolution}
                 onChange={(v) => setResolution(v as VideoResolutionId)}

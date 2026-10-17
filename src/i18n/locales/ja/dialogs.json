@@ -12,8 +12,8 @@
     "unsupported": "このブラウザーでは動画の書き出しを利用できません。音声の書き出しは利用できます。",
     "format": {
       "label": "形式",
-      "videoAudio": "動画＋音声（MP4）",
-      "videoOnly": "動画のみ（MP4・無音）",
+      "videoAudio": "動画＋音声",
+      "videoOnly": "動画のみ（無音）",
       "audioOnly": "音声のみ（WAV）"
     },
     "resolution": "解像度",
@@ -27,7 +27,14 @@
     "playSoundOnComplete": "完了時に音を鳴らす",
     "test": "テスト",
     "cancel": "キャンセル",
-    "submit": "書き出し"
+    "submit": "書き出し",
+    "codec": {
+      "label": "コーデック",
+      "h264": "H.264 + AAC（MP4）— 互換性が最も高い",
+      "vp9": "VP9 + Opus（WebM）— オープン、どこでも再生可",
+      "av1": "AV1 + Opus（WebM）— オープン、最小サイズ、低速",
+      "checking": "対応コーデックを確認中…"
+    }
   },
   "progress": {
     "note": "少し時間がかかる場合があります。タブを閉じないでください。",

@@ -12,8 +12,8 @@
     "unsupported": "Video export is unavailable in this browser. Audio export still works.",
     "format": {
       "label": "Format",
-      "videoAudio": "Video + audio (MP4)",
-      "videoOnly": "Video only (MP4, silent)",
+      "videoAudio": "Video + audio",
+      "videoOnly": "Video only (silent)",
       "audioOnly": "Audio only (WAV)"
     },
     "resolution": "Resolution",
@@ -27,7 +27,14 @@
     "playSoundOnComplete": "Play sound when done",
     "test": "Test",
     "cancel": "Cancel",
-    "submit": "Export"
+    "submit": "Export",
+    "codec": {
+      "label": "Codec",
+      "h264": "H.264 + AAC (MP4) — most compatible",
+      "vp9": "VP9 + Opus (WebM) — open, works everywhere",
+      "av1": "AV1 + Opus (WebM) — open, smallest, slow",
+      "checking": "Checking supported codecs…"
+    }
   },
   "progress": {
     "note": "This may take a moment. Don't close the tab.",
