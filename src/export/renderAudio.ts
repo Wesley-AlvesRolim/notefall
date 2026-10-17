@@ -1,13 +1,11 @@
-import { Scheduler } from 'smplr'
 import type { ParsedSong } from '../midi/types'
-import { midiToTimeline } from '../midi/speedMap'
 import type { Settings } from '../store'
-import { createPiano } from '../audio/sampler'
-import { evaluateVelocityCurve } from '../audio/velocityCurve'
 import { raceWithAbort } from './async'
 import { AudioRenderAborted } from './errors'
+import { loadOfflinePiano } from './synth/piano'
+import { scheduleSongNotes, scheduleUserAudio } from './synth/schedule'
 import { computeExportTimeline } from './timeline'
-import type { AudioRenderProgress, UserAudioTrack } from './synth/types'
+import type { AudioRenderProgress, OfflinePiano, UserAudioTrack } from './synth/types'
 
 export type { AudioRenderProgress, UserAudioTrack }
 
@@ -27,59 +25,6 @@ export type { AudioRenderProgress, UserAudioTrack }
  * incremental progress callbacks during the render itself, only the
  * up-front sample-load progress.
  */
-
-// Mirror engine.ts. The lookahead has no audible-click concern in an
-// offline render (samples are perfectly quantum-aligned), but matching
-// the live engine's offset means a re-rendered take lines up sample-
-// for-sample with what the user heard during preview.
-const LOOKAHEAD = 0.015
-const STOP_BUFFER = 0.02
-
-/**
- * Convert pedal CC events into closed [start,end] sustain ranges. A note
- * whose natural off-time falls inside any range is held until that
- * range's end (the realtime engine's `pedalHeld` deferred-release
- * behaviour, expressed declaratively for offline scheduling).
- *
- * If the song ends with the pedal still down, the open range is
- * truncated at `endTime` so trailing notes still release within the
- * rendered window.
- */
-function buildPedalRanges(
-  events: ParsedSong['pedals'],
-  endTime: number,
-): Array<{ start: number; end: number }> {
-  const ranges: Array<{ start: number; end: number }> = []
-  let down = false
-  let downStart = 0
-  for (const ev of events) {
-    const isDown = ev.value >= 0.5
-    if (isDown && !down) {
-      down = true
-      downStart = ev.time
-    } else if (!isDown && down) {
-      down = false
-      ranges.push({ start: downStart, end: ev.time })
-    }
-  }
-  if (down) ranges.push({ start: downStart, end: endTime })
-  return ranges
-}
-
-function findRangeContaining(
-  ranges: Array<{ start: number; end: number }>,
-  t: number,
-): { start: number; end: number } | null {
-  // Linear scan — pedal range counts are small (dozens at most for a
-  // typical piano piece), and ranges are sorted, so a binary search
-  // would just be ceremony for no measurable win.
-  for (const r of ranges) {
-    if (t < r.start) return null
-    if (t < r.end) return r
-  }
-  return null
-}
-
 export async function renderSongAudio(
   song: ParsedSong,
   settings: Settings,
@@ -90,8 +35,7 @@ export async function renderSongAudio(
 ): Promise<AudioBuffer> {
   if (signal?.aborted) throw new AudioRenderAborted()
   const timeline = computeExportTimeline(song, settings, userAudio ?? null)
-  const { speedMap, midiOffset, midiTrimStart, midiTrimEnd, audioTrimStart, audioTrimEnd, totalDuration } =
-    timeline
+  const { totalDuration } = timeline
   const length = Math.max(1, Math.ceil(totalDuration * sampleRate))
 
   const ctx = new OfflineAudioContext({
@@ -107,68 +51,14 @@ export async function renderSongAudio(
   const samplerGain = settings.midiEnabled
     ? settings.volume * settings.midiVolume
     : 0
+
   // When the sampler track is muted (volume = 0) we skip loading the
   // ~60 MB sample set AND scheduling notes entirely. The render
   // collapses to "userAudio mix + silence" — orders of magnitude
   // faster, and audibly identical to the muted render.
-  const renderSampler = samplerGain > 0
-
-  // Bring the piano up against the offline context. Reuses the
-  // realtime-engine's effect-chain wiring (master → 6-band EQ → split →
-  // dry / pre-delay → reverb → wet) verbatim — same setters, same IR
-  // synthesis — so render parity with live playback is "free".
-  //
-  // The custom scheduler is critical: smplr's default Scheduler defers
-  // any event scheduled more than ~100 ms ahead to a setInterval-driven
-  // dispatcher. That dispatcher never gets a chance to run during
-  // OfflineAudioContext.startRendering() (the render is one synchronous
-  // microtask burst from the caller's perspective), so the default
-  // would dispatch only the first ~100 ms of notes and silently drop
-  // everything afterward. A Scheduler with an effectively-infinite
-  // lookahead forces every `piano.start()` call to dispatch its voice
-  // synchronously, scheduling each AudioBufferSourceNode at the
-  // correct absolute time via `source.start(time)` — sample-accurate
-  // because Web Audio honours the absolute time even on offline ctx.
-  let piano: Awaited<ReturnType<typeof createPiano>> | null = null
-  if (renderSampler) {
-    onProgress?.({ phase: 'loading', loaded: 0, total: 1 })
-    // Race against the abort signal so Cancel is responsive even during
-    // the ~60 MB sample fetch — without this, `await createPiano` blocks
-    // for the entire load before the next signal check fires.
-    piano = await raceWithAbort(
-      createPiano(
-        ctx,
-        (p) => {
-          onProgress?.({ phase: 'loading', loaded: p.loaded, total: p.total })
-        },
-        {
-          scheduler: new Scheduler(ctx, { lookaheadMs: Number.POSITIVE_INFINITY }),
-        },
-      ),
-      signal,
-      () => new AudioRenderAborted(),
-    )
-
-    // Apply settings BEFORE scheduling any notes so the render pass sees
-    // them at currentTime=0. setTargetAtTime ramps complete in well under
-    // a millisecond at the given time constants, so notes scheduled at
-    // t=LOOKAHEAD already inherit the final values.
-    piano.setVolume(samplerGain)
-    piano.setReverbDry(settings.reverbDry)
-    piano.setReverbWet(settings.reverbEnabled ? settings.reverbWet : 0)
-    piano.setReverbSize(settings.reverbSize)
-    piano.setReverbDecayTime(settings.reverbDecayTime)
-    piano.setReverbDecay(settings.reverbDecay)
-    piano.setReverbPreDelay(settings.reverbPreDelay)
-    piano.setReverbDamping(settings.reverbDamping)
-    piano.setReverbHiCut(settings.reverbHiCut)
-    piano.setReverbLowCut(settings.reverbLowCut)
-    piano.setReleaseTime(settings.releaseTime)
-    piano.setDetune(settings.samplerDetune)
-    piano.setVelocityCompensation(settings.velocityCompensation)
-    for (let i = 0; i < settings.eqBands.length; i++) {
-      piano.setEqBand(i, settings.eqBands[i])
-    }
+  let piano: OfflinePiano | null = null
+  if (samplerGain > 0) {
+    piano = await loadOfflinePiano(ctx, settings, samplerGain, onProgress, signal)
   } else {
     // Emit a synthetic "loaded" pulse so progress UI doesn't sit on
     // 0/1 — the modal's audio-fraction calculation expects to see
@@ -176,63 +66,8 @@ export async function renderSongAudio(
     onProgress?.({ phase: 'loading', loaded: 1, total: 1 })
   }
 
-  // Pedal handling. Mirror the engine: when settings.pedalEnabled is off,
-  // ignore the song's pedal track entirely (notes release at their
-  // natural offTime). Pedal events are stored in MIDI-time, so the
-  // ranges are still in MIDI-time and get shifted at the per-note
-  // comparison site below.
-  const pedalRanges =
-    renderSampler && settings.pedalEnabled
-      ? buildPedalRanges(song.pedals, totalDuration - midiOffset)
-      : []
-
-  // Schedule the user-provided accompaniment alongside the piano. Goes
-  // through its own GainNode so the mix volume is independent of the
-  // sampler's. Negative offsets aren't supported in the MVP, so the
-  // start time is always ≥ 0; if the offset overshoots the rendered
-  // window the source simply never fires.
-  if (userAudio && userAudio.offsetSec < totalDuration && audioTrimEnd > audioTrimStart) {
-    const src = ctx.createBufferSource()
-    src.buffer = userAudio.buffer
-    const gain = ctx.createGain()
-    // Master × per-track stacking so the export tracks live playback.
-    gain.gain.value = settings.volume * userAudio.volume
-    src.connect(gain)
-    gain.connect(ctx.destination)
-    // Schedule with `(when, offset, duration)` so the trim window is
-    // honoured by the audio graph itself rather than us needing to
-    // pre-slice the buffer.
-    const startTime = Math.max(0, userAudio.offsetSec + audioTrimStart)
-    src.start(startTime, audioTrimStart, audioTrimEnd - audioTrimStart)
-  }
-
-  if (piano) {
-    for (const n of song.notes) {
-      // Trim filter — match the engine's tick semantics so a rendered
-      // export sounds the same as live playback under the same trim.
-      if (n.time < midiTrimStart) continue
-      if (n.time >= midiTrimEnd) continue
-      const playedMidi = n.midi + settings.transpose
-      if (playedMidi < 0 || playedMidi > 127) continue
-
-      const shaped = evaluateVelocityCurve(settings.velocityCurve, n.velocity)
-      // n.time is MIDI-time; map through the speed curve and shift by
-      // `midiOffset` to land on the export timeline. Without
-      // automation `midiToTimeline` is the identity, so this collapses
-      // to the linear `n.time + midiOffset` of before.
-      const onTime = midiOffset + midiToTimeline(speedMap, n.time) + LOOKAHEAD
-      // Clamp the natural note-off to the trim end (MIDI-time), then
-      // optionally extend via pedal sustain (still MIDI-time), and
-      // finally map to timeline-time.
-      const naturalOff = Math.min(n.time + n.duration, midiTrimEnd)
-      const range = findRangeContaining(pedalRanges, naturalOff)
-      const offMidi = Math.min(range ? range.end : naturalOff, midiTrimEnd)
-      const actualOff = midiOffset + midiToTimeline(speedMap, offMidi)
-
-      const stopFn = piano.start(playedMidi, shaped, onTime, `s${n.id}`)
-      stopFn(actualOff + STOP_BUFFER)
-    }
-  }
+  if (userAudio) scheduleUserAudio(ctx, userAudio, settings, timeline)
+  if (piano) scheduleSongNotes(piano, song, settings, timeline)
 
   if (signal?.aborted) {
     piano?.dispose()

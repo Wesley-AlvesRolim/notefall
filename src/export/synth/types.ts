@@ -1,3 +1,5 @@
+import type { createPiano } from '../../audio/sampler'
+
 export type AudioRenderProgress =
   | { phase: 'loading'; loaded: number; total: number }
   | { phase: 'rendering'; progress: number }
@@ -15,3 +17,7 @@ export type UserAudioTrack = {
   trimStartSec: number
   trimEndSec: number | null
 }
+
+export type PedalRange = { start: number; end: number }
+
+export type OfflinePiano = Awaited<ReturnType<typeof createPiano>>
