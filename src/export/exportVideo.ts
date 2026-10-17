@@ -1,13 +1,14 @@
 import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
 import {
-  VideoRenderAborted,
   isVideoExportSupported,
   renderSongVideo,
   type AudioTrackConfig,
   type VideoRenderOptions,
   type VideoRenderProgress,
 } from './renderVideo'
+import { VideoRenderAborted } from './errors'
+import { defaultExportFileName, triggerDownload } from './download'
 
 // ──────────────────────────────────────────────────────────────────────
 // Composable export settings — the export-settings dialog picks a value
@@ -125,7 +126,7 @@ export async function exportSongToMp4(
   try {
     const blob = await renderSongVideo(song, settings, renderOptions)
     if (options.signal?.aborted) return { kind: 'cancelled' }
-    const fileName = options.fileName ?? defaultMp4FileName(song.name)
+    const fileName = options.fileName ?? defaultExportFileName(song.name, 'mp4')
     triggerDownload(blob, fileName)
     return { kind: 'ok' }
   } catch (e) {
@@ -133,22 +134,4 @@ export async function exportSongToMp4(
     const message = e instanceof Error ? e.message : String(e)
     return { kind: 'error', message }
   }
-}
-
-function defaultMp4FileName(songName: string): string {
-  const base = songName.trim().replace(/\.(mid|midi)$/i, '')
-  const cleaned = base.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').replace(/\s+/g, ' ').trim()
-  const fallback = `notefall-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`
-  return `${cleaned || fallback}.mp4`
-}
-
-function triggerDownload(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
 }

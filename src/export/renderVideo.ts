@@ -6,7 +6,9 @@ import type { Settings } from '../store'
 import { VirtualClock, resetActiveClock, setActiveClock } from '../audio/clock'
 import { audioEngine } from '../audio/engine'
 import { getR3FState } from '../scene/exportBridge'
-import { AudioRenderAborted, renderSongAudio } from './renderAudio'
+import { AudioRenderAborted, VideoRenderAborted } from './errors'
+import { renderSongAudio } from './renderAudio'
+import { MAX_ENCODE_QUEUE, raceWithAbort, yieldToEventLoop } from './async'
 
 /**
  * Match the audio render's tail. Falling notes already past the hit
@@ -20,9 +22,6 @@ const AAC_CODEC_STRING = 'mp4a.40.2'
 
 /** Samples per AAC encoder frame. AAC's natural frame size is 1024. */
 const AUDIO_CHUNK_SAMPLES = 1024
-
-/** Encoder backpressure threshold. */
-const MAX_ENCODE_QUEUE = 4
 
 /** 1 keyframe per second is a comfortable seeking interval. */
 const KEYFRAME_INTERVAL_SECONDS = 1
@@ -81,13 +80,6 @@ export type VideoRenderOptions = {
   onProgress?: (p: VideoRenderProgress) => void
 }
 
-export class VideoRenderAborted extends Error {
-  constructor() {
-    super('Video render aborted')
-    this.name = 'VideoRenderAborted'
-  }
-}
-
 export function isVideoExportSupported(): boolean {
   return (
     typeof VideoEncoder !== 'undefined' &&
@@ -108,46 +100,6 @@ function pickAvcCodecString(width: number, height: number, fps: number): string 
   if (macroblocksPerSec <= 491_520) return 'avc1.640029'
   if (macroblocksPerSec <= 589_824) return 'avc1.640032'
   return 'avc1.640033'
-}
-
-/**
- * Race a promise against an AbortSignal so that long awaits become
- * cancellable. Symmetric with the helper inside renderAudio.ts —
- * duplicated here so each module's failure-mode error type stays
- * local.
- */
-function raceWithAbort<T>(p: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return p
-  if (signal.aborted) return Promise.reject(new VideoRenderAborted())
-  return new Promise<T>((resolve, reject) => {
-    p.then(resolve, reject)
-    signal.addEventListener('abort', () => reject(new VideoRenderAborted()), {
-      once: true,
-    })
-  })
-}
-
-/**
- * Yield to the event loop so DOM events (notably the Cancel button's
- * click) can be processed mid-render. Uses MessageChannel rather than
- * `setTimeout(0)` because the HTML spec clamps nested setTimeouts at
- * ≥4 ms after 5 levels of nesting — adds up to many seconds across an
- * 18 000-frame render. MessageChannel-postMessage has no such clamp
- * and runs in the next macrotask. The channel + handler are reused
- * across calls so we don't allocate per frame.
- */
-const _yieldChannel = typeof MessageChannel !== 'undefined' ? new MessageChannel() : null
-function yieldToEventLoop(): Promise<void> {
-  if (!_yieldChannel) {
-    return new Promise<void>((r) => setTimeout(r, 0))
-  }
-  return new Promise<void>((resolve) => {
-    _yieldChannel.port1.onmessage = () => {
-      _yieldChannel.port1.onmessage = null
-      resolve()
-    }
-    _yieldChannel.port2.postMessage(null)
-  })
 }
 
 /**
@@ -185,6 +137,7 @@ export async function renderSongVideo(
   }
   const { width, height, fps, videoBitrateKbps, audio, userAudio, signal, onProgress } = options
   if (signal?.aborted) throw new VideoRenderAborted()
+  const onAbort = () => new VideoRenderAborted()
 
   const r3f = getR3FState()
   if (!r3f) {
@@ -393,7 +346,7 @@ export async function renderSongVideo(
       emitOverall()
     }
 
-    await raceWithAbort(videoEncoder.flush(), signal)
+    await raceWithAbort(videoEncoder.flush(), signal, onAbort)
     if (videoEncoderError) throw videoEncoderError
 
     // Audio AAC encode pass. Skipped entirely when audio is disabled.
@@ -407,6 +360,7 @@ export async function renderSongVideo(
           throw e
         }),
         signal,
+        onAbort,
       )
 
       audioEncoder.configure({
@@ -449,7 +403,7 @@ export async function renderSongVideo(
 
         setAudioFraction_encode((off + chunkLen) / totalSamples)
       }
-      await raceWithAbort(audioEncoder.flush(), signal)
+      await raceWithAbort(audioEncoder.flush(), signal, onAbort)
       if (audioEncoderError) throw audioEncoderError
     }
 

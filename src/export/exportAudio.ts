@@ -1,7 +1,9 @@
 import { audioBufferToWav } from 'smplr'
 import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
-import { AudioRenderAborted, renderSongAudio, type AudioRenderProgress } from './renderAudio'
+import { AudioRenderAborted } from './errors'
+import { renderSongAudio, type AudioRenderProgress } from './renderAudio'
+import { defaultExportFileName, triggerDownload } from './download'
 
 /**
  * Default sample rate for offline audio export. 44.1 kHz is CD quality
@@ -27,11 +29,6 @@ export type AudioExportResult =
  * produces audible output that matches live playback. The eventual
  * video-export pipeline will reuse `renderSongAudio` and feed the
  * resulting `AudioBuffer` into the muxer instead of writing a WAV.
- *
- * Filename is derived from the song name with disallowed filesystem
- * characters stripped (Windows is the strictest target). A leading
- * `notefall-` prefix is added when the song name is empty so an unnamed
- * recording still produces a recognisable filename.
  */
 export async function exportSongToWav(
   song: ParsedSong,
@@ -61,7 +58,7 @@ export async function exportSongToWav(
     )
     if (options?.signal?.aborted) return { kind: 'cancelled' }
     const blob = audioBufferToWav(buffer)
-    const fileName = options?.fileName ?? defaultWavFileName(song.name)
+    const fileName = options?.fileName ?? defaultExportFileName(song.name, 'wav')
     triggerDownload(blob, fileName)
     return { kind: 'ok' }
   } catch (e) {
@@ -69,25 +66,4 @@ export async function exportSongToWav(
     const message = e instanceof Error ? e.message : String(e)
     return { kind: 'error', message }
   }
-}
-
-function defaultWavFileName(songName: string): string {
-  const base = songName.trim().replace(/\.(mid|midi)$/i, '')
-  // Strip Windows-disallowed characters and runs of whitespace. Result is
-  // ASCII-safe but still preserves Unicode letters / Japanese characters
-  // that are valid filenames on every modern OS.
-  const cleaned = base.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').replace(/\s+/g, ' ').trim()
-  const fallback = `notefall-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}`
-  return `${cleaned || fallback}.wav`
-}
-
-function triggerDownload(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
 }

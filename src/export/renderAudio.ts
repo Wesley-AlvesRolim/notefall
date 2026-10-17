@@ -4,6 +4,8 @@ import { buildSpeedMap, midiToTimeline } from '../midi/speedMap'
 import type { Settings } from '../store'
 import { createPiano } from '../audio/sampler'
 import { evaluateVelocityCurve } from '../audio/velocityCurve'
+import { raceWithAbort } from './async'
+import { AudioRenderAborted } from './errors'
 
 /**
  * Offline render of `song` with the given `settings` into a stereo
@@ -37,36 +39,6 @@ export type AudioRenderProgress =
   | { phase: 'loading'; loaded: number; total: number }
   | { phase: 'rendering'; progress: number }
   | { phase: 'done' }
-
-/**
- * Thrown when the caller's `AbortSignal` aborts during a render. Surfaces
- * so the UI layer can skip the download and quietly tear down the modal
- * without the generic "could not export audio" error toast.
- */
-export class AudioRenderAborted extends Error {
-  constructor() {
-    super('Audio render aborted')
-    this.name = 'AudioRenderAborted'
-  }
-}
-
-/**
- * Race a promise against an AbortSignal so that cancel is responsive
- * even during long awaits (sample fetching, OfflineAudioContext.
- * startRendering()) we can't otherwise interrupt. The underlying
- * promise keeps running in the background — caller is responsible
- * for letting that GPU/network/audio work get GC'd by dropping
- * references to the OfflineAudioContext / encoder it's tied to.
- */
-function raceWithAbort<T>(p: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return p
-  if (signal.aborted) return Promise.reject(new AudioRenderAborted())
-  return new Promise<T>((resolve, reject) => {
-    p.then(resolve, reject)
-    signal.addEventListener('abort', () => reject(new AudioRenderAborted()), { once: true })
-  })
-}
-
 
 /**
  * Convert pedal CC events into closed [start,end] sustain ranges. A note
@@ -204,6 +176,7 @@ export async function renderSongAudio(
         },
       ),
       signal,
+      () => new AudioRenderAborted(),
     )
 
     // Apply settings BEFORE scheduling any notes so the render pass sees
@@ -320,7 +293,7 @@ export async function renderSongAudio(
     // down the piano + chain so the still-pending render finishes
     // near-instantly with silence rather than burning CPU on the
     // convolver + voice graph.
-    buffer = await raceWithAbort(renderPromise, signal)
+    buffer = await raceWithAbort(renderPromise, signal, () => new AudioRenderAborted())
   } catch (e) {
     // dispose() severs the entire effect chain — see sampler.ts.
     // Without this, the OfflineAudioContext can hog CPU for tens of
