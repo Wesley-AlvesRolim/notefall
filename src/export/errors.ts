@@ -16,3 +16,11 @@ export class VideoRenderAborted extends Error {
     this.name = 'VideoRenderAborted'
   }
 }
+
+/** The muxer finalized without producing an output buffer. */
+export class MuxerEmptyOutput extends Error {
+  constructor() {
+    super('Muxer produced no data')
+    this.name = 'MuxerEmptyOutput'
+  }
+}

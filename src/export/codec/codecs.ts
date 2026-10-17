@@ -20,6 +20,8 @@ export const VIDEO_CODECS: VideoCodecMap = {
       mime: 'video/mp4',
       audioCodec: 'mp4a.40.2',
       audioSampleRate: 44_100,
+      muxVideoCodec: 'avc',
+      muxAudioCodec: 'aac',
     },
     pickCodecString(width, height, fps) {
       const macroblocksPerSec = ((width * height) / 256) * fps
@@ -36,6 +38,8 @@ export const VIDEO_CODECS: VideoCodecMap = {
       mime: 'video/webm',
       audioCodec: 'opus',
       audioSampleRate: 48_000,
+      muxVideoCodec: 'vp9',
+      muxAudioCodec: 'opus',
     },
     pickCodecString(width, height, fps) {
       return ['vp09.00.40.08', 'vp09.00.41.08', 'vp09.00.51.08'][lumaTier(width, height, fps)]
@@ -48,6 +52,8 @@ export const VIDEO_CODECS: VideoCodecMap = {
       mime: 'video/webm',
       audioCodec: 'opus',
       audioSampleRate: 48_000,
+      muxVideoCodec: 'av1',
+      muxAudioCodec: 'opus',
     },
     pickCodecString(width, height, fps) {
       return ['av01.0.08M.08', 'av01.0.09M.08', 'av01.0.13M.08'][lumaTier(width, height, fps)]

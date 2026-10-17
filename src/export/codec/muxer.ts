@@ -1,16 +1,23 @@
+import {
+  BufferTarget,
+  EncodedAudioPacketSource,
+  EncodedPacket,
+  EncodedVideoPacketSource,
+  Output,
+  WebMOutputFormat,
+} from 'mediabunny'
 import { ArrayBufferTarget as Mp4Target, Muxer as Mp4Muxer } from 'mp4-muxer'
-import { ArrayBufferTarget as WebmTarget, Muxer as WebmMuxer } from 'webm-muxer'
-import { VIDEO_CODECS } from './codecs'
-import type { AudioTrackConfig, VideoCodec } from './types'
+import { MuxerEmptyOutput } from '../errors'
+import type { AudioTrackConfig, VideoCodecConfig } from './types'
 
 export type MuxerLike = {
   addVideoChunk: (chunk: EncodedVideoChunk, meta?: EncodedVideoChunkMetadata) => void
   addAudioChunk: (chunk: EncodedAudioChunk, meta?: EncodedAudioChunkMetadata) => void
-  finalize: () => Blob
+  finalize: () => Promise<Blob>
 }
 
 export type MuxerParams = {
-  codec: VideoCodec
+  config: VideoCodecConfig
   width: number
   height: number
   fps: number
@@ -18,41 +25,71 @@ export type MuxerParams = {
 }
 
 export function createMuxer(params: MuxerParams): MuxerLike {
-  const { mime, container } = VIDEO_CODECS[params.codec].config
-  const { muxer, target } = container === 'mp4' ? mp4(params) : webm(params)
+  return params.config.container === 'mp4' ? mp4(params) : webm(params)
+}
+
+function mp4({ config, width, height, fps, audio }: MuxerParams): MuxerLike {
+  const target = new Mp4Target()
+  const muxer = new Mp4Muxer({
+    target,
+    video: { codec: config.muxVideoCodec, width, height, frameRate: fps },
+    // Omit the audio track entirely when audio is disabled — a
+    // silent MP4 with just the video stream.
+    ...(audio && {
+      audio: { codec: config.muxAudioCodec, numberOfChannels: 2, sampleRate: audio.sampleRate },
+    }),
+    fastStart: 'in-memory',
+  })
   return {
     addVideoChunk: (c, meta) => muxer.addVideoChunk(c, meta),
     addAudioChunk: (c, meta) => muxer.addAudioChunk(c, meta),
-    finalize: () => {
+    finalize: async () => {
       muxer.finalize()
-      return new Blob([target.buffer], { type: mime })
+      return new Blob([target.buffer], { type: config.mime })
     },
   }
 }
 
-function mp4({ width, height, fps, audio }: MuxerParams) {
-  const target = new Mp4Target()
-  const muxer = new Mp4Muxer({
-    target,
-    video: { codec: 'avc', width, height, frameRate: fps },
-    // Omit the audio track entirely when audio is disabled — a
-    // silent MP4 with just the video stream.
-    ...(audio && {
-      audio: { codec: 'aac' as const, numberOfChannels: 2, sampleRate: audio.sampleRate },
-    }),
-    fastStart: 'in-memory',
-  })
-  return { muxer, target }
-}
+function webm({ config, fps, audio }: MuxerParams): MuxerLike {
+  const output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() })
+  const video = new EncodedVideoPacketSource(config.muxVideoCodec)
+  output.addVideoTrack(video, { frameRate: fps })
+  const sound = audio ? new EncodedAudioPacketSource(config.muxAudioCodec) : null
+  if (sound) output.addAudioTrack(sound)
 
-function webm({ codec, width, height, fps, audio }: MuxerParams) {
-  const target = new WebmTarget()
-  const muxer = new WebmMuxer({
-    target,
-    video: { codec: codec === 'vp9' ? 'V_VP9' : 'V_AV1', width, height, frameRate: fps },
-    ...(audio && {
-      audio: { codec: 'A_OPUS' as const, numberOfChannels: 2, sampleRate: audio.sampleRate },
-    }),
-  })
-  return { muxer, target }
+  // Mediabunny's `start` / `add` are async but encoder output
+  // callbacks are sync, so every call is serialised on one chain
+  // (preserves decode order per track). The first failure poisons the
+  // chain and resurfaces from `finalize`.
+  let chain: Promise<void> = output.start()
+  const enqueue = (fn: () => Promise<void>) => {
+    chain = chain.then(fn)
+    // Keep the rejection on `chain` for finalize, but don't report it
+    // as unhandled in the meantime.
+    chain.catch(() => {})
+  }
+
+  return {
+    addVideoChunk: (c, meta) => {
+      const packet = EncodedPacket.fromEncodedChunk(c)
+      enqueue(() => video.add(packet, meta))
+    },
+    addAudioChunk: (c, meta) => {
+      if (!sound) return
+      const packet = EncodedPacket.fromEncodedChunk(c)
+      enqueue(() => sound.add(packet, meta))
+    },
+    finalize: async () => {
+      try {
+        await chain
+      } catch (e) {
+        await output.cancel().catch(() => {})
+        throw e
+      }
+      await output.finalize()
+      const buffer = (output.target as BufferTarget).buffer
+      if (!buffer) throw new MuxerEmptyOutput()
+      return new Blob([buffer], { type: config.mime })
+    },
+  }
 }

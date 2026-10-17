@@ -128,7 +128,7 @@ export async function renderSongVideo(
   setActiveClock(clock)
   audioEngine.beginExportPlayback()
 
-  const muxer = createMuxer({ codec, width, height, fps, audio })
+  const muxer = createMuxer({ config: codecInfo, width, height, fps, audio })
 
   let videoEncoderError: Error | null = null
   const videoEncoder = new VideoEncoder({
@@ -310,7 +310,7 @@ export async function renderSongVideo(
     }
 
     onProgress?.({ phase: 'finalizing' })
-    const blob = muxer.finalize()
+    const blob = await muxer.finalize()
     onProgress?.({ phase: 'done' })
     return blob
   } finally {

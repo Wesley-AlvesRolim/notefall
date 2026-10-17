@@ -13,6 +13,9 @@ export type VideoCodecConfig = {
   ext: 'mp4' | 'webm'
   mime: 'video/mp4' | 'video/webm'
   audioCodec: 'mp4a.40.2' | 'opus'
+  /** Muxer-side codec ids (mediabunny / mp4-muxer naming, not WebCodecs strings). */
+  muxVideoCodec: 'avc' | 'vp9' | 'av1'
+  muxAudioCodec: 'aac' | 'opus'
   audioSampleRate: 44_100 | 48_000
 }
 
