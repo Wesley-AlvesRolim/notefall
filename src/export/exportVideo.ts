@@ -1,6 +1,7 @@
 import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
 import {
+  VIDEO_CODECS,
   isVideoExportSupported,
   renderSongVideo,
   type AudioTrackConfig,
@@ -8,6 +9,7 @@ import {
   type VideoRenderProgress,
 } from './renderVideo'
 import { VideoRenderAborted } from './errors'
+import { VideoCodec } from './codec/types'
 import { defaultExportFileName, triggerDownload } from './download'
 import type { UserAudioTrack } from './synth/types'
 
@@ -72,12 +74,17 @@ export function computeVideoBitrateKbps(
 
 /**
  * Default AAC-LC audio config — keep aligned with `exportAudio.ts`'s
- * 44.1 kHz so the WAV path and the MP4 audio path produce equivalent
+ * 44.1 kHz so the WAV path and the H.264 / AAC audio path produce equivalent
  * quality. 192 kbps is transparent for piano material.
  */
 export const DEFAULT_AUDIO_CONFIG: AudioTrackConfig = {
   sampleRate: 44_100,
   bitrateKbps: 192,
+}
+
+/** Audio config matching a codec preset (Opus needs 48 kHz). */
+export function audioConfigFor(codec: VideoCodec): AudioTrackConfig {
+  return { sampleRate: VIDEO_CODECS[codec].config.audioSampleRate, bitrateKbps: 192 }
 }
 
 export type VideoExportResult =
@@ -86,12 +93,13 @@ export type VideoExportResult =
   | { kind: 'unsupported' }
   | { kind: 'error'; message: string }
 
-export type Mp4ExportOptions = {
+export type VideoExportOptions = {
+  codec: VideoCodec
   width: number
   height: number
   fps: number
   videoBitrateKbps: number
-  /** `null` to produce a silent MP4 (no audio track). */
+  /** `null` to produce a silent video (no audio track). */
   audio: AudioTrackConfig
   /** Optional accompaniment buffer mixed into the audio track. */
   userAudio?: UserAudioTrack | null
@@ -100,14 +108,15 @@ export type Mp4ExportOptions = {
   onProgress?: (p: VideoRenderProgress) => void
 }
 
-export async function exportSongToMp4(
+export async function exportSongToVideo(
   song: ParsedSong,
   settings: Settings,
-  options: Mp4ExportOptions,
+  options: VideoExportOptions,
 ): Promise<VideoExportResult> {
   if (!isVideoExportSupported()) return { kind: 'unsupported' }
 
   const renderOptions: VideoRenderOptions = {
+    codec: options.codec,
     width: options.width,
     height: options.height,
     fps: options.fps,
@@ -121,7 +130,7 @@ export async function exportSongToMp4(
   try {
     const blob = await renderSongVideo(song, settings, renderOptions)
     if (options.signal?.aborted) return { kind: 'cancelled' }
-    const fileName = options.fileName ?? defaultExportFileName(song.name, 'mp4')
+    const fileName = options.fileName ?? defaultExportFileName(song.name, VIDEO_CODECS[options.codec].config.ext)
     triggerDownload(blob, fileName)
     return { kind: 'ok' }
   } catch (e) {

@@ -54,7 +54,7 @@ import { playExportCompleteChime } from '../audio/exportChime'
 import {
   computeVideoBitrateKbps,
   DEFAULT_AUDIO_CONFIG,
-  exportSongToMp4,
+  exportSongToVideo,
   VIDEO_RESOLUTIONS,
 } from '../export/exportVideo'
 import { isVideoExportSupported } from '../export/renderVideo'
@@ -618,7 +618,8 @@ export function Toolbar() {
           values.fps,
           values.quality,
         )
-        const result = await exportSongToMp4(song, useStore.getState().settings, {
+        const result = await exportSongToVideo(song, useStore.getState().settings, {
+          codec: 'h264',
           width: resInfo.width,
           height: resInfo.height,
           fps: values.fps,

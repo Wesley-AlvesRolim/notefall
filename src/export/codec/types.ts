@@ -1,11 +1,19 @@
-export type VideoCodec = 'h264'
+export type VideoCodec = 'h264' | 'vp9' | 'av1'
+
+export type VideoEncoderSettings = {
+  codec: VideoCodec
+  width: number
+  height: number
+  fps: number
+  bitrateKbps: number
+}
 
 export type VideoCodecConfig = {
-  container: 'mp4'
-  ext: 'mp4'
-  mime: 'video/mp4'
-  audioCodec: 'mp4a.40.2'
-  audioSampleRate: 44_100
+  container: 'mp4' | 'webm'
+  ext: 'mp4' | 'webm'
+  mime: 'video/mp4' | 'video/webm'
+  audioCodec: 'mp4a.40.2' | 'opus'
+  audioSampleRate: 44_100 | 48_000
 }
 
 export type VideoCodecStrategy = {

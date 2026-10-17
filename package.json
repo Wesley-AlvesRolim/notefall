@@ -31,6 +31,7 @@
     "smplr": "^0.20.0",
     "three": "^0.169.0",
     "tone": "^15.0.4",
+    "webm-muxer": "^5.1.4",
     "zustand": "^5.0.1"
   },
   "devDependencies": {

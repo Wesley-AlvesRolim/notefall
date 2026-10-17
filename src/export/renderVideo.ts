@@ -11,11 +11,12 @@ import { encodeAudioBuffer } from './codec/audio'
 import { computeExportTimeline } from './timeline'
 import type { UserAudioTrack } from './synth/types'
 import { VIDEO_CODECS } from './codec/codecs'
-import { isVideoExportSupported, videoEncoderConfig } from './codec/video'
+import { isVideoExportSupported, probeVideoCodecs, videoEncoderConfig } from './codec/video'
 import { createMuxer } from './codec/muxer'
+import { assertEncodersSupported } from './codec/preflight'
 import type { AudioTrackConfig, VideoCodec } from './codec/types'
 
-export { isVideoExportSupported }
+export { VIDEO_CODECS, isVideoExportSupported, probeVideoCodecs }
 export type { AudioTrackConfig }
 
 /** 1 keyframe per second is a comfortable seeking interval. */
@@ -40,6 +41,7 @@ export type VideoRenderProgress =
   | { phase: 'done' }
 
 export type VideoRenderOptions = {
+  codec: VideoCodec
   width: number
   height: number
   fps: number
@@ -59,7 +61,8 @@ export type VideoRenderOptions = {
 
 /**
  * Offline-render the loaded song's visualizer + sampled audio into a
- * single MP4 (H.264 video + AAC-LC audio). Audio and video render in
+ * single video file — MP4 (H.264 + AAC) or WebM (VP9 / AV1 + Opus),
+ * per `VIDEO_CODECS[codec]`. Audio and video render in
  * parallel — the offline AudioContext processes off the main thread
  * while the video frame loop steps R3F on the main thread — so total
  * wall-clock time ≈ max(audio_time, video_time) instead of the sum.
@@ -85,15 +88,14 @@ export async function renderSongVideo(
   settings: Settings,
   options: VideoRenderOptions,
 ): Promise<Blob> {
-  if (!isVideoExportSupported()) {
-    throw new Error(
-      'Video export requires a browser with WebCodecs (Chrome / Edge / Safari 16.4+).',
-    )
-  }
-  const { width, height, fps, videoBitrateKbps, audio, userAudio, signal, onProgress } = options
+  const { codec, width, height, fps, videoBitrateKbps, audio, userAudio, signal, onProgress } = options
   if (signal?.aborted) throw new VideoRenderAborted()
   const onAbort = () => new VideoRenderAborted()
-  const codec: VideoCodec = 'h264'
+
+  await assertEncodersSupported(
+    { codec, width, height, fps, bitrateKbps: videoBitrateKbps },
+    audio,
+  )
 
   const codecInfo = VIDEO_CODECS[codec].config
 
