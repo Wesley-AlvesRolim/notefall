@@ -117,6 +117,8 @@ export function ExportSettingsDialog({
   // opens, then move off an unavailable selection to the first usable one.
   useEffect(() => {
     if (!isOpen || !videoExportSupported) return
+    // Drop the previous open's result so stale support never shows.
+    setCodecSupport(null)
     let cancelled = false
     void probeVideoCodecs().then((support) => {
       if (cancelled) return
@@ -209,10 +211,13 @@ export function ExportSettingsDialog({
                   {t('export.codec.label')}
                 </Label>
                 {(Object.keys(VIDEO_CODECS) as VideoCodec[]).map((id) => (
-                  <FormatRadio key={id} value={id} disabled={codecSupport ? !codecSupport[id] : false}>
+                  <FormatRadio key={id} value={id} disabled={!codecSupport?.[id]}>
                     {t(`export.codec.${id}`)}
                   </FormatRadio>
                 ))}
+                {!codecSupport && (
+                  <p className="px-2 text-[10px] text-neutral-500">{t('export.codec.checking')}</p>
+                )}
               </RadioGroup>
 
               <RadioGroup

@@ -1,11 +1,3 @@
-import {
-  BufferTarget,
-  EncodedAudioPacketSource,
-  EncodedPacket,
-  EncodedVideoPacketSource,
-  Output,
-  WebMOutputFormat,
-} from 'mediabunny'
 import { ArrayBufferTarget as Mp4Target, Muxer as Mp4Muxer } from 'mp4-muxer'
 import { MuxerEmptyOutput } from '../errors'
 import type { AudioTrackConfig, VideoCodecConfig } from './types'
@@ -24,7 +16,7 @@ export type MuxerParams = {
   audio: AudioTrackConfig
 }
 
-export function createMuxer(params: MuxerParams): MuxerLike {
+export async function createMuxer(params: MuxerParams): Promise<MuxerLike> {
   return params.config.container === 'mp4' ? mp4(params) : webm(params)
 }
 
@@ -50,7 +42,17 @@ function mp4({ config, width, height, fps, audio }: MuxerParams): MuxerLike {
   }
 }
 
-function webm({ config, fps, audio }: MuxerParams): MuxerLike {
+async function webm({ config, fps, audio }: MuxerParams): Promise<MuxerLike> {
+  // Loaded on demand so the WebM-only dependency stays out of the
+  // startup bundle.
+  const {
+    BufferTarget,
+    EncodedAudioPacketSource,
+    EncodedPacket,
+    EncodedVideoPacketSource,
+    Output,
+    WebMOutputFormat,
+  } = await import('mediabunny')
   const output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() })
   const video = new EncodedVideoPacketSource(config.muxVideoCodec)
   output.addVideoTrack(video, { frameRate: fps })
@@ -87,7 +89,7 @@ function webm({ config, fps, audio }: MuxerParams): MuxerLike {
         throw e
       }
       await output.finalize()
-      const buffer = (output.target as BufferTarget).buffer
+      const buffer = (output.target as InstanceType<typeof BufferTarget>).buffer
       if (!buffer) throw new MuxerEmptyOutput()
       return new Blob([buffer], { type: config.mime })
     },

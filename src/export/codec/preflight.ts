@@ -1,3 +1,4 @@
+import i18n from '../../i18n'
 import { VIDEO_CODECS } from './codecs'
 import { isVideoExportSupported, videoEncoderConfig } from './video'
 import type { AudioTrackConfig, VideoCodec, VideoEncoderSettings } from './types'
@@ -7,7 +8,7 @@ function otherCodecs(codec: VideoCodec): string {
   return (Object.keys(VIDEO_CODECS) as VideoCodec[])
     .filter((c) => c !== codec)
     .map((c) => c.toUpperCase())
-    .join(' or ')
+    .join(i18n.t('dialogs:export.preflight.or'))
 }
 
 async function isVideoConfigSupported(config: VideoEncoderConfig): Promise<boolean> {
@@ -34,9 +35,7 @@ export async function assertEncodersSupported(
   audio: AudioTrackConfig,
 ): Promise<void> {
   if (!isVideoExportSupported()) {
-    throw new Error(
-      'Video export needs WebCodecs (Chrome / Edge / Safari 16.4+). In this browser you can still export "Audio only" (WAV).',
-    )
+    throw new Error(i18n.t('dialogs:export.preflight.noWebCodecs'))
   }
 
   const { codec, width, height, fps, bitrateKbps } = video
@@ -45,7 +44,13 @@ export async function assertEncodersSupported(
   )
   if (!videoOk) {
     throw new Error(
-      `This browser cannot encode ${codec.toUpperCase()} video at ${width}×${height} @ ${fps} fps. Try ${otherCodecs(codec)}, or lower the resolution / frame rate.`,
+      i18n.t('dialogs:export.preflight.videoUnsupported', {
+        codec: codec.toUpperCase(),
+        width,
+        height,
+        fps,
+        alternatives: otherCodecs(codec),
+      }),
     )
   }
 
@@ -59,7 +64,11 @@ export async function assertEncodersSupported(
   })
   if (!audioOk) {
     throw new Error(
-      `This browser cannot encode the ${audioCodec} audio track that ${codec.toUpperCase()} export needs. Try ${otherCodecs(codec)}, export "Video only", or export "Audio only" (WAV).`,
+      i18n.t('dialogs:export.preflight.audioUnsupported', {
+        audioCodec,
+        codec: codec.toUpperCase(),
+        alternatives: otherCodecs(codec),
+      }),
     )
   }
 }

@@ -98,6 +98,10 @@ export async function renderSongVideo(
   )
 
   const codecInfo = VIDEO_CODECS[codec].config
+  // Built before any R3F / clock state is touched: the WebM muxer
+  // lazy-loads its library, and a failed load must not leave the
+  // scene in export mode.
+  const muxer = await createMuxer({ config: codecInfo, width, height, fps, audio })
 
   const r3f = getR3FState()
   if (!r3f) {
@@ -128,7 +132,6 @@ export async function renderSongVideo(
   setActiveClock(clock)
   audioEngine.beginExportPlayback()
 
-  const muxer = createMuxer({ config: codecInfo, width, height, fps, audio })
 
   let videoEncoderError: Error | null = null
   const videoEncoder = new VideoEncoder({

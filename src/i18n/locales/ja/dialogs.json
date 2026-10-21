@@ -31,9 +31,15 @@
     "codec": {
       "label": "コーデック",
       "h264": "H.264 + AAC（MP4）— 互換性が最も高い",
-      "vp9": "VP9 + Opus（WebM）— オープン、どこでも再生可",
+      "vp9": "VP9 + Opus（WebM）— オープンな形式",
       "av1": "AV1 + Opus（WebM）— オープン、最小サイズ、低速",
       "checking": "対応コーデックを確認中…"
+    },
+    "preflight": {
+      "noWebCodecs": "動画の書き出しには WebCodecs が必要です（Chrome / Edge / Safari 16.4 以降）。このブラウザーでも「音声のみ（WAV）」は書き出せます。",
+      "videoUnsupported": "このブラウザーでは {{codec}} の映像を {{width}}×{{height}}・{{fps}} fps でエンコードできません。{{alternatives}} を試すか、解像度やフレームレートを下げてください。",
+      "audioUnsupported": "このブラウザーでは、{{codec}} の書き出しに必要な {{audioCodec}} の音声をエンコードできません。{{alternatives}} を試すか、「動画のみ」か「音声のみ（WAV）」で書き出してください。",
+      "or": " または "
     }
   },
   "progress": {

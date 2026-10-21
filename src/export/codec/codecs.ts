@@ -4,8 +4,8 @@ import type { VideoCodecMap } from './types'
  * Per-codec container + audio pairing. H.264 / AAC is the most
  * widely playable, but Firefox-based browsers have no AAC encoder (and
  * H.264 there depends on the OpenH264 plugin). VP9 / AV1 + Opus are
- * royalty-free and encoded in software everywhere WebCodecs ships, so
- * they are the portable choice.
+ * royalty-free and the fallback where AAC is missing; availability
+ * still varies per browser, so the dialog probes each preset.
  * Opus only accepts 48 kHz-family rates; AAC export stays at 44.1 kHz.
  *
  * `pickCodecString` steps the level up by throughput budget:

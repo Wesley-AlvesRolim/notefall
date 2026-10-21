@@ -541,7 +541,7 @@ export function Toolbar() {
 
     const exportFormat = isAudioOnly
       ? 'wav'
-      : `${values.codec}_${values.format === 'video-audio' ? 'av' : 'video'}`
+      : `${VIDEO_CODECS[values.codec].config.container}_${values.format === 'video-audio' ? 'av' : 'video'}`
     const exportProps: EventProps = isAudioOnly
       ? { format: exportFormat }
       : {

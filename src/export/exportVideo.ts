@@ -9,7 +9,7 @@ import {
   type VideoRenderProgress,
 } from './renderVideo'
 import { VideoRenderAborted } from './errors'
-import { VideoCodec } from './codec/types'
+import type { VideoCodec } from './codec/types'
 import { defaultExportFileName, triggerDownload } from './download'
 import type { UserAudioTrack } from './synth/types'
 
