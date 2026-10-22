@@ -88,6 +88,7 @@
     "bloomRadius": "Radius",
     "bloomSmoothing": "Smoothing",
     "background": "Background",
+    "octaveLines": "Octave Lines",
     "highFpsPreview": "60 fps Preview",
     "brightness": "Brightness",
     "whiteKeys": "White Keys",

@@ -71,6 +71,7 @@ const KEYBOARD_KEYS = [
   "keyGlowFollowNote",
   "keyGlowIntensity",
   "noteColor",
+  "octaveLinesEnabled",
   "trackColors",
   "whiteKeyColor",
   "woodColor",
@@ -726,7 +727,8 @@ export function Keyboard() {
           </group>
         );
       })}
-      {dividerLength > 0 &&
+      {settings.octaveLinesEnabled &&
+        dividerLength > 0 &&
         octaveDividerXs.map((x, i) => (
           <mesh
             key={`octave-divider-${i}`}
