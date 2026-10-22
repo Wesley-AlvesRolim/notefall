@@ -776,6 +776,7 @@ export function Inspector() {
             settingKey="backgroundColor"
           />
           <BackgroundImageControls />
+          <BoundSwitchRow label={t('row.octaveLines')} settingKey="octaveLinesEnabled" />
           <BoundSwitchRow label={t('row.highFpsPreview')} settingKey="previewHighFps" />
         </Section>
 

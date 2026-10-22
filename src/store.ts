@@ -190,6 +190,7 @@ export type Settings = {
   bloomSmoothing: number
   // Scene
   backgroundColor: string
+  octaveLinesEnabled: boolean   // vertical B→C guide lines above the keyboard
   // Project-level image displayed behind the 3D scene. The source bytes
   // live in the standalone stage-background asset store; these settings
   // only describe how that asset is presented. They are deliberately not
@@ -458,6 +459,7 @@ export const defaultSettings: Settings = {
   bloomRadius: 0.7,
   bloomSmoothing: 0.4,
   backgroundColor: '#05060a',
+  octaveLinesEnabled: true,
   backgroundImageFit: 'cover',
   backgroundImageOpacity: 1,
   backgroundImageScale: 1,

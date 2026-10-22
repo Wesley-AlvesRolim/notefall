@@ -88,6 +88,7 @@
     "bloomRadius": "半径",
     "bloomSmoothing": "スムージング",
     "background": "背景",
+    "octaveLines": "オクターブ線",
     "highFpsPreview": "60 fps プレビュー",
     "brightness": "明るさ",
     "whiteKeys": "白鍵",
