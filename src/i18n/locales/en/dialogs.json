@@ -12,8 +12,8 @@
     "unsupported": "Video export is unavailable in this browser. Audio export still works.",
     "format": {
       "label": "Format",
-      "videoAudio": "Video + audio (MP4)",
-      "videoOnly": "Video only (MP4, silent)",
+      "videoAudio": "Video + audio",
+      "videoOnly": "Video only (silent)",
       "audioOnly": "Audio only (WAV)"
     },
     "resolution": "Resolution",
@@ -27,7 +27,20 @@
     "playSoundOnComplete": "Play sound when done",
     "test": "Test",
     "cancel": "Cancel",
-    "submit": "Export"
+    "submit": "Export",
+    "codec": {
+      "label": "Codec",
+      "h264": "H.264 + AAC (MP4) — most compatible",
+      "vp9": "VP9 + Opus (WebM) — open format",
+      "av1": "AV1 + Opus (WebM) — open, smallest, slow",
+      "checking": "Checking supported codecs…"
+    },
+    "preflight": {
+      "noWebCodecs": "Video export needs WebCodecs (Chrome / Edge / Safari 16.4+). In this browser you can still export \"Audio only\" (WAV).",
+      "videoUnsupported": "This browser cannot encode {{codec}} video at {{width}}×{{height}} @ {{fps}} fps. Try {{alternatives}}, or lower the resolution / frame rate.",
+      "audioUnsupported": "This browser cannot encode the {{audioCodec}} audio track that {{codec}} export needs. Try {{alternatives}}, export \"Video only\", or export \"Audio only\" (WAV).",
+      "or": " or "
+    }
   },
   "progress": {
     "note": "This may take a moment. Don't close the tab.",

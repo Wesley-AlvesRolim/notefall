@@ -53,11 +53,11 @@ import { exportSongToWav } from '../export/exportAudio'
 import { playExportCompleteChime } from '../audio/exportChime'
 import {
   computeVideoBitrateKbps,
-  DEFAULT_AUDIO_CONFIG,
-  exportSongToMp4,
+  audioConfigFor,
+  exportSongToVideo,
   VIDEO_RESOLUTIONS,
 } from '../export/exportVideo'
-import { isVideoExportSupported } from '../export/renderVideo'
+import { VIDEO_CODECS, isVideoExportSupported } from '../export/renderVideo'
 import { showAlert } from './confirm'
 import { ExportProgressModal, type ExportProgressState } from './ExportProgressModal'
 import {
@@ -502,7 +502,7 @@ export function Toolbar() {
   // can tell the files apart at a glance:
   //   song-1080p60-high.mp4
   //   song-1080p60-high-silent.mp4
-  //   song-720p30-standard.mp4
+  //   song-720p30-standard.webm
   //   song.wav
   const buildExportFileName = (values: ExportSettingsValues): string => {
     const songName = song?.name ?? ''
@@ -518,12 +518,12 @@ export function Toolbar() {
     const resLabel = VIDEO_RESOLUTIONS[values.resolution].label.toLowerCase()
     const tag = `${resLabel}${values.fps}-${values.quality}`
     const silent = values.format === 'video-only' ? '-silent' : ''
-    return `${stem}-${tag}${silent}.mp4`
+    return `${stem}-${tag}${silent}.${VIDEO_CODECS[values.codec].config.ext}`
   }
 
   // Run the actual export with the dialog's chosen values. Closes
   // the settings dialog, opens the progress modal, dispatches to
-  // the right pipeline (WAV / MP4), maps progress to the unified
+  // the right pipeline (WAV / video), maps progress to the unified
   // shape, and surfaces errors.
   const onSubmitExportSettings = async (values: ExportSettingsValues) => {
     if (!song) return
@@ -541,13 +541,12 @@ export function Toolbar() {
 
     const exportFormat = isAudioOnly
       ? 'wav'
-      : values.format === 'video-audio'
-        ? 'mp4_av'
-        : 'mp4_video'
+      : `${VIDEO_CODECS[values.codec].config.container}_${values.format === 'video-audio' ? 'av' : 'video'}`
     const exportProps: EventProps = isAudioOnly
       ? { format: exportFormat }
       : {
           format: exportFormat,
+          codec: values.codec,
           resolution: values.resolution,
           fps: values.fps,
           quality: values.quality,
@@ -618,12 +617,13 @@ export function Toolbar() {
           values.fps,
           values.quality,
         )
-        const result = await exportSongToMp4(song, useStore.getState().settings, {
+        const result = await exportSongToVideo(song, useStore.getState().settings, {
+          codec: values.codec,
           width: resInfo.width,
           height: resInfo.height,
           fps: values.fps,
           videoBitrateKbps,
-          audio: includeAudio ? DEFAULT_AUDIO_CONFIG : null,
+          audio: includeAudio ? audioConfigFor(values.codec) : null,
           userAudio: includeAudio ? userAudioForExport : null,
           fileName,
           signal: abort.signal,

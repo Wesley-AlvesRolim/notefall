@@ -1,28 +1,23 @@
 import * as THREE from 'three'
-import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
 import type { ParsedSong } from '../midi/types'
-import { buildSpeedMap, midiToTimeline } from '../midi/speedMap'
 import type { Settings } from '../store'
 import { VirtualClock, resetActiveClock, setActiveClock } from '../audio/clock'
 import { audioEngine } from '../audio/engine'
 import { getR3FState } from '../scene/exportBridge'
-import { AudioRenderAborted, renderSongAudio } from './renderAudio'
+import { AudioRenderAborted, VideoRenderAborted } from './errors'
+import { renderSongAudio } from './renderAudio'
+import { MAX_ENCODE_QUEUE, raceWithAbort, yieldToEventLoop } from './async'
+import { encodeAudioBuffer } from './codec/audio'
+import { computeExportTimeline } from './timeline'
+import type { UserAudioTrack } from './synth/types'
+import { VIDEO_CODECS } from './codec/codecs'
+import { isVideoExportSupported, probeVideoCodecs, videoEncoderConfig } from './codec/video'
+import { createMuxer } from './codec/muxer'
+import { assertEncodersSupported } from './codec/preflight'
+import type { AudioTrackConfig, VideoCodec } from './codec/types'
 
-/**
- * Match the audio render's tail. Falling notes already past the hit
- * line still rise (history mode), landing flashes finish, and the
- * reverb wash fades.
- */
-const TAIL_SECONDS = 5
-
-/** AAC-LC codec string for the AudioEncoder configure() call. */
-const AAC_CODEC_STRING = 'mp4a.40.2'
-
-/** Samples per AAC encoder frame. AAC's natural frame size is 1024. */
-const AUDIO_CHUNK_SAMPLES = 1024
-
-/** Encoder backpressure threshold. */
-const MAX_ENCODE_QUEUE = 4
+export { VIDEO_CODECS, isVideoExportSupported, probeVideoCodecs }
+export type { AudioTrackConfig }
 
 /** 1 keyframe per second is a comfortable seeking interval. */
 const KEYFRAME_INTERVAL_SECONDS = 1
@@ -45,19 +40,8 @@ export type VideoRenderProgress =
   | { phase: 'finalizing' }
   | { phase: 'done' }
 
-/**
- * Optional audio track config. `null` produces a silent video — the
- * mp4-muxer is built without an audio track, the offline audio
- * render is skipped entirely (saves the ~60 MB sample fetch + the
- * convolution-reverb cost), and the progress bar reflects video
- * work only.
- */
-export type AudioTrackConfig = {
-  sampleRate: number
-  bitrateKbps: number
-} | null
-
 export type VideoRenderOptions = {
+  codec: VideoCodec
   width: number
   height: number
   fps: number
@@ -70,89 +54,15 @@ export type VideoRenderOptions = {
    * pass doesn't see the audio buffer directly. Ignored when
    * `audio === null` (no audio track wanted).
    */
-  userAudio?: {
-    buffer: AudioBuffer
-    offsetSec: number
-    volume: number
-    trimStartSec: number
-    trimEndSec: number | null
-  } | null
+  userAudio?: UserAudioTrack | null
   signal?: AbortSignal
   onProgress?: (p: VideoRenderProgress) => void
 }
 
-export class VideoRenderAborted extends Error {
-  constructor() {
-    super('Video render aborted')
-    this.name = 'VideoRenderAborted'
-  }
-}
-
-export function isVideoExportSupported(): boolean {
-  return (
-    typeof VideoEncoder !== 'undefined' &&
-    typeof AudioEncoder !== 'undefined' &&
-    typeof VideoFrame !== 'undefined' &&
-    typeof AudioData !== 'undefined' &&
-    typeof EncodedVideoChunk !== 'undefined'
-  )
-}
-
-/**
- * H.264 codec string for a given resolution × fps. Levels:
- *   4.0 → 1080p30, 4.1 → 1080p60, 5.0 → 4K30, 5.1 → 4K60
- */
-function pickAvcCodecString(width: number, height: number, fps: number): string {
-  const macroblocksPerSec = ((width * height) / 256) * fps
-  if (macroblocksPerSec <= 245_760) return 'avc1.640028'
-  if (macroblocksPerSec <= 491_520) return 'avc1.640029'
-  if (macroblocksPerSec <= 589_824) return 'avc1.640032'
-  return 'avc1.640033'
-}
-
-/**
- * Race a promise against an AbortSignal so that long awaits become
- * cancellable. Symmetric with the helper inside renderAudio.ts —
- * duplicated here so each module's failure-mode error type stays
- * local.
- */
-function raceWithAbort<T>(p: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return p
-  if (signal.aborted) return Promise.reject(new VideoRenderAborted())
-  return new Promise<T>((resolve, reject) => {
-    p.then(resolve, reject)
-    signal.addEventListener('abort', () => reject(new VideoRenderAborted()), {
-      once: true,
-    })
-  })
-}
-
-/**
- * Yield to the event loop so DOM events (notably the Cancel button's
- * click) can be processed mid-render. Uses MessageChannel rather than
- * `setTimeout(0)` because the HTML spec clamps nested setTimeouts at
- * ≥4 ms after 5 levels of nesting — adds up to many seconds across an
- * 18 000-frame render. MessageChannel-postMessage has no such clamp
- * and runs in the next macrotask. The channel + handler are reused
- * across calls so we don't allocate per frame.
- */
-const _yieldChannel = typeof MessageChannel !== 'undefined' ? new MessageChannel() : null
-function yieldToEventLoop(): Promise<void> {
-  if (!_yieldChannel) {
-    return new Promise<void>((r) => setTimeout(r, 0))
-  }
-  return new Promise<void>((resolve) => {
-    _yieldChannel.port1.onmessage = () => {
-      _yieldChannel.port1.onmessage = null
-      resolve()
-    }
-    _yieldChannel.port2.postMessage(null)
-  })
-}
-
 /**
  * Offline-render the loaded song's visualizer + sampled audio into a
- * single MP4 (H.264 video + AAC-LC audio). Audio and video render in
+ * single video file — MP4 (H.264 + AAC) or WebM (VP9 / AV1 + Opus),
+ * per `VIDEO_CODECS[codec]`. Audio and video render in
  * parallel — the offline AudioContext processes off the main thread
  * while the video frame loop steps R3F on the main thread — so total
  * wall-clock time ≈ max(audio_time, video_time) instead of the sum.
@@ -178,13 +88,20 @@ export async function renderSongVideo(
   settings: Settings,
   options: VideoRenderOptions,
 ): Promise<Blob> {
-  if (!isVideoExportSupported()) {
-    throw new Error(
-      'Video export requires a browser with WebCodecs (Chrome / Edge / Safari 16.4+).',
-    )
-  }
-  const { width, height, fps, videoBitrateKbps, audio, userAudio, signal, onProgress } = options
+  const { codec, width, height, fps, videoBitrateKbps, audio, userAudio, signal, onProgress } = options
   if (signal?.aborted) throw new VideoRenderAborted()
+  const onAbort = () => new VideoRenderAborted()
+
+  await assertEncodersSupported(
+    { codec, width, height, fps, bitrateKbps: videoBitrateKbps },
+    audio,
+  )
+
+  const codecInfo = VIDEO_CODECS[codec].config
+  // Built before any R3F / clock state is touched: the WebM muxer
+  // lazy-loads its library, and a failed load must not leave the
+  // scene in export mode.
+  const muxer = await createMuxer({ config: codecInfo, width, height, fps, audio })
 
   const r3f = getR3FState()
   if (!r3f) {
@@ -215,19 +132,6 @@ export async function renderSongVideo(
   setActiveClock(clock)
   audioEngine.beginExportPlayback()
 
-  const muxer = new Muxer({
-    target: new ArrayBufferTarget(),
-    video: { codec: 'avc', width, height, frameRate: fps },
-    // Omit the audio track entirely when audio is disabled — passing
-    // `audio: undefined` produces a silent MP4 with just the video
-    // stream, which is what the "no audio" preset wants.
-    ...(audio
-      ? {
-          audio: { codec: 'aac' as const, numberOfChannels: 2, sampleRate: audio.sampleRate },
-        }
-      : {}),
-    fastStart: 'in-memory',
-  })
 
   let videoEncoderError: Error | null = null
   const videoEncoder = new VideoEncoder({
@@ -318,35 +222,13 @@ export async function renderSongVideo(
     }
     r3f.set({ frameloop: 'never' })
 
-    videoEncoder.configure({
-      codec: pickAvcCodecString(width, height, fps),
-      width,
-      height,
-      bitrate: videoBitrateKbps * 1000,
-      framerate: fps,
-      avc: { format: 'avc' },
-    })
+    videoEncoder.configure(videoEncoderConfig(codec, width, height, fps, videoBitrateKbps))
 
-    // Effective end-of-timeline mirrors the audio render: when the
-    // user-provided accompaniment extends past the MIDI we render
-    // additional frames so the final visual still matches the audio
-    // tail (otherwise the video would freeze on its last MIDI frame
-    // while the audio kept playing).
-    const audioTrimEnd = userAudio
-      ? Math.min(userAudio.buffer.duration, userAudio.trimEndSec ?? userAudio.buffer.duration)
-      : 0
-    const audioEnd = userAudio ? userAudio.offsetSec + audioTrimEnd : 0
-    const midiTrimEnd = settings.midiTrimEndSec ?? song.duration
-    // Speed automation can stretch the MIDI past its natural length;
-    // walk the map to get the actual timeline end.
-    const speedMap = buildSpeedMap(settings.midiSpeedAutomation)
-    const midiTrimEndTimeline = midiToTimeline(speedMap, midiTrimEnd)
-    // Mirror renderAudio: MIDI is shifted by `settings.midiOffsetSec`
-    // on the export timeline so the rendered video extends past the
-    // delayed song end. Trim ends shrink the rendered window so we
-    // don't burn frames on a silent tail.
-    const totalDuration =
-      Math.max(midiTrimEndTimeline + settings.midiOffsetSec, audioEnd) + TAIL_SECONDS
+    // Same window as the audio render (MIDI offset / trim / speed
+    // automation / accompaniment tail + TAIL_SECONDS) so the final
+    // visual matches the audio tail instead of freezing on the last
+    // MIDI frame while the audio keeps playing.
+    const { totalDuration } = computeExportTimeline(song, settings, userAudio ?? null)
     const totalFrames = Math.max(1, Math.ceil(totalDuration * fps))
     const usPerFrame = Math.round(1_000_000 / fps)
     const keyframeInterval = Math.max(1, Math.round(KEYFRAME_INTERVAL_SECONDS * fps))
@@ -393,7 +275,7 @@ export async function renderSongVideo(
       emitOverall()
     }
 
-    await raceWithAbort(videoEncoder.flush(), signal)
+    await raceWithAbort(videoEncoder.flush(), signal, onAbort)
     if (videoEncoderError) throw videoEncoderError
 
     // Audio AAC encode pass. Skipped entirely when audio is disabled.
@@ -407,57 +289,31 @@ export async function renderSongVideo(
           throw e
         }),
         signal,
+        onAbort,
       )
 
       audioEncoder.configure({
-        codec: AAC_CODEC_STRING,
+        codec: codecInfo.audioCodec,
         sampleRate: audioBuffer.sampleRate,
         numberOfChannels: audioBuffer.numberOfChannels,
         bitrate: audio.bitrateKbps * 1000,
       })
 
-      const numChannels = audioBuffer.numberOfChannels
-      const totalSamples = audioBuffer.length
-      const channelData: Float32Array[] = []
-      for (let c = 0; c < numChannels; c++) {
-        channelData.push(audioBuffer.getChannelData(c))
-      }
-      for (let off = 0; off < totalSamples; off += AUDIO_CHUNK_SAMPLES) {
-        if (signal?.aborted) throw new VideoRenderAborted()
-        if (audioEncoderError) throw audioEncoderError
-        const chunkLen = Math.min(AUDIO_CHUNK_SAMPLES, totalSamples - off)
-        const planar = new Float32Array(chunkLen * numChannels)
-        for (let c = 0; c < numChannels; c++) {
-          planar.set(channelData[c].subarray(off, off + chunkLen), c * chunkLen)
-        }
-        const audioData = new AudioData({
-          format: 'f32-planar',
-          sampleRate: audioBuffer.sampleRate,
-          numberOfFrames: chunkLen,
-          numberOfChannels: numChannels,
-          timestamp: Math.round((off / audioBuffer.sampleRate) * 1_000_000),
-          data: planar,
-        })
-        audioEncoder.encode(audioData)
-        audioData.close()
-
-        while (audioEncoder.encodeQueueSize > MAX_ENCODE_QUEUE) {
-          await yieldToEventLoop()
+      await encodeAudioBuffer({
+        encoder: audioEncoder,
+        buffer: audioBuffer,
+        assertAlive: () => {
           if (signal?.aborted) throw new VideoRenderAborted()
           if (audioEncoderError) throw audioEncoderError
-        }
-
-        setAudioFraction_encode((off + chunkLen) / totalSamples)
-      }
-      await raceWithAbort(audioEncoder.flush(), signal)
-      if (audioEncoderError) throw audioEncoderError
+        },
+        signal,
+        onAbort,
+        onProgress: setAudioFraction_encode,
+      })
     }
 
     onProgress?.({ phase: 'finalizing' })
-    muxer.finalize()
-
-    const target = muxer.target as ArrayBufferTarget
-    const blob = new Blob([target.buffer], { type: 'video/mp4' })
+    const blob = await muxer.finalize()
     onProgress?.({ phase: 'done' })
     return blob
   } finally {

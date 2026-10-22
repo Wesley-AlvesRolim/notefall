@@ -22,6 +22,7 @@
     "fflate": "^0.8.2",
     "i18next": "^26.2.0",
     "i18next-browser-languagedetector": "^8.2.1",
+    "mediabunny": "^1.61.6",
     "mp4-muxer": "^5.2.2",
     "posthog-js": "^1.374.2",
     "react": "^18.3.1",
