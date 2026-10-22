@@ -475,6 +475,7 @@ export function HitParticles() {
       emitAccum.fill(0)
       maxDeathTime.current = 0
       aliveCountRef.current = 0
+      aliveFlags.fill(0)
     }
 
     // Clamped at both ends: the upper bound absorbs backgrounded-tab
@@ -580,7 +581,15 @@ export function HitParticles() {
     // press or death-burst (handled after this block) will refresh it
     // and the loop resumes next frame.
     const anyAlive = nowSec < maxDeathTime.current && aliveCountRef.current > 0
-    let aliveCount = anyAlive ? aliveCountRef.current : 0
+    if (!anyAlive && aliveCountRef.current > 0) {
+      // Every listed particle has expired. Clear their membership flags
+      // too: a flag left at 1 makes the ring buffer treat the slot as
+      // "already listed" when it wraps back to it (~32k emissions later),
+      // so particles emitted there are never integrated and sit frozen.
+      for (let k = 0; k < aliveCountRef.current; k++) aliveFlags[aliveIndices[k]] = 0
+      aliveCountRef.current = 0
+    }
+    let aliveCount = aliveCountRef.current
     for (let k = 0; k < aliveCount; ) {
       const i = aliveIndices[k]
       const birth = births[i]
