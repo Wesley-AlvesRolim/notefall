@@ -1,4 +1,3 @@
-import { ArrayBufferTarget as Mp4Target, Muxer as Mp4Muxer } from 'mp4-muxer'
 import { MuxerEmptyOutput } from '../errors'
 import type { AudioTrackConfig, VideoCodecConfig } from './types'
 
@@ -10,50 +9,27 @@ export type MuxerLike = {
 
 export type MuxerParams = {
   config: VideoCodecConfig
-  width: number
-  height: number
   fps: number
   audio: AudioTrackConfig
 }
 
-export async function createMuxer(params: MuxerParams): Promise<MuxerLike> {
-  return params.config.container === 'mp4' ? mp4(params) : webm(params)
-}
-
-function mp4({ config, width, height, fps, audio }: MuxerParams): MuxerLike {
-  const target = new Mp4Target()
-  const muxer = new Mp4Muxer({
-    target,
-    video: { codec: config.muxVideoCodec, width, height, frameRate: fps },
-    // Omit the audio track entirely when audio is disabled — a
-    // silent MP4 with just the video stream.
-    ...(audio && {
-      audio: { codec: config.muxAudioCodec, numberOfChannels: 2, sampleRate: audio.sampleRate },
-    }),
-    fastStart: 'in-memory',
-  })
-  return {
-    addVideoChunk: (c, meta) => muxer.addVideoChunk(c, meta),
-    addAudioChunk: (c, meta) => muxer.addAudioChunk(c, meta),
-    finalize: async () => {
-      muxer.finalize()
-      return new Blob([target.buffer], { type: config.mime })
-    },
-  }
-}
-
-async function webm({ config, fps, audio }: MuxerParams): Promise<MuxerLike> {
-  // Loaded on demand so the WebM-only dependency stays out of the
-  // startup bundle.
+export async function createMuxer({ config, fps, audio }: MuxerParams): Promise<MuxerLike> {
+  // Loaded on demand so the muxer stays out of the startup bundle.
   const {
     BufferTarget,
     EncodedAudioPacketSource,
     EncodedPacket,
     EncodedVideoPacketSource,
+    Mp4OutputFormat,
     Output,
     WebMOutputFormat,
   } = await import('mediabunny')
-  const output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() })
+  // `in-memory` fast start puts moov before mdat (progressive playback).
+  const format =
+    config.container === 'mp4'
+      ? new Mp4OutputFormat({ fastStart: 'in-memory' })
+      : new WebMOutputFormat()
+  const output = new Output({ format, target: new BufferTarget() })
   const video = new EncodedVideoPacketSource(config.muxVideoCodec)
   output.addVideoTrack(video, { frameRate: fps })
   const sound = audio ? new EncodedAudioPacketSource(config.muxAudioCodec) : null

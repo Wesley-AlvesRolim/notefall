@@ -101,7 +101,7 @@ export async function renderSongVideo(
   // Built before any R3F / clock state is touched: the WebM muxer
   // lazy-loads its library, and a failed load must not leave the
   // scene in export mode.
-  const muxer = await createMuxer({ config: codecInfo, width, height, fps, audio })
+  const muxer = await createMuxer({ config: codecInfo, fps, audio })
 
   const r3f = getR3FState()
   if (!r3f) {

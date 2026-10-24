@@ -10,7 +10,7 @@ Browser-based piano visualizer. Notes fall onto an 88-key keyboard while a MIDI 
 - `@tonejs/midi` for parse/serialize; `tone` only for AudioContext lifecycle
 - `react-aria-components` + Tailwind for UI; `zustand` for state
 - IndexedDB for recordings; Web MIDI API for hardware input
-- `mp4-muxer` / `mediabunny` (WebM) + WebCodecs (`VideoEncoder` / `AudioEncoder`) for offline MP4 / WebM export
+- `mediabunny` (MP4 / WebM muxing) + WebCodecs (`VideoEncoder` / `AudioEncoder`) for offline MP4 / WebM export
 
 ## Layout
 
@@ -257,7 +257,7 @@ Single function `renderSongVideo(song, settings, options)` produces a complete M
 1. Snapshot R3F state (renderer size, pixel ratio, frameloop, camera aspect, `state.clock` flags) for the `finally`-block restoration.
 2. **Disarm `THREE.Clock`**: stop it + set `autoStart=false` + zero `elapsedTime`/`oldTime`. Without this, R3F's `getDelta()` (called unconditionally before the `frameloop="never"` override) accumulates wall-clock seconds into `elapsedTime`. The override's `delta = timestamp - elapsedTime` then drifts with units mismatched against our virtual timeline and **eventually goes negative** — sending Keyboard's exp-decay glow into NaN/Infinity (~1 minute into a render the keyboard saturates and clips to black). With autoStart off, getDelta returns 0 and the override owns the timeline.
 3. Install a `VirtualClock` and call `audioEngine.beginExportPlayback()`.
-4. Build one muxer via `createMuxer` (`codec/muxer.ts`): `mp4-muxer` for H.264, `mediabunny` (`Output` + `WebMOutputFormat` + `Encoded*PacketSource`) for VP9 / AV1, behind a small `MuxerLike` interface. Params carry the selected `VIDEO_CODECS[codec].config` (`muxVideoCodec` / `muxAudioCodec` name the muxer-side track codecs); `muxer.ts` never imports `VIDEO_CODECS`. Interface (`addVideoChunk` / `addAudioChunk` / `finalize(): Promise<Blob>`). Mediabunny's `add` is async while encoder output callbacks are sync, so the WebM path serialises every `add` on one promise chain (after `output.start()`); the first error poisons the chain and rethrows from `finalize`.
+4. Build one muxer via `createMuxer` (`codec/muxer.ts`): `mediabunny` `Output` + `Encoded*PacketSource`, with `Mp4OutputFormat` (`fastStart: 'in-memory'`) for H.264 and `WebMOutputFormat` for VP9 / AV1, behind a small `MuxerLike` interface. Params carry the selected `VIDEO_CODECS[codec].config` (`muxVideoCodec` / `muxAudioCodec` name the muxer-side track codecs); `muxer.ts` never imports `VIDEO_CODECS`. Interface (`addVideoChunk` / `addAudioChunk` / `finalize(): Promise<Blob>`). Mediabunny's `add` is async while encoder output callbacks are sync, so every `add` is serialised on one promise chain (after `output.start()`); the first error poisons the chain and rethrows from `finalize`.
 5. **Audio render runs in parallel** with the video pass — `renderSongAudio(...)` returns a Promise that's not awaited until step 7. The OfflineAudioContext processes off the main thread; the video frame loop runs on the main thread; total wall-clock = max(audio, video) instead of sum.
 6. Resize renderer's drawing buffer to export resolution, switch to `frameloop="never"`. Frame loop:
    - `clock.setTime(t)` — virtual time in seconds
@@ -274,7 +274,7 @@ Single function `renderSongVideo(song, settings, options)` produces a complete M
 | `h264` | MP4 | AAC-LC (`mp4a.40.2`) | 44.1 kHz |
 | `vp9` / `av1` | WebM | Opus | 48 kHz (Opus rejects 44.1 kHz) |
 
-`audioConfigFor(codec)` (`exportVideo.ts`) returns the matching audio track config — always use it instead of a fixed 44.1 kHz, or Opus export fails. To add a codec: extend `VideoCodec`, add a `VIDEO_CODECS` entry, handle its container in `createMuxer`, and add the `export.codec.<id>` i18n strings.
+`audioConfigFor(codec)` (`exportVideo.ts`) returns the matching audio track config — always use it instead of a fixed 44.1 kHz, or Opus export fails. To add a codec: extend `VideoCodec`, add a `VIDEO_CODECS` entry, map its container to a mediabunny output format in `createMuxer`, and add the `export.codec.<id>` i18n strings.
 
 **Progress** is a single weighted-sum bar: `audioWeight × audioFraction + videoWeight × videoFraction`. Audio weight collapses to 0 when no audio track is wanted, so the bar becomes pure video progress. The audio fraction is itself a weighted sum of three sub-phases (loading 35% / offline render 55% / AAC encode 10%) so it's monotonic.
 
