@@ -51,7 +51,8 @@
     "aria": "Help and feedback",
     "reportBug": "Report a bug…",
     "requestFeature": "Request a feature…",
-    "viewOnGitHub": "View on GitHub"
+    "viewOnGitHub": "View on GitHub",
+    "build": "Build {{commit}}"
   },
   "analytics": {
     "label": "Help improve notefall",

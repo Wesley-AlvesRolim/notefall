@@ -51,7 +51,8 @@
     "aria": "ヘルプとフィードバック",
     "reportBug": "バグを報告…",
     "requestFeature": "機能をリクエスト…",
-    "viewOnGitHub": "GitHubで見る"
+    "viewOnGitHub": "GitHubで見る",
+    "build": "ビルド {{commit}}"
   },
   "analytics": {
     "label": "notefall の改善に協力する",

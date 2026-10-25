@@ -11,9 +11,9 @@ export function UnsupportedScreen() {
   const { t } = useTranslation('screens')
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-neutral-950 px-6 text-center text-neutral-200">
-      <span className="flex items-baseline gap-1.5">
+      <span className="flex items-center gap-2">
+        <img src="/favicon.svg" alt="" className="h-6 w-6" draggable={false} />
         <span className="text-lg font-semibold tracking-wide">notefall</span>
-        <span className="font-mono text-[10px] text-neutral-500">v{__APP_VERSION__}</span>
       </span>
 
       <MonitorIcon className="h-10 w-10 text-neutral-600" />
