@@ -42,7 +42,7 @@ opt-out usage stats only.)
   [`tone`](https://tonejs.github.io) for AudioContext lifecycle
 - [`@tonejs/midi`](https://github.com/Tonejs/Midi) for MIDI parse/serialize
 - `react-aria-components` + Tailwind for the UI, `zustand` for state
-- `mp4-muxer` + WebCodecs for offline MP4 export
+- `mediabunny` + WebCodecs for offline MP4 / WebM export
 
 ## License
 
