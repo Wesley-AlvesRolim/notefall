@@ -37,7 +37,7 @@ import { useRecorder } from '../audio/useRecorder'
 import { parseMidi } from '../midi/parse'
 import { serializeMidi } from '../midi/serialize'
 import {
-  importUserAudio,
+  pickAndImportUserAudio,
   loadDemoProject,
   newProject,
   openProject,
@@ -130,29 +130,6 @@ const openExternal = (url: string) => {
   // back to the app — standard hygiene for any externally-controlled
   // URL even though our destinations are hard-coded.
   window.open(url, '_blank', 'noopener,noreferrer')
-}
-
-/**
- * Trigger the OS file picker programmatically. Used by the File menu's
- * "Open Audio…" item — `react-aria-components`' `FileTrigger`
- * expects to wrap a Button and doesn't nest cleanly inside a MenuItem,
- * so we drop down to a vanilla input element and resolve with the
- * chosen file. Resolves with `null` when the user dismisses the dialog
- * (only detectable in Chrome 113+; on Safari/Firefox the promise stays
- * pending if the user cancels — acceptable since the caller treats
- * "no file" the same as "no-op").
- */
-function pickFile(accept: string): Promise<File | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = accept
-    input.onchange = () => {
-      const file = input.files?.[0]
-      resolve(file ?? null)
-    }
-    input.click()
-  })
 }
 
 // Shared className strings for File menu items. Centralised so the three
@@ -403,11 +380,7 @@ export function Toolbar() {
     if (result.kind === 'error') reportError(t('error.couldNotSaveProject'), result.message)
   }
   const onImportAudio = async () => {
-    const file = await pickFile(
-      'audio/*,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.webm',
-    )
-    if (!file) return
-    const result = await importUserAudio(file)
+    const result = await pickAndImportUserAudio()
     if (result.kind === 'error') {
       reportError(result.title ?? t('error.couldNotLoadAudio'), result.message)
     }

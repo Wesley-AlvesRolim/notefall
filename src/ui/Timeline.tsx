@@ -4,6 +4,8 @@ import { Slider, SliderThumb, SliderTrack } from 'react-aria-components'
 import { useStore } from '../store'
 import { audioEngine } from '../audio/engine'
 import { useUserAudio, type UserAudioPeaks } from '../audio/userAudio'
+import { pickAndImportUserAudio } from '../projects/actions'
+import { showAlert } from './confirm'
 import { useCurrentDisplayTime } from '../audio/useCurrentTime'
 import type { NoteEvent } from '../midi/types'
 import {
@@ -1523,8 +1525,19 @@ export function Timeline() {
   const midiEnd = songDuration > 0 ? midiTrimEndSec + midiOffsetSec : 0
   const totalDuration = Math.max(0.001, midiEnd, audioEnd)
 
+  // With a song loaded the audio lane is always shown — empty, it holds
+  // the "add audio" affordance so the accompaniment feature is
+  // discoverable without knowing about drag-and-drop.
   const showAudioLane =
-    !!audioFileName || !!audioLoading || !!audioError || !!peaks
+    !!song || !!audioFileName || !!audioLoading || !!audioError || !!peaks
+  // Also shown after a failed decode, next to the error, so the user can retry.
+  const audioEmpty = !peaks && !audioLoading
+  const onAddAudio = async () => {
+    const result = await pickAndImportUserAudio()
+    if (result.kind === 'error') {
+      void showAlert({ title: result.title ?? t('lane.addAudioFailed'), message: result.message, tone: 'error' })
+    }
+  }
 
   useEffect(() => {
     const el = wrapRef.current
@@ -2506,9 +2519,19 @@ export function Timeline() {
                   {t('lane.decoding')}
                 </div>
               )}
-              {audioError && !audioLoading && (
-                <div className="flex h-full items-center justify-center px-2 text-center text-[10px] text-rose-300">
-                  {audioError}
+              {audioEmpty && (
+                <div className="flex h-full flex-col items-center justify-center gap-1 rounded border border-dashed border-neutral-700/70 px-2 text-[10px] text-neutral-500">
+                  {audioError && <span className="text-center text-rose-300">{audioError}</span>}
+                  <span className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void onAddAudio()}
+                      className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] font-medium text-sky-200 outline-none hover:bg-sky-500/25 hover:text-sky-100 focus-visible:ring-1 focus-visible:ring-sky-500"
+                    >
+                      {t('lane.addAudio')}
+                    </button>
+                    <span>{t('lane.addAudioHint')}</span>
+                  </span>
                 </div>
               )}
             </div>

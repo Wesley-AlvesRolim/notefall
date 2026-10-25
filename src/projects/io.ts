@@ -1,4 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
+import { AUDIO_EXTENSIONS, isAudioName } from '../audio/userAudio'
 import {
   PROJECT_FILE_DESCRIPTION,
   PROJECT_FILE_EXTENSION,
@@ -259,8 +260,8 @@ const ACCEPT_TYPES = [
     accept: { [PICKER_MIME]: [PROJECT_FILE_EXTENSION] },
   },
 ]
-// Accept list for the unified Open dialog: notefall projects (`.nfz`)
-// and raw MIDI files combined into a single group. Splitting them into
+// Accept list for the unified Open dialog: notefall projects (`.nfz`),
+// raw MIDI files and accompaniment audio combined into a single group. Splitting them into
 // two entries (one per MIME) makes the picker render two filters and
 // — on macOS — grays out whichever isn't currently selected. A single
 // entry with all extensions keeps both file types selectable at once.
@@ -268,9 +269,9 @@ const ACCEPT_TYPES = [
 // purely by the extension list.
 const OPEN_ACCEPT_TYPES = [
   {
-    description: 'notefall project or MIDI',
+    description: 'notefall project, MIDI or audio',
     accept: {
-      [PICKER_MIME]: [PROJECT_FILE_EXTENSION, '.mid', '.midi'],
+      [PICKER_MIME]: [PROJECT_FILE_EXTENSION, '.mid', '.midi', ...AUDIO_EXTENSIONS],
     },
   },
 ]
@@ -292,13 +293,13 @@ export async function showOpen(): Promise<{ buf: ArrayBuffer; ref: FileRef } | n
     }
     const handle = handles[0]
     const file = await handle.getFile()
-    // MIDI files don't get a write handle stored — there's no Save
-    // path back to a `.mid`, so a handle would be misleading. Project
+    // MIDI / audio files don't get a write handle stored — there's no
+    // Save path back to them, so a handle would be misleading. Project
     // files keep theirs for in-place Cmd+S.
-    const isMidi = isMidiName(file.name)
+    const isProject = !isMidiName(file.name) && !isAudioName(file.name)
     return {
       buf: await file.arrayBuffer(),
-      ref: { name: file.name, handle: isMidi ? null : handle },
+      ref: { name: file.name, handle: isProject ? handle : null },
     }
   }
 
@@ -306,7 +307,7 @@ export async function showOpen(): Promise<{ buf: ArrayBuffer; ref: FileRef } | n
   return new Promise((resolve, reject) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = `${PROJECT_FILE_EXTENSION},.mid,.midi,audio/midi,audio/x-midi`
+    input.accept = `${PROJECT_FILE_EXTENSION},.mid,.midi,audio/midi,audio/x-midi,${AUDIO_EXTENSIONS.join(',')}`
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) {

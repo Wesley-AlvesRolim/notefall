@@ -95,6 +95,7 @@
     "loadMidiFirstMessage": "音声はMIDIトラックの伴奏としてのみ読み込めます。音声を読み込む前にMIDIファイルを開くか録音してください。",
     "couldNotLoadAudioTitle": "音声を読み込めませんでした",
     "couldNotLoadAudioMessage": "「{{name}}」をデコードできませんでした。\n\n{{detail}}",
+    "notAudioFile": "「{{name}}」はオーディオファイルではありません。MP3・WAV・OGG・M4A・AAC・FLAC・WebM のファイルを選んでください。",
     "somethingWentWrong": "問題が発生しました"
   }
 }

@@ -95,6 +95,7 @@
     "loadMidiFirstMessage": "Audio can only be loaded as accompaniment for a MIDI track. Open or record a MIDI file before importing audio.",
     "couldNotLoadAudioTitle": "Could not load audio",
     "couldNotLoadAudioMessage": "\"{{name}}\" could not be decoded.\n\n{{detail}}",
+    "notAudioFile": "\"{{name}}\" is not an audio file. Choose an MP3, WAV, OGG, M4A, AAC, FLAC or WebM file.",
     "somethingWentWrong": "Something went wrong"
   }
 }

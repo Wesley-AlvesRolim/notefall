@@ -208,7 +208,7 @@ Zip wrapper present from day 1 even with only `manifest.json`, so audio-sync (fu
 
 **Footgun**: react-aria's `DragTypes.has('Files')` does NOT mirror HTML's `dataTransfer.types.includes('Files')` — it holds MIME types, not the OS-level `'Files'` sentinel. Don't gate `getDropOperation` on `'Files'`; either return `'copy'` unconditionally and filter in `onDrop`, or check specific MIME types.
 
-**Toolbar File menu** consolidates New / Open / Open Recent ▸ / Save / Save As / Open MIDI / Demo Songs. Disables during recording. Open MIDI replaces just the song; Open Project replaces the whole session. Open Recent submenu hides when no recents OR FSA unavailable.
+**Toolbar File menu** consolidates New / Open / Open Recent ▸ / Save / Save As / Open MIDI / Demo Songs. Disables during recording. Open MIDI replaces just the song; Open Project replaces the whole session. Open Recent submenu hides when no recents OR FSA unavailable. **Open… also accepts audio**: an audio pick is added to the current song as its accompaniment (`importUserAudio`) instead of replacing the session, so the discard-changes prompt runs *after* the picker, once the file type is known. With a song loaded the timeline's audio lane is always shown; empty, it carries an "Add audio…" button (`pickAndImportUserAudio`).
 
 **Help menu** opens GitHub issue templates with `&environment=<encoded>` URL-prefilling browser/viewport/FSA info only — never user content. Also hosts the analytics opt-out toggle (see Analytics).
 
