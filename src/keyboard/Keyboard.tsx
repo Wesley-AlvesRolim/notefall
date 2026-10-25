@@ -103,6 +103,11 @@ const BLACK_PRESS_ANGLE =
 // the way up, and longer than one frame at 24 fps so exports show it too.
 const RETRIGGER_LIFT_SECONDS = 0.05;
 const RETRIGGER_PRESS_THRESHOLD = 0.35;
+// The key glow dims with the lift rather than blinking off: it eases toward
+// RETRIGGER_GLOW_FLOOR of its level with time constant RETRIGGER_GLOW_TC,
+// then eases back, so a fast run of repeats doesn't flicker.
+const RETRIGGER_GLOW_FLOOR = 0.3;
+const RETRIGGER_GLOW_TC = 0.03;
 
 // Slope tint: per-frame, slope material's color = lerp(blackKeyColor, white,
 // FACTOR). 0.12 is "若干明るい" — a perceptible but not dramatic step up.
@@ -170,6 +175,11 @@ export function Keyboard() {
   // Absolute time until which a retriggered key is held up (see
   // RETRIGGER_LIFT_SECONDS). Reset on clock epoch like glow / press.
   const liftUntil = useMemo(() => new Float64Array(KEY_COUNT), []);
+  // Glow as drawn this frame: `glow` scaled by `glowDip`, which dims while
+  // a key lifts, so the emissive, black-key tint, and the light / shadow on
+  // the white keys all dim with it. `glow` itself keeps integrating.
+  const glowDip = useMemo(() => new Float32Array(KEY_COUNT).fill(1), []);
+  const shownGlow = useMemo(() => new Float32Array(KEY_COUNT), []);
   const lastEpoch = useRef(clockEpoch());
   // World-space clip applied to the black-key materials: keep only
   // geometry at or in front of the keyboard's back edge (the hit line,
@@ -451,17 +461,23 @@ export function Keyboard() {
       glow.fill(0);
       press.fill(0);
       liftUntil.fill(0);
+      glowDip.fill(1);
     }
     const nowSec = now();
     const brightness = rs.keyboardBrightness;
     const pressK = 1 - Math.exp(-delta / Math.max(0.005, PRESS_TC));
+    const dipK = 1 - Math.exp(-delta / RETRIGGER_GLOW_TC);
     for (let i = 0; i < KEY_COUNT; i++) {
       const decay = rs.keyGlowDecay;
       const target = held[i] ? Math.max(glow[i], 0.6) : 0;
       const k1 = 1 - Math.exp(-delta / Math.max(0.01, decay));
       glow[i] += (target - glow[i]) * k1;
 
-      const pressTarget = held[i] && nowSec >= liftUntil[i] ? 1 : 0;
+      const lifting = nowSec < liftUntil[i];
+      glowDip[i] += ((lifting ? RETRIGGER_GLOW_FLOOR : 1) - glowDip[i]) * dipK;
+      shownGlow[i] = glow[i] * glowDip[i];
+
+      const pressTarget = held[i] && !lifting ? 1 : 0;
       press[i] += (pressTarget - press[i]) * pressK;
 
       const mat = matRefs.current[i];
@@ -479,7 +495,7 @@ export function Keyboard() {
         ? rs.blackKeyColor
         : rs.whiteKeyColor;
       mat.color.set(baseColor).multiplyScalar(brightness);
-      const e = glow[i];
+      const e = shownGlow[i];
       const glowOn = e > 0.001 && settings.keyGlowEnabled;
       // Resolve the glow tint per-key: in "follow note" mode, prefer
       // the per-track override (if the most recent note-on on this
@@ -595,7 +611,7 @@ export function Keyboard() {
     const fallbackG = LIGHT_COLOR_SCRATCH.g;
     const fallbackB = LIGHT_COLOR_SCRATCH.b;
     for (let bk = 0; bk < BLACK_KEY_COUNT; bk++) {
-      blackGlow[bk] = Math.min(1, glow[BLACK_KEY_INDICES[bk]]);
+      blackGlow[bk] = Math.min(1, shownGlow[BLACK_KEY_INDICES[bk]]);
     }
     if (settings.flashEnabled) {
       claimed.fill(0);
@@ -605,7 +621,7 @@ export function Keyboard() {
         let bestVal = 0.005;
         for (let i = 0; i < KEY_COUNT; i++) {
           if (claimed[i]) continue;
-          const v = glow[i];
+          const v = shownGlow[i];
           if (v > bestVal) {
             bestVal = v;
             bestI = i;
