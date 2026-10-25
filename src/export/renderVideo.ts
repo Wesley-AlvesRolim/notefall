@@ -1,4 +1,3 @@
-import * as THREE from 'three'
 import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
 import { VirtualClock, resetActiveClock, setActiveClock } from '../audio/clock'
@@ -16,6 +15,7 @@ import { createMuxer } from './codec/muxer'
 import { assertEncodersSupported } from './codec/preflight'
 import type { AudioTrackConfig, VideoCodec } from './codec/types'
 import { createAvRenderProgress } from './progress'
+import { enterSceneExportMode } from './sceneExportMode'
 
 export { VIDEO_CODECS, isVideoExportSupported, probeVideoCodecs }
 export type { AudioTrackConfig }
@@ -57,16 +57,14 @@ export type VideoRenderOptions = {
  * wall-clock time ≈ max(audio_time, video_time) instead of the sum.
  *
  * Pipeline:
- *   1. Save R3F renderer / clock / camera / frameloop state for
- *      restoration. Disarm `THREE.Clock.autoStart` so its `getDelta()`
- *      doesn't pollute `state.clock.elapsedTime` with wall-clock
- *      seconds in the override path.
+ *   1. Put the R3F scene into export mode (`enterSceneExportMode`:
+ *      export resolution, `frameloop="never"`, disarmed `THREE.Clock`).
  *   2. Install a `VirtualClock` and put the audio engine into silent
  *      export mode.
  *   3. Kick off `renderSongAudio` — runs in its own
  *      `OfflineAudioContext`, doesn't touch the realtime engine.
- *   4. Configure VideoEncoder, switch R3F to `frameloop="never"`, and
- *      step `(totalDuration * fps)` frames in parallel with (3).
+ *   4. Configure VideoEncoder and step `(totalDuration * fps)` frames
+ *      in parallel with (3).
  *   5. After the video loop finishes, await the audio buffer (likely
  *      already done by then), encode it as AAC chunks into the same
  *      muxer.
@@ -96,27 +94,10 @@ export async function renderSongVideo(
   if (!r3f) {
     throw new Error('The 3D scene is not mounted yet. Try again in a moment.')
   }
-  const { gl, camera } = r3f
 
   onProgress?.({ phase: 'preparing' })
 
-  // Snapshot R3F state for restoration.
-  const prevSize = new THREE.Vector2()
-  gl.getSize(prevSize)
-  const prevPixelRatio = gl.getPixelRatio()
-  const prevFrameloop = r3f.frameloop
-  const isPerspective = (camera as THREE.PerspectiveCamera).isPerspectiveCamera === true
-  const prevAspect = isPerspective ? (camera as THREE.PerspectiveCamera).aspect : 1
-
-  const prevClockAutoStart = r3f.clock.autoStart
-  const prevClockRunning = r3f.clock.running
-  const prevClockElapsed = r3f.clock.elapsedTime
-  const prevClockOldTime = r3f.clock.oldTime
-  r3f.clock.stop()
-  r3f.clock.autoStart = false
-  r3f.clock.elapsedTime = 0
-  r3f.clock.oldTime = 0
-
+  const restoreScene = enterSceneExportMode(r3f, width, height)
   const clock = new VirtualClock()
   setActiveClock(clock)
   audioEngine.beginExportPlayback()
@@ -172,16 +153,6 @@ export async function renderSongVideo(
     // surface as an unhandled rejection before we await it.
     audioRenderPromise?.catch(() => undefined)
 
-    // Configure the video encoder + R3F renderer for the video pass.
-    gl.setSize(width, height, false)
-    gl.setPixelRatio(1)
-    if (isPerspective) {
-      const cam = camera as THREE.PerspectiveCamera
-      cam.aspect = width / height
-      cam.updateProjectionMatrix()
-    }
-    r3f.set({ frameloop: 'never' })
-
     videoEncoder.configure(videoEncoderConfig(codec, width, height, fps, videoBitrateKbps))
 
     // Same window as the audio render (MIDI offset / trim / speed
@@ -199,11 +170,11 @@ export async function renderSongVideo(
 
       const t = n / fps
       clock.setTime(t)
-      // Pass SECONDS to advance — see the autoStart=false comment
-      // above. delta in useFrame becomes 1/fps in seconds.
+      // Pass SECONDS to advance — see `enterSceneExportMode`'s clock
+      // disarm. delta in useFrame becomes 1/fps in seconds.
       r3f.advance(t, true)
 
-      const frame = new VideoFrame(gl.domElement, {
+      const frame = new VideoFrame(r3f.gl.domElement, {
         timestamp: n * usPerFrame,
         duration: usPerFrame,
       })
@@ -292,25 +263,6 @@ export async function renderSongVideo(
       /* ignore */
     }
     resetActiveClock()
-    try {
-      if (isPerspective) {
-        const cam = camera as THREE.PerspectiveCamera
-        cam.aspect = prevAspect
-        cam.updateProjectionMatrix()
-      }
-      gl.setPixelRatio(prevPixelRatio)
-      gl.setSize(prevSize.x, prevSize.y, false)
-      r3f.clock.elapsedTime = prevClockElapsed
-      r3f.clock.oldTime = prevClockOldTime
-      r3f.clock.autoStart = prevClockAutoStart
-      if (prevClockRunning) {
-        r3f.clock.oldTime = performance.now()
-        r3f.clock.running = true
-      }
-      r3f.set({ frameloop: prevFrameloop })
-      r3f.invalidate()
-    } catch {
-      /* ignore */
-    }
+    restoreScene()
   }
 }
