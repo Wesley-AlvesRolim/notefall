@@ -144,6 +144,9 @@ function guessAudioMimeFromName(name: string): string {
   return 'application/octet-stream'
 }
 
+/** Accompaniment formats offered by the pickers (decoded via WebAudio). */
+export const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.oga', '.m4a', '.aac', '.flac', '.webm']
+
 export function isAudioName(name: string): boolean {
   return /\.(mp3|wav|ogg|oga|m4a|aac|flac|webm)$/i.test(name)
 }

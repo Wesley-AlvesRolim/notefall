@@ -116,58 +116,47 @@ export type Settings = {
   // Softness of the core falloff — larger = wider halo edge around the bright spot
   flashHaloWidth: number
   flashColor: string
-  // Particles drifting up from the keyboard while a note is held. The
-  // visual signature is a billboarded radial flame-wisp: the quad geometry
-  // stays at fixed size, but the fragment's UV is radially dilated as the
-  // particle ages so the bright core appears to shrink while the soft halo
-  // expands. Motion is curl-noise driven (Bridson 2007), with per-particle
-  // 3D position so the divergence-free vector field can produce internal
-  // cluster width without horizontal spreading.
+  // Particles rising from held keys: soft dots (a share of them drawn
+  // as thin tilted rays) carried by a curl-noise flow, plus faint fog
+  // puffs behind them. See notes/particleSim.ts for the motion model.
   particlesEnabled: boolean
-  particleColor: string
-  particleSize: number          // global scale on the radial falloff
-  particleOpacity: number       // alpha multiplier on the final color
-  particleBrightness: number    // lift toward white in `tex × (color + (1 − color) × brightness) × 1.4`
-  particleLifetime: number      // seconds — visible duration of each particle
-  particleSpeed: number         // multiplier on the initial upward drift velocity
-  particleCount: number         // per-key per-frame emission count (stochastic-rounded)
-  // Curl-noise wind field shape. Multi-octave FBM on top of a 3D Perlin
-  // gradient sampled at 3 displaced bases (Bridson 2007's vector
-  // potential ψ → curl(ψ) = divergence-free flow).
-  particleTurbulence: number    // master strength of the curl contribution to velocity
-  turbulenceFrequency: number   // spatial frequency of the curl field (smaller = larger features)
-  flowSpeed: number        // rate the noise sample point slides along Z (= "wind landscape evolves")
-  // Per-axis turbulence scales — applied BOTH as inverse feature-size
-  // inside the domain transform (asymmetric noise) AND component-wise on
-  // the curl output (per-axis amplitude).
-  turbulenceX: number
-  turbulenceY: number
-  turbulenceZ: number
-  // 0 = noise sample point pinned to the emitter (all particles in one
-  // press follow the same wind in lockstep). 1 = sample purely at the
-  // particle's current position (each drifts independently). Mid values
-  // give intra-emission coherence within a single press.
-  noiseLocality: number
-  // FBM octave count and per-octave multipliers. octaveScale = lacunarity
-  // (frequency multiplier per octave); octaveMultiplier = gain (amplitude
-  // multiplier per octave).
-  turbulenceOctaves: number
-  octaveScale: number
-  octaveMultiplier: number
-  // Multiplicative drag rate on velocity per second. xy_speed and |vz|
-  // are damped by `drag × C × min(speed, 1) × dt` per frame; xy_speed is
-  // floored at a small minimum so particles don't completely stall in
-  // zero-curl regions.
-  drag: number
-  // Rotational pull on velocity.xy angle AWAY from π/2 (= +Y, "up"). +Y
-  // is an unstable equilibrium — particles starting purely upward stay
-  // upward, but any horizontal perturbation grows over time, producing
-  // a swirling-spread visual when this is dialled up.
-  swirl: number
-  // Initial outward kick on emission, in a direction deterministically
-  // hashed from the spawn XY (so two particles spawned at the same XY
-  // get the same launch direction). 0 = pure upward initial velocity.
-  kick: number
+  particleBlending: 'alpha' | 'additive'
+  particleDotCount: number       // emission rate multiplier (rays are a share of the dots)
+  particleDotSize: number
+  particleDotOpacity: number
+  particleDotBrightness: number  // lift of the dot colour toward white
+  particleLife: number           // lifetime multiplier
+  particleRise: number           // upward drift speed
+  particleSpread: number         // launch-direction fan across the emitter (needs launch speed)
+  particleEmitterWidth: number   // spawn band width, in key widths
+  // Turbulence: a multi-octave curl-noise flow the velocity lags toward.
+  particleFlowStrength: number
+  particleFlowX: number          // per-axis weight of the flow
+  particleFlowY: number
+  particleFlowZ: number
+  particleFlowOctaves: number    // 1..4
+  particleFlowOctaveScale: number // frequency multiplier per octave
+  particleFlowOctaveGain: number  // amplitude multiplier per octave
+  particleFlowFrequency: number  // spatial frequency of the flow (larger = smaller swirls)
+  particleFlowEvolution: number  // how fast the flow pattern changes over time
+  particleFlowFollow: number     // 0 = static field the particles rise through, 1 = field rises with them
+  // Motion extras (all off at 0).
+  particleLaunchSpeed: number
+  particleRandomDirection: number
+  particleRandomSpeed: number
+  particleAirFriction: number
+  particleGravityCurl: number    // bends headings away from vertical
+  particleTwirl: number          // orbit around the key's vertical axis
+  particleTwirlVariance: number
+  particleMotionTrail: boolean   // stretch dots along their travel
+  particleRaysEnabled: boolean
+  particleRayLength: number
+  particleRayOpacity: number
+  particleRayAngle: number       // degrees at the keyboard centre
+  particleRaySpread: number      // extra degrees fanned across the keyboard width
+  particleFogEnabled: boolean
+  particleFogCount: number       // fog puff emission rate multiplier
+  particleFogOpacity: number
   // Glowing laser line at the keyboard hit point — straight bar + animated wavy beam
   hitLineEnabled: boolean
   hitLineColor: string
@@ -420,26 +409,41 @@ export const defaultSettings: Settings = {
   flashHaloWidth: 0.5,
   flashColor: '#ffffff',
   particlesEnabled: true,
-  particleColor: '#5ad7ff',
-  particleSize: 1.00,
-  particleOpacity: 0.15,
-  particleBrightness: 0.15,
-  particleLifetime: 0.70,
-  particleSpeed: 1.00,
-  particleCount: 5.00,
-  particleTurbulence: 1.00,
-  turbulenceFrequency: 1.50,
-  flowSpeed: 4.75,
-  turbulenceX: 0.80,
-  turbulenceY: 0.40,
-  turbulenceZ: 0.40,
-  noiseLocality: 0.80,
-  turbulenceOctaves: 3,
-  octaveScale: 1.1,
-  octaveMultiplier: 0.0,
-  drag: 0.10,
-  swirl: 0,
-  kick: 0,
+  particleBlending: 'alpha',
+  particleDotCount: 1.5,
+  particleDotSize: 0.7,
+  particleDotOpacity: 0.7,
+  particleDotBrightness: 1.2,
+  particleLife: 1.0,
+  particleRise: 1.1,
+  particleSpread: 0,
+  particleEmitterWidth: 1.0,
+  particleFlowStrength: 1.0,
+  particleFlowX: 0.5,
+  particleFlowY: 0.5,
+  particleFlowZ: 0.5,
+  particleFlowOctaves: 3,
+  particleFlowOctaveScale: 1.1,
+  particleFlowOctaveGain: 0.5,
+  particleFlowFrequency: 1.1,
+  particleFlowEvolution: 1.3,
+  particleFlowFollow: 0.7,
+  particleLaunchSpeed: 0,
+  particleRandomDirection: 0,
+  particleRandomSpeed: 0,
+  particleAirFriction: 0,
+  particleGravityCurl: 0,
+  particleTwirl: 0,
+  particleTwirlVariance: 0,
+  particleMotionTrail: false,
+  particleRaysEnabled: true,
+  particleRayLength: 1.2,
+  particleRayOpacity: 0.06,
+  particleRayAngle: -40,
+  particleRaySpread: 80,
+  particleFogEnabled: true,
+  particleFogCount: 1.6,
+  particleFogOpacity: 0.07,
   hitLineEnabled: true,
   hitLineColor: '#5ad7ff',
   hitLineIntensity: 2.5,

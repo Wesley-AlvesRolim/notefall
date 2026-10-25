@@ -37,7 +37,7 @@ import { useRecorder } from '../audio/useRecorder'
 import { parseMidi } from '../midi/parse'
 import { serializeMidi } from '../midi/serialize'
 import {
-  importUserAudio,
+  pickAndImportUserAudio,
   loadDemoProject,
   newProject,
   openProject,
@@ -106,7 +106,7 @@ function buildEnvironmentBlock(): string {
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1
   const fsa = hasFileSystemAccess() ? 'yes' : 'no'
   return [
-    `notefall: v${__APP_VERSION__}`,
+    `notefall: ${__APP_COMMIT__}`,
     `User-Agent: ${ua}`,
     `Viewport: ${w}×${h} (DPR ${dpr})`,
     `File System Access: ${fsa}`,
@@ -130,29 +130,6 @@ const openExternal = (url: string) => {
   // back to the app — standard hygiene for any externally-controlled
   // URL even though our destinations are hard-coded.
   window.open(url, '_blank', 'noopener,noreferrer')
-}
-
-/**
- * Trigger the OS file picker programmatically. Used by the File menu's
- * "Open Audio…" item — `react-aria-components`' `FileTrigger`
- * expects to wrap a Button and doesn't nest cleanly inside a MenuItem,
- * so we drop down to a vanilla input element and resolve with the
- * chosen file. Resolves with `null` when the user dismisses the dialog
- * (only detectable in Chrome 113+; on Safari/Firefox the promise stays
- * pending if the user cancels — acceptable since the caller treats
- * "no file" the same as "no-op").
- */
-function pickFile(accept: string): Promise<File | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = accept
-    input.onchange = () => {
-      const file = input.files?.[0]
-      resolve(file ?? null)
-    }
-    input.click()
-  })
 }
 
 // Shared className strings for File menu items. Centralised so the three
@@ -403,11 +380,7 @@ export function Toolbar() {
     if (result.kind === 'error') reportError(t('error.couldNotSaveProject'), result.message)
   }
   const onImportAudio = async () => {
-    const file = await pickFile(
-      'audio/*,.mp3,.wav,.ogg,.oga,.m4a,.aac,.flac,.webm',
-    )
-    if (!file) return
-    const result = await importUserAudio(file)
+    const result = await pickAndImportUserAudio()
     if (result.kind === 'error') {
       reportError(result.title ?? t('error.couldNotLoadAudio'), result.message)
     }
@@ -682,14 +655,16 @@ export function Toolbar() {
           flex gap. Result: every border has symmetric room around it
           and the toolbar's visual rhythm stays even. */}
       <div className="flex items-center">
-        {/* Section 1 — branding + file ops. No left border (it sits at
-            the toolbar's start), so only `pr-3` to leave 12px before
-            the next divider. */}
-        <div className="flex items-center gap-2 pr-3">
-        <span className="flex items-baseline gap-1.5">
+        {/* Section 0 — branding. No left border (it sits at the
+            toolbar's start); a little wider than the 12px rhythm so the
+            wordmark doesn't read as part of the file controls. */}
+        <span className="flex items-center gap-2 pl-0.5 pr-4">
+          <img src="/favicon.svg" alt="" className="h-5 w-5" draggable={false} />
           <span className="text-sm font-semibold tracking-wide text-neutral-200">notefall</span>
-          <span className="font-mono text-[10px] text-neutral-500">v{__APP_VERSION__}</span>
         </span>
+
+        {/* Section 1 — file ops + MIDI input. */}
+        <div className="flex items-center gap-2 border-l border-neutral-800 px-3">
 
         {/* File menu — single entry point for everything that loads or
             saves a song-bearing payload. Project ops (.nfz round-trip),
@@ -1237,6 +1212,13 @@ export function Toolbar() {
                       <span className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white transition group-data-[selected]:translate-x-3" />
                     </span>
                   </Switch>
+                  <Separator className="my-1 h-px border-0 bg-neutral-800" />
+                  {/* Build identifier for bug reports — selectable so it
+                      can be copied; the issue templates get it via the
+                      environment block too. */}
+                  <span className="select-text px-2 py-1 font-mono text-[10px] text-neutral-500">
+                    {t('help.build', { commit: __APP_COMMIT__ })}
+                  </span>
                 </>
               )}
             </Dialog>

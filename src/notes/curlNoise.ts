@@ -164,21 +164,3 @@ export function sampleCurl(
     freq *= octaveScale
   }
 }
-
-// Deterministic per-position direction vector. Used by the optional
-// outward-kick on emission so two particles spawned at the same XY get the
-// same launch direction. Hash → uniform 24-bit → angle in [0, 2π) → unit
-// vector (cos, sin).
-export function dirFromXY(x: number, y: number, out: [number, number]): void {
-  const buf = new ArrayBuffer(8)
-  const f = new Float32Array(buf)
-  const u = new Uint32Array(buf)
-  f[0] = x * 127.1
-  f[1] = y * 311.7
-  let h = u[0] ^ (u[1] >>> 0)
-  h = (Math.imul(h, 0x9E3779B1) ^ (h >>> 16)) >>> 0
-  const seed24 = h & 0xFFFFFF
-  const angle = (seed24 / 0xFFFFFF) * (Math.PI * 2)
-  out[0] = Math.cos(angle)
-  out[1] = Math.sin(angle)
-}

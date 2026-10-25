@@ -33,7 +33,10 @@
     "mute": "ミュート",
     "unmute": "ミュート解除",
     "resizeLanes": "ドラッグでレーンの高さを変更",
-    "decoding": "デコード中…"
+    "decoding": "デコード中…",
+    "addAudio": "＋ オーディオを追加…",
+    "addAudioHint": "または音源ファイルをドラッグ＆ドロップ",
+    "addAudioFailed": "オーディオを読み込めませんでした"
   },
   "context": {
     "volume": "音量",

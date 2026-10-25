@@ -4,7 +4,7 @@ import { parseMidi } from '../midi/parse'
 import { serializeMidi } from '../midi/serialize'
 import { useCustomTexture } from '../notes/customTexture'
 import { useStageBackground } from '../scene/stageBackground'
-import { useUserAudio } from '../audio/userAudio'
+import { AUDIO_EXTENSIONS, isAudioName, useUserAudio } from '../audio/userAudio'
 import { useStore } from '../store'
 import { track } from '../usage'
 import type { SongSource } from '../usage/events'
@@ -35,7 +35,13 @@ import { defaultSettings, type Settings } from '../store'
  * one back at that point.
  */
 function loadSettings(saved: Partial<Settings> | undefined): Settings {
-  return { ...defaultSettings, ...(saved ?? {}) }
+  // Copy only keys the current build knows: a plain spread would carry
+  // removed / renamed keys along in memory and write them back on save.
+  const known: Partial<Settings> = {}
+  for (const key of Object.keys(saved ?? {}) as (keyof Settings)[]) {
+    if (key in defaultSettings) (known as Record<string, unknown>)[key] = saved![key]
+  }
+  return { ...defaultSettings, ...known }
 }
 
 /**
@@ -289,12 +295,6 @@ async function applyOpenedProject(
  * identically.
  */
 export async function openProject(): Promise<ActionResult> {
-  const proceed = await confirmDiscardIfDirty(
-    i18n.t('dialogs:actions.openReplace'),
-    i18n.t('dialogs:actions.discardAndOpen'),
-  )
-  if (!proceed) return { kind: 'cancelled' }
-
   let opened: Awaited<ReturnType<typeof showOpen>>
   try {
     opened = await showOpen()
@@ -302,6 +302,19 @@ export async function openProject(): Promise<ActionResult> {
     return { kind: 'error', message: describeError(e) }
   }
   if (!opened) return { kind: 'cancelled' }
+
+  // Audio is added to the current song as its accompaniment rather than
+  // replacing the session, so it skips the discard prompt. That prompt
+  // therefore runs after the pick (we only know the type then).
+  if (isAudioName(opened.ref.name)) {
+    return importUserAudio(new File([opened.buf], opened.ref.name))
+  }
+
+  const proceed = await confirmDiscardIfDirty(
+    i18n.t('dialogs:actions.openReplace'),
+    i18n.t('dialogs:actions.discardAndOpen'),
+  )
+  if (!proceed) return { kind: 'cancelled' }
 
   if (isMidiName(opened.ref.name)) {
     return applyOpenedMidi(opened.buf, opened.ref.name, 'midi_file')
@@ -493,6 +506,26 @@ export async function newProject(): Promise<ActionResult> {
  * loaded song — it attaches alongside the existing MIDI so the user
  * can sync the two via the timeline. Marks the project dirty.
  */
+/**
+ * Pick an audio file and add it as the current song's accompaniment.
+ * Uses a vanilla `<input type="file">` because callers sit inside
+ * react-aria MenuItems / plain buttons where `FileTrigger` doesn't nest.
+ * On Safari/Firefox a cancelled dialog never resolves — harmless, since
+ * nothing waits on it.
+ */
+export async function pickAndImportUserAudio(): Promise<ActionResult> {
+  const file = await new Promise<File | null>((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    // Extensions only: `audio/*` also matches MIDI (`audio/midi`).
+    input.accept = AUDIO_EXTENSIONS.join(',')
+    input.onchange = () => resolve(input.files?.[0] ?? null)
+    input.click()
+  })
+  if (!file) return { kind: 'cancelled' }
+  return importUserAudio(file)
+}
+
 export async function importUserAudio(file: File): Promise<ActionResult> {
   // Audio is an *accompaniment* to a MIDI track — there's no point
   // loading it standalone (there's nothing to sync against, and the
@@ -504,6 +537,13 @@ export async function importUserAudio(file: File): Promise<ActionResult> {
       kind: 'error',
       title: i18n.t('dialogs:actions.loadMidiFirstTitle'),
       message: i18n.t('dialogs:actions.loadMidiFirstMessage'),
+    }
+  }
+  if (!isAudioName(file.name)) {
+    return {
+      kind: 'error',
+      title: i18n.t('dialogs:actions.couldNotLoadAudioTitle'),
+      message: i18n.t('dialogs:actions.notAudioFile', { name: file.name }),
     }
   }
   try {

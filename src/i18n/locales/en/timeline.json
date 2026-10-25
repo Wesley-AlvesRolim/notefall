@@ -33,7 +33,10 @@
     "mute": "Mute",
     "unmute": "Unmute",
     "resizeLanes": "Drag to resize lanes",
-    "decoding": "Decoding…"
+    "decoding": "Decoding…",
+    "addAudio": "+ Add audio…",
+    "addAudioHint": "or drop an audio file anywhere",
+    "addAudioFailed": "Could not load audio"
   },
   "context": {
     "volume": "Volume",
