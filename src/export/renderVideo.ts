@@ -15,24 +15,13 @@ import { isVideoExportSupported, probeVideoCodecs, videoEncoderConfig } from './
 import { createMuxer } from './codec/muxer'
 import { assertEncodersSupported } from './codec/preflight'
 import type { AudioTrackConfig, VideoCodec } from './codec/types'
+import { createAvRenderProgress } from './progress'
 
 export { VIDEO_CODECS, isVideoExportSupported, probeVideoCodecs }
 export type { AudioTrackConfig }
 
 /** 1 keyframe per second is a comfortable seeking interval. */
 const KEYFRAME_INTERVAL_SECONDS = 1
-
-/**
- * Weights for combining audio and video into one progress bar. The
- * audio path runs in parallel with the video path (OfflineAudioContext
- * renders off the main thread; sample fetches happen in the background)
- * so this is just a UX hint — neither finishes "first" in any
- * deterministic way. The audio side covers loading + render + AAC
- * encode; the video side is the dominant frame loop, so it gets the
- * larger share.
- */
-const AUDIO_PROGRESS_WEIGHT = 0.4
-const VIDEO_PROGRESS_WEIGHT = 0.6
 
 export type VideoRenderProgress =
   | { phase: 'preparing' }
@@ -155,38 +144,9 @@ export async function renderSongVideo(
       })
     : null
 
-  // ──────────────────────────────────────────────────────────────────
-  // Combined progress. Audio and video render concurrently when both
-  // tracks are wanted. The bar is a weighted sum of two independent
-  // fractions; in the audio-disabled case, the audio weight collapses
-  // to 0 and the bar is pure video progress.
-  // ──────────────────────────────────────────────────────────────────
-  const audioWeight = audio ? AUDIO_PROGRESS_WEIGHT : 0
-  const videoWeight = audio ? VIDEO_PROGRESS_WEIGHT : 1
-  let audioFraction = audio ? 0 : 1
-  let videoFraction = 0
-  let lastEmitted = -1
-  const emitOverall = () => {
-    const overall = audioWeight * audioFraction + videoWeight * videoFraction
-    if (overall - lastEmitted > 0.005 || overall === 1) {
-      lastEmitted = overall
-      onProgress?.({ phase: 'rendering', progress: overall })
-    }
-  }
-
-  // Within the audio path: loading 35% / offline render 55% / AAC encode 10%.
-  const setAudioFraction_loading = (f: number) => {
-    audioFraction = 0.35 * f
-    emitOverall()
-  }
-  const setAudioFraction_render = (f: number) => {
-    audioFraction = 0.35 + 0.55 * f
-    emitOverall()
-  }
-  const setAudioFraction_encode = (f: number) => {
-    audioFraction = 0.9 + 0.1 * f
-    emitOverall()
-  }
+  const progress = createAvRenderProgress(audio !== null, (overall) =>
+    onProgress?.({ phase: 'rendering', progress: overall }),
+  )
 
   try {
     // Kick off the audio render IN PARALLEL with the video pass when
@@ -199,9 +159,9 @@ export async function renderSongVideo(
           audio.sampleRate,
           (p) => {
             if (p.phase === 'loading') {
-              setAudioFraction_loading(p.total > 0 ? p.loaded / p.total : 0)
+              progress.audioLoading(p.total > 0 ? p.loaded / p.total : 0)
             } else if (p.phase === 'rendering') {
-              setAudioFraction_render(p.progress)
+              progress.audioRender(p.progress)
             }
           },
           signal,
@@ -271,8 +231,7 @@ export async function renderSongVideo(
       // timeout clamp.
       await yieldToEventLoop()
 
-      videoFraction = (n + 1) / totalFrames
-      emitOverall()
+      progress.video((n + 1) / totalFrames)
     }
 
     await raceWithAbort(videoEncoder.flush(), signal, onAbort)
@@ -308,7 +267,7 @@ export async function renderSongVideo(
         },
         signal,
         onAbort,
-        onProgress: setAudioFraction_encode,
+        onProgress: progress.audioEncode,
       })
     }
 

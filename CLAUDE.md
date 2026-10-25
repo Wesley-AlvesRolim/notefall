@@ -30,7 +30,8 @@ src/
 ├ export/        renderAudio (OfflineAudioContext → AudioBuffer / WAV),
 │                renderVideo (frame-stepped R3F → encoders → muxer),
 │                exportAudio / exportVideo (download wrappers),
-│                timeline (shared render window), async / errors / download helpers
+│                timeline (shared render window), async / errors / download helpers,
+│                progress (weighted A/V bar)
 │  ├ synth/      offline piano: load + settings, pedal ranges, note / accompaniment scheduling
 │  └ codec/      VIDEO_CODECS presets, encoder config + probe, audio encode loop,
 │                muxer factory (MP4 / WebM), preflight
