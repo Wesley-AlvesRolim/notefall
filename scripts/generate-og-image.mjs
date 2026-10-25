@@ -16,7 +16,7 @@
  *
  * Without it the script still emits the SVG and tells you to install it.
  */
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 
@@ -60,6 +60,14 @@ function blackKeys() {
     s += `<rect x="${(cx - blackW / 2).toFixed(2)}" y="${KB_TOP}" width="${blackW.toFixed(2)}" height="${blackH.toFixed(2)}" rx="2.5" fill="${BLACK_KEY}"/>`
   }
   return s
+}
+
+// ── Logo symbol ──────────────────────────────────────────────────────────
+// favicon.svg is the logo symbol; nest it beside the wordmark as a lockup.
+const LOGO_SIZE = 128
+function logoSymbol(x, y) {
+  const src = readFileSync(resolve(publicDir, 'favicon.svg'), 'utf8')
+  return src.replace('<svg ', `<svg x="${x}" y="${y}" width="${LOGO_SIZE}" height="${LOGO_SIZE}" `)
 }
 
 // ── Falling notes ─────────────────────────────────────────────────────────
@@ -128,9 +136,10 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <!-- Left scrim for text legibility -->
   <rect width="${W}" height="${KB_TOP}" fill="url(#scrim)"/>
 
-  <!-- Wordmark + tagline -->
+  <!-- Logo: symbol + wordmark, then tagline -->
+  ${logoSymbol(64, 128)}
   <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
-    <text x="80" y="232" font-size="104" font-weight="700" fill="#ffffff" letter-spacing="-3">notefall</text>
+    <text x="${64 + LOGO_SIZE + 12}" y="232" font-size="104" font-weight="700" fill="#ffffff" letter-spacing="-3">notefall</text>
     <text x="84" y="296" font-size="38" font-weight="500" fill="#cdd9e8">Piano MIDI visualizer in your browser</text>
     <text x="84" y="350" font-size="27" font-weight="500" fill="${CYAN}" letter-spacing="0.5">Falling notes · play live · record · edit · export to video</text>
   </g>

@@ -36,9 +36,21 @@
   <!-- Left scrim for text legibility -->
   <rect width="1200" height="486" fill="url(#scrim)"/>
 
-  <!-- Wordmark + tagline -->
+  <!-- Logo: symbol + wordmark, then tagline -->
+  <svg x="64" y="128" width="128" height="128" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Three keys in perspective with one falling note. Keys and note share one
+       vanishing point; the note fills the slot between the two black keys. -->
+  <rect width="64" height="64" rx="14" fill="#05060a"/>
+  <path d="M9.05 50.53Q8.75 52 10.25 52L21.75 52Q23.25 52 23.37 50.5L24.59 34.75Q24.65 34 23.9 34L13.22 34Q12.47 34 12.32 34.73Z" fill="#f5f5f5"/>
+  <path d="M24.85 50.5Q24.75 52 26.25 52L37.75 52Q39.25 52 39.15 50.5L38.14 34.75Q38.09 34 37.34 34L26.66 34Q25.91 34 25.86 34.75Z" fill="#f5f5f5"/>
+  <path d="M40.63 50.5Q40.75 52 42.25 52L53.75 52Q55.25 52 54.95 50.53L51.68 34.73Q51.53 34 50.78 34L40.1 34Q39.35 34 39.41 34.75Z" fill="#f5f5f5"/>
+  <path d="M21.48 42.25Q21.4 43 22.15 43L27.13 43Q27.88 43 27.91 42.25L28.22 34.5Q28.24 34 27.74 34L22.82 34Q22.32 34 22.27 34.5Z" fill="#161616"/>
+  <path d="M36.09 42.25Q36.12 43 36.87 43L41.85 43Q42.6 43 42.52 42.25L41.73 34.5Q41.68 34 41.18 34L36.26 34Q35.76 34 35.78 34.5Z" fill="#161616"/>
+  <path d="M28.42 29.5Q28.36 31 29.86 31L34.14 31Q35.64 31 35.58 29.5L34.79 9.5Q34.73 8 33.23 8L30.77 8Q29.27 8 29.21 9.5Z" fill="#5ad7ff"/>
+</svg>
+
   <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
-    <text x="80" y="232" font-size="104" font-weight="700" fill="#ffffff" letter-spacing="-3">notefall</text>
+    <text x="204" y="232" font-size="104" font-weight="700" fill="#ffffff" letter-spacing="-3">notefall</text>
     <text x="84" y="296" font-size="38" font-weight="500" fill="#cdd9e8">Piano MIDI visualizer in your browser</text>
     <text x="84" y="350" font-size="27" font-weight="500" fill="#5ad7ff" letter-spacing="0.5">Falling notes · play live · record · edit · export to video</text>
   </g>
