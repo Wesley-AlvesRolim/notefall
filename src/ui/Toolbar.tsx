@@ -47,7 +47,7 @@ import {
 } from '../projects/actions'
 import { hasFileSystemAccess } from '../projects/io'
 import { clearAllRecent, getRecent, subscribeRecent } from '../projects/recent'
-import { DEMOS, loadDemoManifestNames } from '../demos'
+import { DEMOS } from '../demos'
 import { useUserAudio } from '../audio/userAudio'
 import { exportSongToWav } from '../export/exportAudio'
 import { playExportCompleteChime } from '../audio/exportChime'
@@ -291,23 +291,6 @@ export function Toolbar() {
   useEffect(() => {
     return () => {
       if (emptyToastTimerRef.current !== null) clearTimeout(emptyToastTimerRef.current)
-    }
-  }, [])
-
-  // Resolved manifest names for each demo, keyed by URL. Populated
-  // once on mount via a parallel fetch+unzip of every demo's
-  // `manifest.json` so the menu shows the project's real display name
-  // instead of the filename. Falls back to filename until the
-  // promise settles (or forever, for entries that fail to load).
-  const [demoNames, setDemoNames] = useState<Map<string, string>>(new Map())
-  useEffect(() => {
-    let cancelled = false
-    if (DEMOS.length === 0) return
-    void loadDemoManifestNames().then((names) => {
-      if (!cancelled) setDemoNames(names)
-    })
-    return () => {
-      cancelled = true
     }
   }, [])
 
@@ -840,7 +823,7 @@ export function Toolbar() {
                       className="flex w-64 flex-col gap-0.5 outline-none"
                     >
                       {DEMOS.map((demo) => {
-                        const label = demoNames.get(demo.url) ?? demo.fallbackLabel
+                        const { label } = demo
                         return (
                           <MenuItem
                             key={demo.url}
