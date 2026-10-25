@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Button,
@@ -9,7 +9,7 @@ import {
 } from 'react-aria-components'
 import { useStore } from '../store'
 import { useUserAudio } from '../audio/userAudio'
-import { DEMOS, loadDemoManifestNames } from '../demos'
+import { DEMOS } from '../demos'
 import { toggleRecord as toggleRecordControl } from '../audio/recordControl'
 import { loadDemoProject, openProject } from '../projects/actions'
 import { showAlert } from './confirm'
@@ -67,18 +67,6 @@ function FollowPlayheadToggle() {
  */
 function EmptyState() {
   const { t } = useTranslation('timeline')
-  const [demoNames, setDemoNames] = useState<Map<string, string>>(new Map())
-  useEffect(() => {
-    let cancelled = false
-    if (DEMOS.length === 0) return
-    void loadDemoManifestNames().then((names) => {
-      if (!cancelled) setDemoNames(names)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const onOpen = async () => {
     const result = await openProject()
     if (result.kind === 'error') {
@@ -144,7 +132,7 @@ function EmptyState() {
                 className="flex w-64 flex-col gap-0.5 outline-none"
               >
                 {DEMOS.map((demo) => {
-                  const label = demoNames.get(demo.url) ?? demo.fallbackLabel
+                  const { label } = demo
                   return (
                     <MenuItem
                       key={demo.url}
