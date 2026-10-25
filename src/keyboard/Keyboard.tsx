@@ -48,6 +48,7 @@ import {
   type WhiteKeyUniforms,
 } from "./whiteKeyShader";
 import { usePcKeyboardInput } from "./pcInput";
+import { retriggerDip } from "./retriggerDip";
 import { useStore, useSettingsSlice, defaultSettings } from "../store";
 import { computeLiveVisibleTop, keyboardViewShift } from "../scene/visibleTop";
 import { getResolvedSettings } from "../scene/automatedSettings";
@@ -103,7 +104,8 @@ const BLACK_PRESS_ANGLE =
 // the way up, and longer than one frame at 24 fps so exports show it too.
 const RETRIGGER_LIFT_SECONDS = 0.05;
 const RETRIGGER_PRESS_THRESHOLD = 0.35;
-// The key glow dims with the lift rather than blinking off: it eases toward
+// The key light (glow here, the flash via `retriggerDip`) dims with the lift
+// rather than blinking off: it eases toward
 // RETRIGGER_GLOW_FLOOR of its level with time constant RETRIGGER_GLOW_TC,
 // then eases back, so a fast run of repeats doesn't flicker.
 const RETRIGGER_GLOW_FLOOR = 0.3;
@@ -175,10 +177,9 @@ export function Keyboard() {
   // Absolute time until which a retriggered key is held up (see
   // RETRIGGER_LIFT_SECONDS). Reset on clock epoch like glow / press.
   const liftUntil = useMemo(() => new Float64Array(KEY_COUNT), []);
-  // Glow as drawn this frame: `glow` scaled by `glowDip`, which dims while
-  // a key lifts, so the emissive, black-key tint, and the light / shadow on
-  // the white keys all dim with it. `glow` itself keeps integrating.
-  const glowDip = useMemo(() => new Float32Array(KEY_COUNT).fill(1), []);
+  // Glow as drawn this frame: `glow` scaled by `retriggerDip`, which dims
+  // while a key lifts, so the emissive, black-key tint, and the light /
+  // shadow on the white keys all dim with it. `glow` keeps integrating.
   const shownGlow = useMemo(() => new Float32Array(KEY_COUNT), []);
   const lastEpoch = useRef(clockEpoch());
   // World-space clip applied to the black-key materials: keep only
@@ -461,7 +462,7 @@ export function Keyboard() {
       glow.fill(0);
       press.fill(0);
       liftUntil.fill(0);
-      glowDip.fill(1);
+      retriggerDip.fill(1);
     }
     const nowSec = now();
     const brightness = rs.keyboardBrightness;
@@ -474,8 +475,8 @@ export function Keyboard() {
       glow[i] += (target - glow[i]) * k1;
 
       const lifting = nowSec < liftUntil[i];
-      glowDip[i] += ((lifting ? RETRIGGER_GLOW_FLOOR : 1) - glowDip[i]) * dipK;
-      shownGlow[i] = glow[i] * glowDip[i];
+      retriggerDip[i] += ((lifting ? RETRIGGER_GLOW_FLOOR : 1) - retriggerDip[i]) * dipK;
+      shownGlow[i] = glow[i] * retriggerDip[i];
 
       const pressTarget = held[i] && !lifting ? 1 : 0;
       press[i] += (pressTarget - press[i]) * pressK;

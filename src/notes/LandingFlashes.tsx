@@ -17,6 +17,7 @@ const LANDING_FLASHES_KEYS = [
 import { audioEngine } from '../audio/engine'
 import { clockEpoch, now } from '../audio/clock'
 import { getResolvedSettings } from '../scene/automatedSettings'
+import { retriggerDip } from '../keyboard/retriggerDip'
 import { KEYBOARD_LAYOUT, KEYBOARD_Y, KEY_COUNT, MIDI_MIN, WHITE_KEY_LENGTH } from '../keyboard/layout'
 
 const VERTEX_SHADER = /* glsl */ `
@@ -75,12 +76,6 @@ const FRAGMENT_SHADER = /* glsl */ `
 // immediately. Without this, sub-frame staccato notes never get a chance to
 // reach the GPU and look unlit.
 const MIN_HOLD_SECONDS = 0.08
-// Dark gap forced before a retriggered flash: a note-on while the key's
-// flash is still lit (same-pitch notes with a tiny or zero gap, or still
-// inside the previous note's MIN_HOLD window) would otherwise keep the
-// flash on continuously across both notes. Longer than one frame at
-// 24 fps so exports show the blink too.
-const RETRIGGER_GAP_SECONDS = 0.05
 // Plane size as a multiple of the key's width. Chosen so a default-size
 // flash covers about 2.6 key widths of halo (matches the reference visual).
 const BASE_PLANE_SCALE = 2.6
@@ -116,20 +111,14 @@ export function LandingFlashes() {
     a.fill(-1)
     return a
   }, [])
+  // Flash level before the retrigger dip; `intensities` (the uploaded
+  // attribute) is this × retriggerDip, rebuilt each frame.
+  const levels = useMemo(() => new Float32Array(KEY_COUNT), [])
   const heldCount = useMemo(() => new Uint8Array(KEY_COUNT), [])
   const sustainLevels = useMemo(() => new Float32Array(KEY_COUNT), [])
   // Earliest wall-clock time at which a key can fade to off. Bumped on every
   // note-on so very short notes still show for at least MIN_HOLD_SECONDS.
   const heldUntil = useMemo(() => new Float32Array(KEY_COUNT), [])
-  // Absolute time until which a retriggered key's flash stays dark; 0 when
-  // no gap is pending.
-  const gapUntil = useMemo(() => new Float64Array(KEY_COUNT), [])
-  // When each key's flash last went dark, so a note-on just after a
-  // release still gets the full gap.
-  const darkSince = useMemo(
-    () => new Float64Array(KEY_COUNT).fill(-Infinity),
-    [],
-  )
   const lastEpoch = useRef(clockEpoch())
 
   const material = useMemo(() => {
@@ -176,21 +165,10 @@ export function LandingFlashes() {
         const base = getResolvedSettings().flashIntensity
         const sustain = base * (0.7 + ev.velocity * 0.3)
         if (sustainLevels[idx] < sustain) sustainLevels[idx] = sustain
-        const t = now()
-        if (gapUntil[idx] <= t) {
-          // Retrigger while lit, or so soon after going dark that the gap
-          // might not reach a frame: hold the flash dark for the full gap.
-          if (intensities[idx] > 0) {
-            gapUntil[idx] = t + RETRIGGER_GAP_SECONDS
-          } else if (t < darkSince[idx] + RETRIGGER_GAP_SECONDS) {
-            gapUntil[idx] = darkSince[idx] + RETRIGGER_GAP_SECONDS
-          }
-        }
-        // Instant on — no rise time — unless a gap is pending, in which
-        // case useFrame relights it when the gap ends.
-        intensities[idx] = gapUntil[idx] > t ? 0 : sustainLevels[idx]
-        // Minimum-visible window counts from when the flash actually shows.
-        heldUntil[idx] = Math.max(t, gapUntil[idx]) + MIN_HOLD_SECONDS
+        // Instant on — no rise time. Also extend the minimum-visible window.
+        levels[idx] = sustainLevels[idx]
+        intensities[idx] = levels[idx] * retriggerDip[idx]
+        heldUntil[idx] = now() + MIN_HOLD_SECONDS
         lastTrack[idx] = ev.track ?? -1
         intensityAttr.needsUpdate = true
       } else {
@@ -199,7 +177,7 @@ export function LandingFlashes() {
       }
     })
     return off
-  }, [heldCount, sustainLevels, heldUntil, gapUntil, darkSince, lastTrack, intensities, intensityAttr])
+  }, [heldCount, sustainLevels, heldUntil, lastTrack, levels, intensities, intensityAttr])
 
   // Attribute wiring only. The per-instance transforms used to be
   // rebuilt here on flashSize / flashWidth change, but those are
@@ -241,8 +219,6 @@ export function LandingFlashes() {
     if (epoch !== lastEpoch.current) {
       lastEpoch.current = epoch
       heldUntil.fill(-Infinity)
-      gapUntil.fill(0)
-      darkSince.fill(-Infinity)
     }
 
     const rs = getResolvedSettings()
@@ -283,19 +259,16 @@ export function LandingFlashes() {
 
     let dirty = false
     for (let i = 0; i < KEY_COUNT; i++) {
-      // Retrigger gap over: relight at the sustain level.
-      if (gapUntil[i] > 0 && nowSec >= gapUntil[i]) {
-        gapUntil[i] = 0
-        intensities[i] = sustainLevels[i]
-        dirty = true
-      }
-      if (intensities[i] === 0) continue
+      if (levels[i] === 0) continue
       // Snap off only when the key has been released AND the minimum hold
-      // window has elapsed. Otherwise hold the current intensity steady.
+      // window has elapsed. Otherwise hold the current level steady.
       if (heldCount[i] === 0 && nowSec >= heldUntil[i]) {
-        intensities[i] = 0
+        levels[i] = 0
         sustainLevels[i] = 0
-        darkSince[i] = nowSec
+      }
+      const v = levels[i] * retriggerDip[i]
+      if (intensities[i] !== v) {
+        intensities[i] = v
         dirty = true
       }
     }
