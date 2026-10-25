@@ -927,10 +927,12 @@ export class AudioEngine {
         const stopTime = (this.piano?.context.currentTime ?? 0) + STOP_BUFFER
         // Live notes are sustained by either pedal source. Tag with whichever
         // is currently down — live takes precedence when both are pressed,
-        // since the physical pedal is the more direct controller.
+        // since the physical pedal is the more direct controller. The song
+        // pedal only counts while playing: paused, `pedalDown` is frozen at
+        // the playhead's CC64 state and no pedal-up would ever flush it.
         if (this.livePedalDown) {
           this.pedalHeld.push({ midi, stop: stopFn, source: 'live' })
-        } else if (this.pedalEnabled && this.pedalDown) {
+        } else if (this.playing && this.pedalEnabled && this.pedalDown) {
           this.pedalHeld.push({ midi, stop: stopFn, source: 'song' })
         } else {
           stopFn(stopTime)
