@@ -1,0 +1,96 @@
+{
+  "file": {
+    "menuButton": "Arquivo",
+    "menuLabel": "Arquivo",
+    "new": "Novo",
+    "open": "Abrir…",
+    "openRecent": "Abrir recente",
+    "openRecentLabel": "Abrir recente",
+    "clearRecent": "Limpar recentes",
+    "save": "Salvar",
+    "saveAs": "Salvar como…",
+    "openAudio": "Abrir áudio…",
+    "saveSongAsMidi": "Salvar música como MIDI…",
+    "export": "Exportar…",
+    "demoSongs": "Músicas de demonstração",
+    "demoSongsLabel": "Músicas de demonstração"
+  },
+  "midi": {
+    "button": "Entrada MIDI",
+    "inputDevices": "Dispositivos de entrada",
+    "noDevices": "Nenhum dispositivo MIDI detectado. Conecte um dispositivo MIDI USB e abra novamente.",
+    "disconnect": "Desconectar",
+    "connect": "Conectar"
+  },
+  "record": {
+    "stop": "Parar gravação",
+    "cancelCountIn": "Cancelar contagem",
+    "start": "Iniciar gravação",
+    "label": "Gravar",
+    "disableCountIn": "Desativar contagem",
+    "enableCountIn": "Ativar contagem"
+  },
+  "recordings": {
+    "showWithNew": "Mostrar gravações ({{count}} novas)",
+    "show": "Mostrar gravações",
+    "unread": "Não lida",
+    "heading": "Gravações",
+    "clearAll": "Limpar tudo",
+    "empty": "Nenhuma gravação ainda. Pressione o botão \"Gravar\" para capturar o que você tocar.",
+    "clickToRename": "Clique para renomear",
+    "pause": "Pausar reprodução",
+    "loadAndPlay": "Carregar e tocar",
+    "saveAsMid": "Salvar como .mid",
+    "confirmDelete": "Confirmar exclusão da gravação",
+    "delete": "Excluir gravação"
+  },
+  "toast": {
+    "emptyRecording": "Nenhuma nota capturada — a gravação ficou vazia"
+  },
+  "help": {
+    "aria": "Ajuda e feedback",
+    "reportBug": "Relatar um bug…",
+    "requestFeature": "Sugerir uma funcionalidade…",
+    "viewOnGitHub": "Ver no GitHub",
+    "build": "Build {{commit}}"
+  },
+  "analytics": {
+    "label": "Ajude a melhorar o notefall",
+    "caption": "Apenas uso anônimo — nunca suas músicas ou arquivos."
+  },
+  "badge": {
+    "unsaved": "Não salvo",
+    "unsavedAria": "Alterações não salvas"
+  },
+  "projectName": {
+    "aria": "Nome do projeto",
+    "rename": "Renomear projeto",
+    "untitled": "Sem título",
+    "noFile": "Nenhum arquivo carregado"
+  },
+  "export": {
+    "titleAudio": "Exportando áudio",
+    "titleVideo": "Exportando vídeo",
+    "phasePreparing": "Preparando",
+    "phaseLoadingSamples": "Carregando amostras",
+    "phaseRendering": "Renderizando",
+    "phaseRenderingAudio": "Renderizando áudio",
+    "phaseFinalizing": "Finalizando"
+  },
+  "error": {
+    "couldNotLoadDemo": "Não foi possível carregar a demonstração",
+    "couldNotOpenFile": "Não foi possível abrir o arquivo",
+    "couldNotSaveProject": "Não foi possível salvar o projeto",
+    "couldNotLoadAudio": "Não foi possível carregar o áudio",
+    "couldNotOpenProject": "Não foi possível abrir o projeto",
+    "couldNotExportAudio": "Não foi possível exportar o áudio",
+    "couldNotExportVideo": "Não foi possível exportar o vídeo",
+    "videoNotSupportedTitle": "Exportação de vídeo não suportada",
+    "videoNotSupportedMessage": "Seu navegador não tem a API WebCodecs. Use Chrome, Edge ou Safari 16.4+ para exportar vídeo.",
+    "videoNotSupportedShort": "Seu navegador não tem a API WebCodecs."
+  },
+  "language": {
+    "label": "Idioma",
+    "aria": "Mudar idioma"
+  }
+}
