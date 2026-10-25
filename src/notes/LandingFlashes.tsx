@@ -11,14 +11,13 @@ const LANDING_FLASHES_KEYS = [
   'flashIntensity',
   'flashSize',
   'flashWidth',
-  'keyboardY',
   'noteColor',
   'trackColors',
 ] as const
 import { audioEngine } from '../audio/engine'
 import { clockEpoch, now } from '../audio/clock'
 import { getResolvedSettings } from '../scene/automatedSettings'
-import { KEYBOARD_LAYOUT, KEY_COUNT, MIDI_MIN, WHITE_KEY_LENGTH } from '../keyboard/layout'
+import { KEYBOARD_LAYOUT, KEYBOARD_Y, KEY_COUNT, MIDI_MIN, WHITE_KEY_LENGTH } from '../keyboard/layout'
 
 const VERTEX_SHADER = /* glsl */ `
   attribute float instanceIntensity;
@@ -195,7 +194,6 @@ export function LandingFlashes() {
   // when nothing changed (zero-pin steady state ⇒ rebuilt exactly once).
   const lastFlashSize = useRef<number>(NaN)
   const lastFlashWidth = useRef<number>(NaN)
-  const groupRef = useRef<THREE.Group>(null)
 
   // Scratch THREE.Color reused inside the per-frame tint resolver to
   // parse hex strings without allocating.
@@ -223,11 +221,6 @@ export function LandingFlashes() {
     // Pin-resolved global uniforms (formerly per-field useEffects).
     material.uniforms.uHaloWidth.value = rs.flashHaloWidth
     material.uniforms.uBrightness.value = rs.flashBrightness
-
-    // Pin-resolved group placement (keyboardY is non-animatable but the
-    // resolver passes it straight through, so this is correct with or
-    // without pins; zero pins ⇒ same Y the JSX prop sets).
-    if (groupRef.current) groupRef.current.position.y = rs.keyboardY
 
     // Rebuild the per-instance scale matrices only when the resolved
     // flashSize / flashWidth changed. With zero pins these are constant,
@@ -318,7 +311,7 @@ export function LandingFlashes() {
   })
 
   return (
-    <group ref={groupRef} position={[0, settings.keyboardY, 0]}>
+    <group position={[0, KEYBOARD_Y, 0]}>
       <instancedMesh
         ref={meshRef}
         args={[undefined, undefined, KEY_COUNT]}

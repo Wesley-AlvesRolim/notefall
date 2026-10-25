@@ -41,10 +41,11 @@ src/
 
 ## Coordinates
 
-- Camera at `[0, 0, 12]`, FOV 32°. Keyboard at `keyboardY = -2.0`.
+- Camera at `[0, 0, 12]`, FOV 32°. Keyboard fixed at world `KEYBOARD_Y = -2.0` (`keyboard/layout.ts`).
 - 1 mm = 0.01 wu. White: 0.235 × 1.475. Black: 0.137 × 0.95. 88 white keys × 0.235 = 12.22 wu = full 16:9 viewport width.
 - White keys are 3D solid caps with rounded corners (`createRoundedWhiteGeometry`); black keys are custom chamfered geometry with an **inner solid fill** so chamfer/slope seams resolve to black instead of revealing the void behind.
-- Hit line at `keyboardY + WHITE_KEY_LENGTH`. Note plane z = 0.05; clipping is **per-fragment SDF** (`vWorldY < uHitY`), NOT z-occlusion — putting notes at a different z would cause perspective parallax against the keys.
+- On-screen keyboard position is `keyboardScreenY` (Inspector "Keyboard Y"; 0 = keyboard front edge on the bottom of the view, 1 = back edge on the top). `keyboardViewShift` turns it into a **lens shift** for the current camera, applied by `CameraSync` via `camera.view.offsetY` (`applyViewShift`, `scene/visibleTop.ts`). The keyboard itself never moves — moving it in world Y (the old `keyboardY`) exposed its back/top structure through perspective. Anything that derives the visible Y range from FOV must scale the half-height by `viewTopScale` / `viewBottomScale` of that shift.
+- Hit line at `NOTE_HIT_Y = KEYBOARD_Y + WHITE_KEY_LENGTH`. Note plane z = 0.05; clipping is **per-fragment SDF** (`vWorldY < uHitY`), NOT z-occlusion — putting notes at a different z would cause perspective parallax against the keys.
 
 ## AudioEngine (`src/audio/engine.ts`)
 

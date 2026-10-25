@@ -1,7 +1,7 @@
 import type { NoteEvent } from '../midi/types'
 import { defaultSettings, type Settings } from '../store'
 import { midiToTimeline, timelineToMidi, type SpeedMap } from '../midi/speedMap'
-import { KEYBOARD_LAYOUT, KEY_COUNT, MIDI_MIN, noteHitYWorld } from '../keyboard/layout'
+import { KEYBOARD_LAYOUT, KEY_COUNT, MIDI_MIN, NOTE_HIT_Y } from '../keyboard/layout'
 
 // Falling notes render on the z = NOTE_PLANE_Z plane so they sit in front
 // of the 3D key caps (white at z=0, black tops at z=0.09) instead of
@@ -83,7 +83,7 @@ export function frustumBottom(settings: Settings): number {
 }
 
 export function fallDistance(settings: Settings): number {
-  const hitY = noteHitYWorld(settings.keyboardY)
+  const hitY = NOTE_HIT_Y
   return Math.max(0.5, frustumTop(settings) - hitY) + SPAWN_BUFFER
 }
 
@@ -101,7 +101,7 @@ export function clickYToTime(
   settings: Settings,
   ctx: TimeContext,
 ): number {
-  const hitY = noteHitYWorld(settings.keyboardY)
+  const hitY = NOTE_HIT_Y
   const headT = ((y - hitY) / fallDistance(settings)) * settings.fallDurationSec
   const audioAtClick =
     settings.fallDirection === 'down'
@@ -145,7 +145,7 @@ export function timeToHeadY(
   settings: Settings,
   ctx: TimeContext,
 ): number {
-  const hitY = noteHitYWorld(settings.keyboardY)
+  const hitY = NOTE_HIT_Y
   const fd = fallDistance(settings)
   const fireAudio = ctx.midiOffset + midiToTimeline(ctx.speedMap, time)
   const headT =
@@ -189,7 +189,7 @@ export function noteVisualBounds(
   const width = key.width * settings.noteWidthScale
   const halfWidth = width / 2
 
-  const hitY = noteHitYWorld(settings.keyboardY)
+  const hitY = NOTE_HIT_Y
   const fd = fallDistance(settings)
   const fall = settings.fallDurationSec
   const minLength = Math.max(0.01, settings.noteMinLength)

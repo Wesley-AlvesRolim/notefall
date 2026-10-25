@@ -43,7 +43,10 @@ export type Settings = {
   // color settings can still be tweaked independently afterward.
   themeColor: string
   // Layout
-  keyboardY: number
+  // On-screen keyboard position: 0 = its front edge on the bottom of the
+  // view, 1 = its back edge on the top. Applied as a lens shift, so the
+  // keyboard keeps its straight-on look (see scene/visibleTop.ts).
+  keyboardScreenY: number
   // Camera
   cameraFov: number
   cameraPos: [number, number, number]
@@ -381,7 +384,7 @@ export type Settings = {
 
 export const defaultSettings: Settings = {
   themeColor: '#5ad7ff',
-  keyboardY: -2.0,
+  keyboardScreenY: 0.27,
   cameraFov: 32,
   cameraPos: [0, 0, 12],
   cameraLookAt: [0, 0, 0],

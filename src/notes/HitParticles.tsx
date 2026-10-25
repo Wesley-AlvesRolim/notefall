@@ -10,7 +10,6 @@ const HIT_PARTICLES_KEYS = [
   'drag',
   'fallDurationSec',
   'flowSpeed',
-  'keyboardY',
   'kick',
   'noiseLocality',
   'noteMinLength',
@@ -36,7 +35,7 @@ const HIT_PARTICLES_KEYS = [
 import { audioEngine } from '../audio/engine'
 import { clockEpoch, now } from '../audio/clock'
 import { getResolvedSettings } from '../scene/automatedSettings'
-import { KEYBOARD_LAYOUT, KEY_COUNT, MIDI_MIN, WHITE_KEY_LENGTH, WHITE_KEY_WIDTH } from '../keyboard/layout'
+import { KEYBOARD_LAYOUT, KEY_COUNT, MIDI_MIN, NOTE_HIT_Y, WHITE_KEY_WIDTH } from '../keyboard/layout'
 import { sampleCurl, dirFromXY } from './curlNoise'
 import { noteDeathFx } from './noteDeathFx'
 
@@ -498,11 +497,11 @@ export function HitParticles() {
     material.uniforms.uOpacity.value = rs.particleOpacity
     material.uniforms.uBrightness.value = rs.particleBrightness
     material.uniforms.uTime.value = nowSec
-    material.uniforms.uHitY.value = rs.keyboardY + WHITE_KEY_LENGTH
+    material.uniforms.uHitY.value = NOTE_HIT_Y
 
     if (!settings.particlesEnabled) return
 
-    const hitY = rs.keyboardY + WHITE_KEY_LENGTH
+    const hitY = NOTE_HIT_Y
     // Minimum emission duration in seconds, derived from the falling-note
     // `noteMinLength` (world units) using the same fall-distance ↔ time
     // conversion FallingNotes uses. Recomputed per frame so changes to

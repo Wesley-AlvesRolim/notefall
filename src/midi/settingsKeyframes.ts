@@ -52,7 +52,7 @@ export type SettingsKeyframe = {
 // animate must be added to the matching list here.
 
 export const ANIMATABLE_NUMBER_KEYS = [
-  'keyboardY',
+  'keyboardScreenY',
   'cameraFov',
   'fallDurationSec',
   'noteEmissive',
