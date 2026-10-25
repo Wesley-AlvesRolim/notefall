@@ -125,9 +125,12 @@ Right-click and eraser drag emit `DyingNote { midi, velocity, x, centerY, width,
 
 ## Hit particles (`src/notes/HitParticles.tsx`)
 
-3D curl-noise system. Per-particle world XYZ position so the divergence-free field produces internal cluster width without horizontal spreading (a 2D curl produced either thin strands or too-wide spread). Curl forcing is low-passed by a **two-stage cascaded EMA (τ = 100 ms/stage, −12 dB/oct)** — the noise field's Z time-slide flutters at ≈ `flowSpeed` Hz (~5 Hz at default), and a single pole passed enough of that band to read as a fine left-right shake. Sideways velocity (x/z, not vy) relaxes exponentially toward 0 (`HORIZ_CONFINE_TAU`) so curl drift saturates at ≈ forcing × τ instead of fanning the plume wider with altitude. Two emission paths share `emitParticleAt(...)`:
-- **Per-key** — `addKeyListener` → ATTACK_BURST (3) on note-on + sustained per-frame while held.
-- **Note death** — `noteDeathFx` → `DeathEmitter` for `DEATH_EMIT_DURATION` (0.35 s).
+Three layers: soft **dots**, a share of them drawn as thin tilted **rays** (same pool, same shader), and faint **fog** puffs drawn underneath. The CPU sim lives in `particleSim.ts` (React-free, structure-of-arrays pools, oldest-first so youngest draws on top); `HitParticles.tsx` only wires key / death events and settings into it and uploads two instanced quad batches per frame. The sim has its own units (keyboard = `SIM_KEYBOARD_WIDTH`, y = 0 at the hit line); `SIM_TO_WORLD` maps positions and sizes into the scene, so tune constants in sim units.
+
+- **Motion** — rise is a *position* add (`y += rise·dt`); velocity follows the flow by a **first-order lag** `v += (1 − e^(−7dt))·(target − v)`, not force accumulation, so sideways speed is bounded by the field (steady plume width, no EMA / confinement hacks needed). Young particles get a stronger push (`ageBoost`).
+- **Flow field** — `curlLattice.ts` bakes `curlNoise.ts`'s curl into a lazily filled, periodic 128³ int16 lattice read **nearest-cell**; the lag smooths the cell steps. Sampling the continuous noise directly reads as jitter.
+- **Sprites** are generated in the shaders (no textures). Colour is computed in sRGB and alpha-blended; with bloom on (linear composer target) the fragment linearises colour and raises alpha to 1.5 so the plume matches the bloom-off brightness (`uLinearTarget`, set per draw in `onBeforeRender`). Destination alpha must stay opaque (`blendSrcAlpha = One`) or the composer target turns translucent under particles and the canvas darkens them.
+- **Emission** — per held key per frame (count ≥ 1 rounds up, < 1 is a coin flip), ×8 on the first frame of a press, two half-steps below 45 fps. **Note death**: `noteDeathFx` → `DeathEmitter` runs the same emission over the deleted note's rectangle for `DEATH_EMIT_DURATION` (0.35 s).
 
 ## Landing flashes (`src/notes/LandingFlashes.tsx`)
 

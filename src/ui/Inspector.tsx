@@ -195,7 +195,6 @@ function ThemeSection() {
           themeColor: v,
           noteColor: v,
           hitLineColor: v,
-          particleColor: v,
         })
       }
       defaultValue={def.themeColor}
@@ -525,6 +524,24 @@ function FallDirectionRow() {
   )
 }
 
+// ── Particles: blending select ───────────────────────────────────────
+function ParticleBlendingRow() {
+  const { t } = useTranslation('inspector')
+  const blending = useStore((st) => st.settings.particleBlending)
+  return (
+    <SelectRow
+      label={t('row.particleBlending')}
+      value={blending}
+      options={[
+        { value: 'alpha', label: t('particleBlending.alpha') },
+        { value: 'additive', label: t('particleBlending.additive') },
+      ]}
+      onChange={(v) => atomicUpdate({ particleBlending: v })}
+      defaultValue={def.particleBlending}
+    />
+  )
+}
+
 // ── Audio: pre-delay needs unit conversion (s ↔ ms) ──────────────────
 function PreDelayRow() {
   const { t } = useTranslation('inspector')
@@ -711,26 +728,53 @@ export function Inspector() {
 
         <Section title={t('section.particles')}>
           <BoundSwitchRow label={t('row.particlesEnabled')} settingKey="particlesEnabled" />
-          <BoundColorRow label={t('row.particleColor')} settingKey="particleColor" />
-          <BoundSliderRow label={t('row.particleSize')} settingKey="particleSize" min={0} max={2} step={0.01} />
-          <BoundSliderRow label={t('row.particleOpacity')} settingKey="particleOpacity" min={0} max={1} step={0.01} />
-          <BoundSliderRow label={t('row.particleBrightness')} settingKey="particleBrightness" min={0} max={2} step={0.01} />
-          <BoundSliderRow label={t('row.particleLifetime')} settingKey="particleLifetime" min={0.1} max={3} step={0.05} />
-          <BoundSliderRow label={t('row.particleSpeed')} settingKey="particleSpeed" min={0} max={3} step={0.05} />
-          <BoundSliderRow label={t('row.particleCount')} settingKey="particleCount" min={0} max={30} step={0.1} />
-          <BoundSliderRow label={t('row.particleTurbulence')} settingKey="particleTurbulence" min={0} max={2} step={0.05} />
-          <BoundSliderRow label={t('row.turbFrequency')} settingKey="turbulenceFrequency" min={0} max={5} step={0.05} />
-          <BoundSliderRow label={t('row.flowSpeed')} settingKey="flowSpeed" min={0} max={16} step={0.05} />
-          <BoundSliderRow label={t('row.turbulenceX')} settingKey="turbulenceX" min={0} max={2} step={0.05} />
-          <BoundSliderRow label={t('row.turbulenceY')} settingKey="turbulenceY" min={0} max={2} step={0.05} />
-          <BoundSliderRow label={t('row.turbulenceZ')} settingKey="turbulenceZ" min={0} max={2} step={0.05} />
-          <BoundSliderRow label={t('row.locality')} settingKey="noiseLocality" min={0} max={1} step={0.01} />
-          <BoundSliderRow label={t('row.octaves')} settingKey="turbulenceOctaves" min={1} max={4} step={1} />
-          <BoundSliderRow label={t('row.octaveScale')} settingKey="octaveScale" min={0.5} max={3} step={0.05} />
-          <BoundSliderRow label={t('row.octaveMul')} settingKey="octaveMultiplier" min={0} max={1} step={0.01} />
-          <BoundSliderRow label={t('row.drag')} settingKey="drag" min={0} max={1} step={0.01} />
-          <BoundSliderRow label={t('row.swirl')} settingKey="swirl" min={0} max={1} step={0.01} />
-          <BoundSliderRow label={t('row.kick')} settingKey="kick" min={0} max={3} step={0.05} />
+          <ParticleBlendingRow />
+          <BoundSliderRow label={t('row.particleCount')} settingKey="particleDotCount" min={0} max={10} step={0.05} />
+          <BoundSliderRow label={t('row.particleSize')} settingKey="particleDotSize" min={0} max={3} step={0.01} />
+          <BoundSliderRow label={t('row.particleOpacity')} settingKey="particleDotOpacity" min={0} max={1} step={0.01} />
+          <BoundSliderRow label={t('row.particleBrightness')} settingKey="particleDotBrightness" min={0} max={3} step={0.01} />
+          <BoundSliderRow label={t('row.particleLife')} settingKey="particleLife" min={0.1} max={3} step={0.05} />
+          <BoundSliderRow label={t('row.particleRise')} settingKey="particleRise" min={0} max={4} step={0.05} />
+          <BoundSliderRow label={t('row.particleSpread')} settingKey="particleSpread" min={0} max={2} step={0.01} />
+          <BoundSliderRow label={t('row.emitterWidth')} settingKey="particleEmitterWidth" min={0} max={3} step={0.05} />
+        </Section>
+
+        <Section title={t('section.particleTurbulence')}>
+          <BoundSliderRow label={t('row.flowStrength')} settingKey="particleFlowStrength" min={0} max={4} step={0.05} />
+          <BoundSliderRow label={t('row.flowX')} settingKey="particleFlowX" min={0} max={2} step={0.01} />
+          <BoundSliderRow label={t('row.flowY')} settingKey="particleFlowY" min={0} max={2} step={0.01} />
+          <BoundSliderRow label={t('row.flowZ')} settingKey="particleFlowZ" min={0} max={2} step={0.01} />
+          <BoundSliderRow label={t('row.octaves')} settingKey="particleFlowOctaves" min={1} max={4} step={1} />
+          <BoundSliderRow label={t('row.octaveScale')} settingKey="particleFlowOctaveScale" min={0.5} max={3} step={0.01} />
+          <BoundSliderRow label={t('row.octaveGain')} settingKey="particleFlowOctaveGain" min={0} max={2} step={0.01} />
+          <BoundSliderRow label={t('row.flowFrequency')} settingKey="particleFlowFrequency" min={0.1} max={5} step={0.05} />
+          <BoundSliderRow label={t('row.flowEvolution')} settingKey="particleFlowEvolution" min={0} max={5} step={0.05} />
+          <BoundSliderRow label={t('row.flowFollow')} settingKey="particleFlowFollow" min={0} max={1} step={0.01} />
+        </Section>
+
+        <Section title={t('section.particleMotion')}>
+          <BoundSliderRow label={t('row.launchSpeed')} settingKey="particleLaunchSpeed" min={0} max={5} step={0.05} />
+          <BoundSliderRow label={t('row.randomDirection')} settingKey="particleRandomDirection" min={0} max={1} step={0.01} />
+          <BoundSliderRow label={t('row.randomSpeed')} settingKey="particleRandomSpeed" min={0} max={1} step={0.01} />
+          <BoundSliderRow label={t('row.airFriction')} settingKey="particleAirFriction" min={0} max={2} step={0.01} />
+          <BoundSliderRow label={t('row.gravityCurl')} settingKey="particleGravityCurl" min={0} max={2} step={0.01} />
+          <BoundSliderRow label={t('row.twirl')} settingKey="particleTwirl" min={0} max={3} step={0.05} />
+          <BoundSliderRow label={t('row.twirlVariance')} settingKey="particleTwirlVariance" min={0} max={2} step={0.05} />
+          <BoundSwitchRow label={t('row.motionTrail')} settingKey="particleMotionTrail" />
+        </Section>
+
+        <Section title={t('section.particleRays')}>
+          <BoundSwitchRow label={t('row.enabled')} settingKey="particleRaysEnabled" />
+          <BoundSliderRow label={t('row.rayLength')} settingKey="particleRayLength" min={0} max={4} step={0.05} />
+          <BoundSliderRow label={t('row.rayOpacity')} settingKey="particleRayOpacity" min={0} max={1} step={0.01} />
+          <BoundSliderRow label={t('row.rayAngle')} settingKey="particleRayAngle" min={-180} max={180} step={1} />
+          <BoundSliderRow label={t('row.raySpread')} settingKey="particleRaySpread" min={-180} max={180} step={1} />
+        </Section>
+
+        <Section title={t('section.particleFog')}>
+          <BoundSwitchRow label={t('row.enabled')} settingKey="particleFogEnabled" />
+          <BoundSliderRow label={t('row.fogCount')} settingKey="particleFogCount" min={0} max={5} step={0.05} />
+          <BoundSliderRow label={t('row.fogOpacity')} settingKey="particleFogOpacity" min={0} max={1} step={0.01} />
         </Section>
 
         <Section title={t('section.hitLine')}>
