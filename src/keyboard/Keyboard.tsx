@@ -79,7 +79,7 @@ const KEYBOARD_KEYS = [
   "woodColor",
 ] as const;
 import { audioEngine } from "../audio/engine";
-import { clockEpoch } from "../audio/clock";
+import { clockEpoch, now } from "../audio/clock";
 
 // Press animation: each key's group sits at the rear edge; press dips
 // `position.z = -PIVOT_DIP × p` and tilts `rotation.x = ANGLE × p`.
@@ -94,6 +94,15 @@ const WHITE_PRESS_ANGLE =
   (WHITE_PRESS_DEPTH - WHITE_PIVOT_DIP) / WHITE_KEY_LENGTH;
 const BLACK_PRESS_ANGLE =
   (BLACK_PRESS_DEPTH - BLACK_PIVOT_DIP) / BLACK_KEY_LENGTH;
+
+// Retrigger lift: a note-on that lands while the key is still (mostly)
+// down — same-pitch notes with a tiny or zero gap, where the off and the
+// next on can even arrive in the same frame — would leave the key looking
+// held through both notes. Instead the key rises for RETRIGGER_LIFT_SECONDS
+// before pressing again. Long enough for PRESS_TC to bring it nearly all
+// the way up, and longer than one frame at 24 fps so exports show it too.
+const RETRIGGER_LIFT_SECONDS = 0.05;
+const RETRIGGER_PRESS_THRESHOLD = 0.35;
 
 // Slope tint: per-frame, slope material's color = lerp(blackKeyColor, white,
 // FACTOR). 0.12 is "若干明るい" — a perceptible but not dramatic step up.
@@ -158,6 +167,9 @@ export function Keyboard() {
   const glow = useMemo(() => new Float32Array(KEY_COUNT), []);
   const held = useMemo(() => new Uint8Array(KEY_COUNT), []);
   const press = useMemo(() => new Float32Array(KEY_COUNT), []);
+  // Absolute time until which a retriggered key is held up (see
+  // RETRIGGER_LIFT_SECONDS). Reset on clock epoch like glow / press.
+  const liftUntil = useMemo(() => new Float64Array(KEY_COUNT), []);
   const lastEpoch = useRef(clockEpoch());
   // World-space clip applied to the black-key materials: keep only
   // geometry at or in front of the keyboard's back edge (the hit line,
@@ -288,6 +300,10 @@ export function Keyboard() {
       const idx = ev.midi - MIDI_MIN;
       if (idx < 0 || idx >= KEY_COUNT) return;
       if (ev.type === "on") {
+        const t = now();
+        if (press[idx] > RETRIGGER_PRESS_THRESHOLD && t >= liftUntil[idx]) {
+          liftUntil[idx] = t + RETRIGGER_LIFT_SECONDS;
+        }
         glow[idx] = Math.max(glow[idx], 0.5 + ev.velocity * 0.6);
         held[idx]++;
         lastTrack[idx] = ev.track ?? -1;
@@ -296,7 +312,7 @@ export function Keyboard() {
       }
     });
     return off;
-  }, [glow, held, lastTrack]);
+  }, [glow, held, press, liftUntil, lastTrack]);
 
   // Window-level release so dragging off the canvas still stops the note.
   useEffect(() => {
@@ -434,7 +450,9 @@ export function Keyboard() {
       lastEpoch.current = epoch;
       glow.fill(0);
       press.fill(0);
+      liftUntil.fill(0);
     }
+    const nowSec = now();
     const brightness = rs.keyboardBrightness;
     const pressK = 1 - Math.exp(-delta / Math.max(0.005, PRESS_TC));
     for (let i = 0; i < KEY_COUNT; i++) {
@@ -443,7 +461,7 @@ export function Keyboard() {
       const k1 = 1 - Math.exp(-delta / Math.max(0.01, decay));
       glow[i] += (target - glow[i]) * k1;
 
-      const pressTarget = held[i] ? 1 : 0;
+      const pressTarget = held[i] && nowSec >= liftUntil[i] ? 1 : 0;
       press[i] += (pressTarget - press[i]) * pressK;
 
       const mat = matRefs.current[i];
