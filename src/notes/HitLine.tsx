@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { useSettingsSlice } from '../store'
 import { getResolvedSettings } from '../scene/automatedSettings'
-import { KEYBOARD_LAYOUT, WHITE_KEY_LENGTH } from '../keyboard/layout'
+import { KEYBOARD_LAYOUT, NOTE_HIT_Y } from '../keyboard/layout'
 
 const HIT_LINE_KEYS = [
   'hitLineBarHalo',
@@ -22,7 +22,6 @@ const HIT_LINE_KEYS = [
   'hitLineWaveScrollSpeed',
   'hitLineWaveThickness',
   'hitLineWaveY',
-  'keyboardY',
 ] as const
 import { now } from '../audio/clock'
 
@@ -252,18 +251,15 @@ export function HitLine() {
     waveMaterial.uniforms.uMorphSpeed.value = r.hitLineWaveMorphSpeed
     waveMaterial.uniforms.uHalo.value = r.hitLineWaveHalo
     waveMaterial.uniforms.uGrain.value = r.hitLineWaveGrain
-    // Pin-resolved vertical placement. keyboardY is non-animatable but
-    // the resolver passes it straight through, so this stays correct
-    // whether or not pins are present. Zero pins ⇒ same Y the JSX prop
-    // computes, so no visible change.
-    const hitYR = r.keyboardY + WHITE_KEY_LENGTH
+    // Pin-resolved vertical offsets from the fixed hit line.
+    const hitYR = NOTE_HIT_Y
     if (barMeshRef.current) barMeshRef.current.position.y = hitYR + r.hitLineBarY
     if (waveMeshRef.current) waveMeshRef.current.position.y = hitYR + r.hitLineWaveY
   })
 
   if (!settings.hitLineEnabled) return null
 
-  const hitY = settings.keyboardY + WHITE_KEY_LENGTH
+  const hitY = NOTE_HIT_Y
   const planeWidth = KEYBOARD_LAYOUT.totalWidth + PLANE_WIDTH_PAD
 
   // z = 0.14 / 0.141: in front of the 3D black keys (top z ≈ 0.09),

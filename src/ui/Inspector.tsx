@@ -671,7 +671,7 @@ export function Inspector() {
         </Section>
 
         <Section title={t('section.layout')}>
-          <BoundSliderRow label={t('row.keyboardY')} settingKey="keyboardY" min={-3} max={2} step={0.05} />
+          <BoundSliderRow label={t('row.keyboardY')} settingKey="keyboardScreenY" min={0} max={1} step={0.01} />
         </Section>
 
         <Section title={t('section.theme')}>

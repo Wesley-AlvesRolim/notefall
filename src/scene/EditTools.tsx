@@ -2,12 +2,13 @@ import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { useThree, type ThreeEvent } from '@react-three/fiber'
 import { useStore, useSettingsSlice } from '../store'
+import { keyboardViewShift, viewBottomScale, viewTopScale } from './visibleTop'
 
 const EDIT_TOOLS_KEYS = [
   'cameraFov',
   'cameraLookAt',
   'cameraPos',
-  'keyboardY',
+  'keyboardScreenY',
   'midiOffsetSec',
   'midiSpeedAutomation',
   'transpose',
@@ -29,10 +30,10 @@ import {
 import { noteDeathFx } from '../notes/noteDeathFx'
 import {
   KEYBOARD_LAYOUT,
+  KEYBOARD_Y,
   KEY_COUNT,
   MIDI_MIN,
-  WHITE_KEY_LENGTH,
-  noteHitYWorld,
+  NOTE_HIT_Y,
 } from '../keyboard/layout'
 
 /**
@@ -129,10 +130,11 @@ export function EditTools() {
 
   const camDistance = Math.abs(s.cameraPos[2])
   const halfVisHeight = camDistance * Math.tan((s.cameraFov * Math.PI) / 360)
-  const visibleTopY = s.cameraLookAt[1] + halfVisHeight
-  const visibleBottomY = s.cameraLookAt[1] - halfVisHeight
-  const topOfKeyboard = s.keyboardY + WHITE_KEY_LENGTH
-  const bottomOfKeyboard = s.keyboardY
+  const shift = keyboardViewShift(s)
+  const visibleTopY = s.cameraLookAt[1] + halfVisHeight * viewTopScale(shift)
+  const visibleBottomY = s.cameraLookAt[1] - halfVisHeight * viewBottomScale(shift)
+  const topOfKeyboard = NOTE_HIT_Y
+  const bottomOfKeyboard = KEYBOARD_Y
   const upperHeight = visibleTopY - topOfKeyboard
   const upperCenterY = (visibleTopY + topOfKeyboard) / 2
   const lowerHeight = bottomOfKeyboard - visibleBottomY
@@ -341,7 +343,7 @@ export function EditTools() {
   ) => {
     const cur = useStore.getState()
     const settings = cur.settings
-    const hitY = noteHitYWorld(settings.keyboardY)
+    const hitY = NOTE_HIT_Y
     if (startWorld.y <= hitY) return // below hit line: no-op
 
     // Bootstrap an empty song on first add when nothing is loaded so

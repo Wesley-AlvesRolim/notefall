@@ -9,9 +9,11 @@ import {
   BLACK_KEY_LENGTH,
   BLACK_KEY_THICKNESS,
   KEYBOARD_LAYOUT,
+  KEYBOARD_Y,
   KEY_COUNT,
   MIDI_MAX,
   MIDI_MIN,
+  NOTE_HIT_Y,
   WHITE_KEY_LENGTH,
   WHITE_KEY_WIDTH,
 } from "./layout";
@@ -47,7 +49,7 @@ import {
 } from "./whiteKeyShader";
 import { usePcKeyboardInput } from "./pcInput";
 import { useStore, useSettingsSlice, defaultSettings } from "../store";
-import { computeLiveVisibleTop } from "../scene/visibleTop";
+import { computeLiveVisibleTop, keyboardViewShift } from "../scene/visibleTop";
 import { getResolvedSettings } from "../scene/automatedSettings";
 
 const KEYBOARD_KEYS = [
@@ -64,7 +66,7 @@ const KEYBOARD_KEYS = [
   "flashSize",
   "flashWidth",
   "keyboardBrightness",
-  "keyboardY",
+  "keyboardScreenY",
   "keyGlowColor",
   "keyGlowDecay",
   "keyGlowEnabled",
@@ -159,16 +161,15 @@ export function Keyboard() {
   const lastEpoch = useRef(clockEpoch());
   // World-space clip applied to the black-key materials: keep only
   // geometry at or in front of the keyboard's back edge (the hit line,
-  // world Y = keyboardY + WHITE_KEY_LENGTH). Black keys are modelled
+  // world Y = NOTE_HIT_Y). Black keys are modelled
   // 0.01 past that edge (to kill a white sliver at the shared seam) and
   // tilt rearward when pressed — without this clip that coloured rear
   // pokes up above the keyboard into the falling-note lane. Normal is
-  // -Y so the kept half-space is y <= constant; `constant` is refreshed
-  // each frame from the live keyboardY. Cutting through the geometry is
+  // -Y so the kept half-space is y <= constant. Cutting through the geometry is
   // safe: black keys have an inner solid fill, so the cross-section
   // reads as the key colour rather than a hollow shell.
   const blackKeyClip = useMemo(
-    () => new THREE.Plane(new THREE.Vector3(0, -1, 0), 0),
+    () => new THREE.Plane(new THREE.Vector3(0, -1, 0), NOTE_HIT_Y),
     [],
   );
   // Stable array identity so r3f doesn't re-assign the prop every frame.
@@ -177,9 +178,6 @@ export function Keyboard() {
   // useFrame allocation-free.
   const claimed = useMemo(() => new Uint8Array(KEY_COUNT), []);
 
-  // Root group — its Y follows the pin-resolved keyboardY each frame so
-  // the whole keyboard animates under pins + the export advance() loop.
-  const rootGroupRef = useRef<THREE.Group>(null);
   const meshRefs = useRef<(THREE.Mesh | null)[]>([]);
   // Group wraps each key with its origin at the rear pivot; animating the
   // group's rotation+position tilts/dips the key during press.
@@ -439,10 +437,6 @@ export function Keyboard() {
     }
     const brightness = rs.keyboardBrightness;
     const pressK = 1 - Math.exp(-delta / Math.max(0.005, PRESS_TC));
-    // Track the live keyboard back edge so the black-key clip stays put
-    // if keyboardY is adjusted. Normal = (0,-1,0) → kept where y <= c.
-    blackKeyClip.constant = rs.keyboardY + WHITE_KEY_LENGTH;
-    if (rootGroupRef.current) rootGroupRef.current.position.y = rs.keyboardY;
     for (let i = 0; i < KEY_COUNT; i++) {
       const decay = rs.keyGlowDecay;
       const target = held[i] ? Math.max(glow[i], 0.6) : 0;
@@ -650,7 +644,7 @@ export function Keyboard() {
   // beyond the horizon. The reference trajectory length serves as a
   // floor so zoom-in / look-down can't shorten the line below the
   // designed default.
-  const dividerHitY = settings.keyboardY + WHITE_KEY_LENGTH;
+  const dividerHitY = NOTE_HIT_Y;
   const referenceTopWorld =
     defaultSettings.cameraLookAt[1] +
     Math.abs(defaultSettings.cameraPos[2]) *
@@ -661,6 +655,7 @@ export function Keyboard() {
     settings.cameraFov,
     0.02,
     dividerHitY,
+    keyboardViewShift(settings),
   );
   const dividerLength = Math.max(
     0,
@@ -668,7 +663,7 @@ export function Keyboard() {
   );
 
   return (
-    <group ref={rootGroupRef} position={[0, settings.keyboardY, 0]}>
+    <group position={[0, KEYBOARD_Y, 0]}>
       {KEYBOARD_LAYOUT.keys.map((k, i) => {
         const isBlack = k.isBlack;
         const customMat = whiteKeyMaterials[i];

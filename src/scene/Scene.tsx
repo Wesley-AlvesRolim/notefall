@@ -23,13 +23,14 @@ const SCENE_CONTENTS_KEYS = [
   'cameraLookAt',
   'cameraPos',
   'flashEnabled',
+  'keyboardScreenY',
   'notesEnabled',
 ] as const
 const PLAY_TOGGLE_KEYS = [
   'cameraFov',
   'cameraLookAt',
   'cameraPos',
-  'keyboardY',
+  'keyboardScreenY',
 ] as const
 import { recorder } from '../audio/recorder'
 import { registerR3FStateGetter } from './exportBridge'
@@ -38,12 +39,13 @@ import { FallingNotes } from '../notes/FallingNotes'
 import { LandingFlashes } from '../notes/LandingFlashes'
 import { HitParticles } from '../notes/HitParticles'
 import { HitLine } from '../notes/HitLine'
-import { WHITE_KEY_LENGTH, KEYBOARD_LAYOUT } from '../keyboard/layout'
+import { KEYBOARD_Y, KEYBOARD_LAYOUT, NOTE_HIT_Y } from '../keyboard/layout'
 import { audioEngine } from '../audio/engine'
 import { pauseSong, playSong, togglePlayback } from '../audio/playback'
 import { EditTools } from './EditTools'
 import { CameraControls, isCameraGestureActive } from './CameraControls'
 import { StageBackground } from './StageBackgroundLayer'
+import { applyViewShift, keyboardViewShift, viewBottomScale, viewTopScale } from './visibleTop'
 
 // On-screen preview tick rate when the user opts into the lighter
 // 30 fps mode. The rendered MP4 export drives its own fps regardless
@@ -199,7 +201,7 @@ function SceneContents({ recState }: { recState: 'idle' | 'recording' }) {
     <>
       <ambientLight intensity={0.35} />
       <directionalLight position={[2, 6, 4]} intensity={0.8} />
-      <CameraSync pos={s.cameraPos} lookAt={s.cameraLookAt} fov={s.cameraFov} />
+      <CameraSync pos={s.cameraPos} lookAt={s.cameraLookAt} fov={s.cameraFov} screenY={s.keyboardScreenY} />
       <CameraControls />
       <R3FStateBridge />
       {editMode ? <EditTools /> : <PlayToggleArea />}
@@ -246,7 +248,6 @@ const BACK_PANEL_BACK_Z = FRONT_RAIL_FRONT_Z - 0.15
 const BACK_PANEL_DEPTH = 0.01
 const FRONT_RAIL_COLOR = '#0c0c0c'
 function KeyboardFrontRail() {
-  const keyboardY = useStore((st) => st.settings.keyboardY)
   // Extend laterally under the cheekblocks so the rail and back
   // panel span the same overall x range as the rest of the case
   // (edges align with the outer faces of the cheeks).
@@ -265,7 +266,7 @@ function KeyboardFrontRail() {
   // player edge. That gap reads as a shadowed channel on real grands,
   // framed laterally by the cheekblocks (which themselves overhang
   // forward by the same amount).
-  const railTopY = keyboardY - CHEEK_FRONT_OVERHANG
+  const railTopY = KEYBOARD_Y - CHEEK_FRONT_OVERHANG
   const railBottomY = railTopY - FRONT_RAIL_HEIGHT
   const railHeight = railTopY - railBottomY
   const railCenterY = (railTopY + railBottomY) / 2
@@ -276,7 +277,7 @@ function KeyboardFrontRail() {
   // is closed off from behind by the back panel. Also plugs the
   // seams between rounded white keys / chamfered black keys so a
   // light `backgroundColor` can't bleed through as pale slivers.
-  const backTopY = keyboardY + WHITE_KEY_LENGTH
+  const backTopY = NOTE_HIT_Y
   const backBottomY = railTopY
   const backHeight = backTopY - backBottomY
   const backCenterY = (backTopY + backBottomY) / 2
@@ -307,7 +308,7 @@ function KeyboardFrontRail() {
  *
  * Per block:
  *   width (x)   `CHEEK_WIDTH`                                   — a touch wider than one white key
- *   length (y)  `[keyboardY, keyboardY + WHITE_KEY_LENGTH]`     — full keyboard depth
+ *   length (y)  `[KEYBOARD_Y, NOTE_HIT_Y]`                      — full keyboard depth
  *   height (z)  `[FRAME_BACK_Z, CHEEK_TOP_Z]`                   — from the frame's back face up
  *                                                                 just above the black-key top
  *
@@ -327,16 +328,15 @@ const CHEEK_TOP_Z = 0.08
 // cheekblocks protruding a touch toward the player, ahead of the keys.
 const CHEEK_FRONT_OVERHANG = 0.02
 function KeyboardCheekBlocks() {
-  const keyboardY = useStore((st) => st.settings.keyboardY)
   // Match the frame's z extent so the blocks visually continue the
   // front rail / back panel as one carcass piece.
   const frameBackZ = FRONT_RAIL_FRONT_Z - FRONT_RAIL_DEPTH
   const depth = CHEEK_TOP_Z - frameBackZ
   const centerZ = (CHEEK_TOP_Z + frameBackZ) / 2
-  // Front edge sits CHEEK_FRONT_OVERHANG ahead of `keyboardY` (the
+  // Front edge sits CHEEK_FRONT_OVERHANG ahead of `KEYBOARD_Y` (the
   // white-key player edge); back edge stays at the hit line.
-  const frontY = keyboardY - CHEEK_FRONT_OVERHANG
-  const backY = keyboardY + WHITE_KEY_LENGTH
+  const frontY = KEYBOARD_Y - CHEEK_FRONT_OVERHANG
+  const backY = NOTE_HIT_Y
   const length = backY - frontY
   const centerY = (frontY + backY) / 2
   const halfKb = KEYBOARD_LAYOUT.totalWidth / 2
@@ -396,10 +396,11 @@ function PlayToggleArea() {
   const s = useSettingsSlice(PLAY_TOGGLE_KEYS)
   const camDistance = Math.abs(s.cameraPos[2])
   const halfVisHeight = camDistance * Math.tan((s.cameraFov * Math.PI) / 360)
-  const visibleTopY = s.cameraLookAt[1] + halfVisHeight
-  const visibleBottomY = s.cameraLookAt[1] - halfVisHeight
-  const topOfKeyboard = s.keyboardY + WHITE_KEY_LENGTH
-  const bottomOfKeyboard = s.keyboardY
+  const shift = keyboardViewShift(s)
+  const visibleTopY = s.cameraLookAt[1] + halfVisHeight * viewTopScale(shift)
+  const visibleBottomY = s.cameraLookAt[1] - halfVisHeight * viewBottomScale(shift)
+  const topOfKeyboard = NOTE_HIT_Y
+  const bottomOfKeyboard = KEYBOARD_Y
   // Above-keyboard region (where falling notes appear)
   const upperHeight = visibleTopY - topOfKeyboard
   const upperCenterY = (visibleTopY + topOfKeyboard) / 2
@@ -535,10 +536,12 @@ function CameraSync({
   pos,
   lookAt,
   fov,
+  screenY,
 }: {
   pos: [number, number, number]
   lookAt: [number, number, number]
   fov: number
+  screenY: number
 }) {
   const { camera } = useThree()
   // Non-pin (or zero-pin) path: apply on prop change so a slider drag
@@ -550,9 +553,18 @@ function CameraSync({
     if ('fov' in camera) {
       ;(camera as THREE.PerspectiveCamera).fov = fov
       ;(camera as THREE.PerspectiveCamera).updateProjectionMatrix()
+      applyViewShift(
+        camera as THREE.PerspectiveCamera,
+        keyboardViewShift({
+          keyboardScreenY: screenY,
+          cameraPos: pos,
+          cameraLookAt: lookAt,
+          cameraFov: fov,
+        }),
+      )
     }
     camera.lookAt(...lookAt)
-  }, [camera, pos, lookAt, fov])
+  }, [camera, pos, lookAt, fov, screenY])
   // Follow the pin-resolved camera every frame. With zero pins the
   // resolved values equal the props, so position/fov writes are
   // idempotent and this collapses to the original "re-aim lookAt each
@@ -570,6 +582,7 @@ function CameraSync({
     let cp: readonly [number, number, number]
     let cl: readonly [number, number, number]
     let cf: number
+    let cs: number
     if (isCameraGestureActive()) {
       const st = useStore.getState()
       const base = st.settings
@@ -581,11 +594,13 @@ function CameraSync({
       cp = (kf?.settings.cameraPos ?? base.cameraPos) as [number, number, number]
       cl = (kf?.settings.cameraLookAt ?? base.cameraLookAt) as [number, number, number]
       cf = kf?.settings.cameraFov ?? base.cameraFov
+      cs = kf?.settings.keyboardScreenY ?? base.keyboardScreenY
     } else {
       const r = getResolvedSettings()
       cp = r.cameraPos
       cl = r.cameraLookAt
       cf = r.cameraFov
+      cs = r.keyboardScreenY
     }
     const [px, py, pz] = cp
     const [lx, ly, lz] = cl
@@ -597,6 +612,15 @@ function CameraSync({
         persp.updateProjectionMatrix()
         prevFov.current = cf
       }
+      applyViewShift(
+        persp,
+        keyboardViewShift({
+          keyboardScreenY: cs,
+          cameraPos: cp,
+          cameraLookAt: cl,
+          cameraFov: cf,
+        }),
+      )
     }
     camera.lookAt(lx, ly, lz)
   })

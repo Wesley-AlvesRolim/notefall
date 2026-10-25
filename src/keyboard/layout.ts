@@ -121,7 +121,10 @@ export function adjacentBlackKeys(midi: number): {
   }
 }
 
+// World Y of the keyboard's front (player) edge. Fixed: the on-screen
+// keyboard position is a lens shift (`keyboardScreenY`, see
+// scene/visibleTop.ts), so the keyboard is always seen from the same angle.
+export const KEYBOARD_Y = -2.0
+
 // Notes hit the back edge of the keyboard.
-export function noteHitYWorld(keyboardYWorld: number): number {
-  return keyboardYWorld + WHITE_KEY_LENGTH
-}
+export const NOTE_HIT_Y = KEYBOARD_Y + WHITE_KEY_LENGTH
