@@ -77,6 +77,7 @@ const KEYBOARD_KEYS = [
   "woodColor",
 ] as const;
 import { audioEngine } from "../audio/engine";
+import { clockEpoch } from "../audio/clock";
 
 // Press animation: each key's group sits at the rear edge; press dips
 // `position.z = -PIVOT_DIP × p` and tilts `rotation.x = ANGLE × p`.
@@ -155,6 +156,7 @@ export function Keyboard() {
   const glow = useMemo(() => new Float32Array(KEY_COUNT), []);
   const held = useMemo(() => new Uint8Array(KEY_COUNT), []);
   const press = useMemo(() => new Float32Array(KEY_COUNT), []);
+  const lastEpoch = useRef(clockEpoch());
   // World-space clip applied to the black-key materials: keep only
   // geometry at or in front of the keyboard's back edge (the hit line,
   // world Y = keyboardY + WHITE_KEY_LENGTH). Black keys are modelled
@@ -424,6 +426,17 @@ export function Keyboard() {
     // slice. Zero pins ⇒ `rs` is the live settings object by reference,
     // so every value below is bit-identical to the pre-pin code.
     const rs = getResolvedSettings();
+    // A clock swap (the exporter installing its virtual clock) starts a
+    // new timeline. The engine already sent note-offs for everything
+    // sounding, but glow / press only decay over `keyGlowDecay`, so keys
+    // lit by playback right before Export stayed lit in the video's
+    // opening frames. Drop them so the render starts from a dark keyboard.
+    const epoch = clockEpoch();
+    if (epoch !== lastEpoch.current) {
+      lastEpoch.current = epoch;
+      glow.fill(0);
+      press.fill(0);
+    }
     const brightness = rs.keyboardBrightness;
     const pressK = 1 - Math.exp(-delta / Math.max(0.005, PRESS_TC));
     // Track the live keyboard back edge so the black-key clip stays put
