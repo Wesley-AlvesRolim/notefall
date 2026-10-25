@@ -35,7 +35,13 @@ import { defaultSettings, type Settings } from '../store'
  * one back at that point.
  */
 function loadSettings(saved: Partial<Settings> | undefined): Settings {
-  return { ...defaultSettings, ...(saved ?? {}) }
+  // Copy only keys the current build knows: a plain spread would carry
+  // removed / renamed keys along in memory and write them back on save.
+  const known: Partial<Settings> = {}
+  for (const key of Object.keys(saved ?? {}) as (keyof Settings)[]) {
+    if (key in defaultSettings) (known as Record<string, unknown>)[key] = saved![key]
+  }
+  return { ...defaultSettings, ...known }
 }
 
 /**
