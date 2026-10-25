@@ -17,6 +17,7 @@ const LANDING_FLASHES_KEYS = [
 import { audioEngine } from '../audio/engine'
 import { clockEpoch, now } from '../audio/clock'
 import { getResolvedSettings } from '../scene/automatedSettings'
+import { retriggerDip } from '../keyboard/retriggerDip'
 import { KEYBOARD_LAYOUT, KEYBOARD_Y, KEY_COUNT, MIDI_MIN, WHITE_KEY_LENGTH } from '../keyboard/layout'
 
 const VERTEX_SHADER = /* glsl */ `
@@ -110,6 +111,9 @@ export function LandingFlashes() {
     a.fill(-1)
     return a
   }, [])
+  // Flash level before the retrigger dip; `intensities` (the uploaded
+  // attribute) is this × retriggerDip, rebuilt each frame.
+  const levels = useMemo(() => new Float32Array(KEY_COUNT), [])
   const heldCount = useMemo(() => new Uint8Array(KEY_COUNT), [])
   const sustainLevels = useMemo(() => new Float32Array(KEY_COUNT), [])
   // Earliest wall-clock time at which a key can fade to off. Bumped on every
@@ -162,7 +166,8 @@ export function LandingFlashes() {
         const sustain = base * (0.7 + ev.velocity * 0.3)
         if (sustainLevels[idx] < sustain) sustainLevels[idx] = sustain
         // Instant on — no rise time. Also extend the minimum-visible window.
-        intensities[idx] = sustainLevels[idx]
+        levels[idx] = sustainLevels[idx]
+        intensities[idx] = levels[idx] * retriggerDip[idx]
         heldUntil[idx] = now() + MIN_HOLD_SECONDS
         lastTrack[idx] = ev.track ?? -1
         intensityAttr.needsUpdate = true
@@ -172,7 +177,7 @@ export function LandingFlashes() {
       }
     })
     return off
-  }, [heldCount, sustainLevels, heldUntil, lastTrack, intensities, intensityAttr])
+  }, [heldCount, sustainLevels, heldUntil, lastTrack, levels, intensities, intensityAttr])
 
   // Attribute wiring only. The per-instance transforms used to be
   // rebuilt here on flashSize / flashWidth change, but those are
@@ -254,12 +259,16 @@ export function LandingFlashes() {
 
     let dirty = false
     for (let i = 0; i < KEY_COUNT; i++) {
-      if (intensities[i] === 0) continue
+      if (levels[i] === 0) continue
       // Snap off only when the key has been released AND the minimum hold
-      // window has elapsed. Otherwise hold the current intensity steady.
+      // window has elapsed. Otherwise hold the current level steady.
       if (heldCount[i] === 0 && nowSec >= heldUntil[i]) {
-        intensities[i] = 0
+        levels[i] = 0
         sustainLevels[i] = 0
+      }
+      const v = levels[i] * retriggerDip[i]
+      if (intensities[i] !== v) {
+        intensities[i] = v
         dirty = true
       }
     }

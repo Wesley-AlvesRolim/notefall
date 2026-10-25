@@ -48,6 +48,7 @@ import {
   type WhiteKeyUniforms,
 } from "./whiteKeyShader";
 import { usePcKeyboardInput } from "./pcInput";
+import { retriggerDip } from "./retriggerDip";
 import { useStore, useSettingsSlice, defaultSettings } from "../store";
 import { computeLiveVisibleTop, keyboardViewShift } from "../scene/visibleTop";
 import { getResolvedSettings } from "../scene/automatedSettings";
@@ -79,7 +80,7 @@ const KEYBOARD_KEYS = [
   "woodColor",
 ] as const;
 import { audioEngine } from "../audio/engine";
-import { clockEpoch } from "../audio/clock";
+import { clockEpoch, now } from "../audio/clock";
 
 // Press animation: each key's group sits at the rear edge; press dips
 // `position.z = -PIVOT_DIP × p` and tilts `rotation.x = ANGLE × p`.
@@ -94,6 +95,37 @@ const WHITE_PRESS_ANGLE =
   (WHITE_PRESS_DEPTH - WHITE_PIVOT_DIP) / WHITE_KEY_LENGTH;
 const BLACK_PRESS_ANGLE =
   (BLACK_PRESS_DEPTH - BLACK_PIVOT_DIP) / BLACK_KEY_LENGTH;
+
+// Clip for the white keys (cap and wood body): the plane through the camera
+// and the keyboard's top back edge (the hit line), keeping the side in
+// front. The camera sits above the keyboard, so anything deeper at the back
+// edge — the keys' rear walls, the wood walls of the gaps between keys —
+// projects ABOVE the edge on screen. The hit line normally covers that; with
+// it off it showed as wood-coloured slivers. With this plane nothing of the
+// white keys draws above the edge line. The cut opens onto the background
+// (inner walls are back-face culled). Re-aimed every frame since the camera
+// can move; WHITE_REAR_CLIP keeps the edge itself off the plane.
+const WHITE_REAR_CLIP = 0.001;
+const WHITE_KEY_CLIP = new THREE.Plane();
+const WHITE_KEY_CLIP_PLANES = [WHITE_KEY_CLIP];
+for (const m of WHITE_BODY_MATERIALS) m.clippingPlanes = WHITE_KEY_CLIP_PLANES;
+const CLIP_EDGE_POINT = new THREE.Vector3(0, NOTE_HIT_Y - WHITE_REAR_CLIP, 0);
+const CLIP_NORMAL_SCRATCH = new THREE.Vector3();
+
+// Retrigger lift: a note-on that lands while the key is still (mostly)
+// down — same-pitch notes with a tiny or zero gap, where the off and the
+// next on can even arrive in the same frame — would leave the key looking
+// held through both notes. Instead the key rises for RETRIGGER_LIFT_SECONDS
+// before pressing again. Long enough for PRESS_TC to bring it nearly all
+// the way up, and longer than one frame at 24 fps so exports show it too.
+const RETRIGGER_LIFT_SECONDS = 0.05;
+const RETRIGGER_PRESS_THRESHOLD = 0.35;
+// The key light (glow here, the flash via `retriggerDip`) dims with the lift
+// rather than blinking off: it eases toward
+// RETRIGGER_GLOW_FLOOR of its level with time constant RETRIGGER_GLOW_TC,
+// then eases back, so a fast run of repeats doesn't flicker.
+const RETRIGGER_GLOW_FLOOR = 0.3;
+const RETRIGGER_GLOW_TC = 0.03;
 
 // Slope tint: per-frame, slope material's color = lerp(blackKeyColor, white,
 // FACTOR). 0.12 is "若干明るい" — a perceptible but not dramatic step up.
@@ -158,6 +190,13 @@ export function Keyboard() {
   const glow = useMemo(() => new Float32Array(KEY_COUNT), []);
   const held = useMemo(() => new Uint8Array(KEY_COUNT), []);
   const press = useMemo(() => new Float32Array(KEY_COUNT), []);
+  // Absolute time until which a retriggered key is held up (see
+  // RETRIGGER_LIFT_SECONDS). Reset on clock epoch like glow / press.
+  const liftUntil = useMemo(() => new Float64Array(KEY_COUNT), []);
+  // Glow as drawn this frame: `glow` scaled by `retriggerDip`, which dims
+  // while a key lifts, so the emissive, black-key tint, and the light /
+  // shadow on the white keys all dim with it. `glow` keeps integrating.
+  const shownGlow = useMemo(() => new Float32Array(KEY_COUNT), []);
   const lastEpoch = useRef(clockEpoch());
   // World-space clip applied to the black-key materials: keep only
   // geometry at or in front of the keyboard's back edge (the hit line,
@@ -240,6 +279,7 @@ export function Keyboard() {
         roughness: 0.55,
         metalness: 0.05,
       });
+      mat.clippingPlanes = WHITE_KEY_CLIP_PLANES;
       patchWhiteKeyMaterial(mat, u, sharedLightUniforms);
       arr[i] = mat;
     }
@@ -288,6 +328,10 @@ export function Keyboard() {
       const idx = ev.midi - MIDI_MIN;
       if (idx < 0 || idx >= KEY_COUNT) return;
       if (ev.type === "on") {
+        const t = now();
+        if (press[idx] > RETRIGGER_PRESS_THRESHOLD && t >= liftUntil[idx]) {
+          liftUntil[idx] = t + RETRIGGER_LIFT_SECONDS;
+        }
         glow[idx] = Math.max(glow[idx], 0.5 + ev.velocity * 0.6);
         held[idx]++;
         lastTrack[idx] = ev.track ?? -1;
@@ -296,7 +340,7 @@ export function Keyboard() {
       }
     });
     return off;
-  }, [glow, held, lastTrack]);
+  }, [glow, held, press, liftUntil, lastTrack]);
 
   // Window-level release so dragging off the canvas still stops the note.
   useEffect(() => {
@@ -417,7 +461,20 @@ export function Keyboard() {
 
   usePcKeyboardInput(ensureAudio);
 
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
+    // Normal = X × (camera − edge point) = (0, −dz, dy): points toward the
+    // front of the keyboard, the kept side.
+    const cam = camera.position;
+    CLIP_NORMAL_SCRATCH.set(
+      0,
+      -(cam.z - CLIP_EDGE_POINT.z),
+      cam.y - CLIP_EDGE_POINT.y,
+    ).normalize();
+    WHITE_KEY_CLIP.setFromNormalAndCoplanarPoint(
+      CLIP_NORMAL_SCRATCH,
+      CLIP_EDGE_POINT,
+    );
+
     // Pin-resolved settings for every animatable key in this pass.
     // Non-animatable toggles (keyGlowEnabled / keyGlowFollowNote /
     // flashEnabled / flashFollowNote) keep reading the React `settings`
@@ -434,16 +491,24 @@ export function Keyboard() {
       lastEpoch.current = epoch;
       glow.fill(0);
       press.fill(0);
+      liftUntil.fill(0);
+      retriggerDip.fill(1);
     }
+    const nowSec = now();
     const brightness = rs.keyboardBrightness;
     const pressK = 1 - Math.exp(-delta / Math.max(0.005, PRESS_TC));
+    const dipK = 1 - Math.exp(-delta / RETRIGGER_GLOW_TC);
     for (let i = 0; i < KEY_COUNT; i++) {
       const decay = rs.keyGlowDecay;
       const target = held[i] ? Math.max(glow[i], 0.6) : 0;
       const k1 = 1 - Math.exp(-delta / Math.max(0.01, decay));
       glow[i] += (target - glow[i]) * k1;
 
-      const pressTarget = held[i] ? 1 : 0;
+      const lifting = nowSec < liftUntil[i];
+      retriggerDip[i] += ((lifting ? RETRIGGER_GLOW_FLOOR : 1) - retriggerDip[i]) * dipK;
+      shownGlow[i] = glow[i] * retriggerDip[i];
+
+      const pressTarget = held[i] && !lifting ? 1 : 0;
       press[i] += (pressTarget - press[i]) * pressK;
 
       const mat = matRefs.current[i];
@@ -461,7 +526,7 @@ export function Keyboard() {
         ? rs.blackKeyColor
         : rs.whiteKeyColor;
       mat.color.set(baseColor).multiplyScalar(brightness);
-      const e = glow[i];
+      const e = shownGlow[i];
       const glowOn = e > 0.001 && settings.keyGlowEnabled;
       // Resolve the glow tint per-key: in "follow note" mode, prefer
       // the per-track override (if the most recent note-on on this
@@ -577,7 +642,7 @@ export function Keyboard() {
     const fallbackG = LIGHT_COLOR_SCRATCH.g;
     const fallbackB = LIGHT_COLOR_SCRATCH.b;
     for (let bk = 0; bk < BLACK_KEY_COUNT; bk++) {
-      blackGlow[bk] = Math.min(1, glow[BLACK_KEY_INDICES[bk]]);
+      blackGlow[bk] = Math.min(1, shownGlow[BLACK_KEY_INDICES[bk]]);
     }
     if (settings.flashEnabled) {
       claimed.fill(0);
@@ -587,7 +652,7 @@ export function Keyboard() {
         let bestVal = 0.005;
         for (let i = 0; i < KEY_COUNT; i++) {
           if (claimed[i]) continue;
-          const v = glow[i];
+          const v = shownGlow[i];
           if (v > bestVal) {
             bestVal = v;
             bestI = i;

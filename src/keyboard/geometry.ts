@@ -836,7 +836,11 @@ export const WHITE_BODY_FRONT_OVERHANG = 0.015;
 const WHITE_BODY_FRONT_CORNER_R = 0.015;
 
 // Reassign side-wall triangles whose 3 vertices all sit on the body's
-// front edge to material index 2 (white front). ExtrudeGeometry walks
+// front edge to material index 2 (white front), and the walls of the
+// black-key notch (inner x = ±NOTCH_INSET_FROM_BOUNDARY, front y =
+// NOTCH_FRONT_Y) to index 0 (the dark top), like the felt-lined cavity a
+// black key sits in. In wood they showed as a brown strip behind each black
+// key at the keyboard's back edge, past the black key's rounded rear top. ExtrudeGeometry walks
 // the contour in REVERSE order (`while (--i >= 0)`), so the front edge
 // segment isn't at the start of the side group — it's near the end.
 // We classify every side triangle by its vertex y, then split the side
@@ -859,36 +863,42 @@ function tagWhiteBodyFrontFace(
   // y in (frontY, frontY + WHITE_BODY_FRONT_CORNER_R).
   const yBound = frontY + WHITE_BODY_FRONT_CORNER_R + 1e-5;
   const isFront = new Uint8Array(triCount);
+  const matOf = new Uint8Array(triCount);
   for (let t = 0; t < triCount; t++) {
     const v0 = sideStart + 3 * t;
     let allFront: 0 | 1 = 1;
+    let allNotchX = true;
+    let allNotchY = true;
     for (let k = 0; k < 3; k++) {
+      const x = positions[(v0 + k) * 3];
       const y = positions[(v0 + k) * 3 + 1];
-      if (y > yBound || y < frontY - 1e-5) {
-        allFront = 0;
-        break;
-      }
+      if (y > yBound || y < frontY - 1e-5) allFront = 0;
+      if (Math.abs(Math.abs(x) - NOTCH_INSET_FROM_BOUNDARY) > 1e-5)
+        allNotchX = false;
+      if (Math.abs(y - NOTCH_FRONT_Y) > 1e-5) allNotchY = false;
     }
     isFront[t] = allFront;
+    matOf[t] = allFront ? 2 : allNotchX || allNotchY ? 0 : 1;
   }
   geom.clearGroups();
   geom.addGroup(0, sideStart, 0); // caps
-  // Emit alternating wood (1) / white-front (2) runs over the side range.
+  // Emit runs of equal material (wood 1 / white front 2 / notch 0) over
+  // the side range.
   let runStart = 0;
-  let runFlag: number = isFront[0];
-  const flushRun = (end: number, flag: number) => {
+  let runMat: number = matOf[0];
+  const flushRun = (end: number, mat: number) => {
     const vStart = sideStart + 3 * runStart;
     const vCount = (end - runStart) * 3;
-    if (vCount > 0) geom.addGroup(vStart, vCount, flag ? 2 : 1);
+    if (vCount > 0) geom.addGroup(vStart, vCount, mat);
   };
   for (let t = 1; t < triCount; t++) {
-    if (isFront[t] !== runFlag) {
-      flushRun(t, runFlag);
+    if (matOf[t] !== runMat) {
+      flushRun(t, runMat);
       runStart = t;
-      runFlag = isFront[t];
+      runMat = matOf[t];
     }
   }
-  flushRun(triCount, runFlag);
+  flushRun(triCount, runMat);
 
   // Override front-face vertex normals so the surface receives the same
   // diffuse light as the cap top (whose normal is +Z). Without this the
@@ -958,7 +968,7 @@ export const WHITE_BODY_FRONT_MATERIAL = new THREE.MeshStandardMaterial({
   metalness: 0.05,
 });
 export const WHITE_BODY_MATERIALS: THREE.Material[] = [
-  WHITE_BODY_TOP_MATERIAL, // group 0: caps (top + bottom; top visible)
-  WHITE_BODY_WOOD_MATERIAL, // group 1: side walls (left/right/back + inner notch)
+  WHITE_BODY_TOP_MATERIAL, // group 0: caps (top + bottom; top visible) + black-key notch walls
+  WHITE_BODY_WOOD_MATERIAL, // group 1: side walls (left/right/back)
   WHITE_BODY_FRONT_MATERIAL, // group 2: white-coated front-vertical face
 ];
