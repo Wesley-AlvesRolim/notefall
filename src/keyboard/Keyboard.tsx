@@ -96,6 +96,22 @@ const WHITE_PRESS_ANGLE =
 const BLACK_PRESS_ANGLE =
   (BLACK_PRESS_DEPTH - BLACK_PIVOT_DIP) / BLACK_KEY_LENGTH;
 
+// Clip for the white keys (cap and wood body): the plane through the camera
+// and the keyboard's top back edge (the hit line), keeping the side in
+// front. The camera sits above the keyboard, so anything deeper at the back
+// edge — the keys' rear walls, the wood walls of the gaps between keys —
+// projects ABOVE the edge on screen. The hit line normally covers that; with
+// it off it showed as wood-coloured slivers. With this plane nothing of the
+// white keys draws above the edge line. The cut opens onto the background
+// (inner walls are back-face culled). Re-aimed every frame since the camera
+// can move; WHITE_REAR_CLIP keeps the edge itself off the plane.
+const WHITE_REAR_CLIP = 0.001;
+const WHITE_KEY_CLIP = new THREE.Plane();
+const WHITE_KEY_CLIP_PLANES = [WHITE_KEY_CLIP];
+for (const m of WHITE_BODY_MATERIALS) m.clippingPlanes = WHITE_KEY_CLIP_PLANES;
+const CLIP_EDGE_POINT = new THREE.Vector3(0, NOTE_HIT_Y - WHITE_REAR_CLIP, 0);
+const CLIP_NORMAL_SCRATCH = new THREE.Vector3();
+
 // Retrigger lift: a note-on that lands while the key is still (mostly)
 // down — same-pitch notes with a tiny or zero gap, where the off and the
 // next on can even arrive in the same frame — would leave the key looking
@@ -263,6 +279,7 @@ export function Keyboard() {
         roughness: 0.55,
         metalness: 0.05,
       });
+      mat.clippingPlanes = WHITE_KEY_CLIP_PLANES;
       patchWhiteKeyMaterial(mat, u, sharedLightUniforms);
       arr[i] = mat;
     }
@@ -444,7 +461,20 @@ export function Keyboard() {
 
   usePcKeyboardInput(ensureAudio);
 
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
+    // Normal = X × (camera − edge point) = (0, −dz, dy): points toward the
+    // front of the keyboard, the kept side.
+    const cam = camera.position;
+    CLIP_NORMAL_SCRATCH.set(
+      0,
+      -(cam.z - CLIP_EDGE_POINT.z),
+      cam.y - CLIP_EDGE_POINT.y,
+    ).normalize();
+    WHITE_KEY_CLIP.setFromNormalAndCoplanarPoint(
+      CLIP_NORMAL_SCRATCH,
+      CLIP_EDGE_POINT,
+    );
+
     // Pin-resolved settings for every animatable key in this pass.
     // Non-animatable toggles (keyGlowEnabled / keyGlowFollowNote /
     // flashEnabled / flashFollowNote) keep reading the React `settings`
