@@ -12,7 +12,7 @@
  * editable (prefix files with `01-`, `02-`, …).
  */
 
-import { strFromU8, unzipSync } from 'fflate'
+import { strFromU8, Unzip, UnzipInflate } from 'fflate'
 
 const modules = import.meta.glob('./demos/*.nfz', {
   eager: true,
@@ -38,8 +38,52 @@ export const DEMOS: DemoEntry[] = Object.entries(modules)
   .sort((a, b) => a.fallbackLabel.localeCompare(b.fallbackLabel))
 
 /**
- * Fetch and unzip just the `manifest.json` from each demo, returning
- * a `url → manifest.name` map. Failures (network, malformed zip,
+ * Stream a demo and pull out just its `manifest.json`, cancelling the
+ * download as soon as that entry is decoded. `pack` writes the
+ * manifest as the first zip entry, so this reads a few KB even when
+ * the demo bundles a multi-MB audio track — the menu fetches every
+ * demo on mount, and a full download there would cost each visitor
+ * the whole audio file just to show a label. Resolves `null` if the
+ * stream ends without a manifest.
+ */
+async function fetchManifestText(url: string): Promise<string | null> {
+  const res = await fetch(url)
+  if (!res.ok || !res.body) return null
+  const reader = res.body.getReader()
+  let text: string | null = null
+  const parts: Uint8Array[] = []
+  const unzip = new Unzip((file) => {
+    if (file.name !== 'manifest.json') return
+    file.ondata = (err, chunk, final) => {
+      if (err) throw err
+      parts.push(chunk)
+      if (!final) return
+      const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
+      let off = 0
+      for (const p of parts) {
+        all.set(p, off)
+        off += p.length
+      }
+      text = strFromU8(all)
+    }
+    file.start()
+  })
+  unzip.register(UnzipInflate)
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      unzip.push(value ?? new Uint8Array(0), done)
+      if (text !== null || done) break
+    }
+  } finally {
+    void reader.cancel().catch(() => {})
+  }
+  return text
+}
+
+/**
+ * Read just the `manifest.json` from each demo, returning a
+ * `url → manifest.name` map. Failures (network, malformed zip,
  * missing/invalid manifest) drop silently — the caller falls back to
  * the filename label. Each demo is fetched in parallel; the whole
  * call resolves once every entry has settled.
@@ -49,13 +93,9 @@ export async function loadDemoManifestNames(): Promise<Map<string, string>> {
   await Promise.all(
     DEMOS.map(async (demo) => {
       try {
-        const res = await fetch(demo.url)
-        if (!res.ok) return
-        const buf = await res.arrayBuffer()
-        const files = unzipSync(new Uint8Array(buf))
-        const mf = files['manifest.json']
-        if (!mf) return
-        const parsed = JSON.parse(strFromU8(mf)) as { name?: unknown }
+        const text = await fetchManifestText(demo.url)
+        if (text === null) return
+        const parsed = JSON.parse(text) as { name?: unknown }
         if (typeof parsed.name === 'string' && parsed.name.length > 0) {
           out.set(demo.url, parsed.name)
         }
