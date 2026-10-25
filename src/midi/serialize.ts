@@ -28,21 +28,25 @@ export function serializeMidi(
 ): ArrayBuffer {
   const midi = new Midi()
   if (options.preserveTracks) {
-    // Multi-track output. Reconstruct one SMF track per index that
-    // appears in `NoteEvent.track`, in the same order as
-    // `song.tracks`. Tracks that originally had a name but no notes
-    // (pure meta / tempo tracks) are skipped — the @tonejs/midi
-    // encoder prepends its own meta track regardless. Pedal events
+    // Multi-track output. Emit one SMF track for EVERY index
+    // 0..max (empty ones included, e.g. a source tempo track) so each
+    // note keeps its `NoteEvent.track` index across the round-trip —
+    // `trackColors` is keyed by that index, and skipping empty tracks
+    // shifted every later track down by one on reload. The encoder's
+    // own leading meta track is dropped again by the parser (format 1,
+    // zero duration), so it doesn't shift anything. Pedal events
     // currently live on the song as a flat array (no track tag); we
     // attach them to whichever track has the lowest index that
     // contains notes, so reparse still picks them up.
     const trackByIdx = new Map<number, ReturnType<typeof midi.addTrack>>()
     const noteTrackIndices: number[] = []
+    let maxIdx = song.tracks.length - 1
     for (const n of song.notes) {
       if (!noteTrackIndices.includes(n.track)) noteTrackIndices.push(n.track)
+      if (n.track > maxIdx) maxIdx = n.track
     }
     noteTrackIndices.sort((a, b) => a - b)
-    for (const idx of noteTrackIndices) {
+    for (let idx = 0; idx <= maxIdx; idx++) {
       const t = midi.addTrack()
       // Restore the friendly track name when we have one. The encoder
       // writes it as the SMF "trackName" meta event so reparse via
