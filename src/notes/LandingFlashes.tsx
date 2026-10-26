@@ -19,6 +19,7 @@ import { clockEpoch, now } from '../audio/clock'
 import { getResolvedSettings } from '../scene/automatedSettings'
 import { retriggerDip } from '../keyboard/retriggerDip'
 import { KEYBOARD_LAYOUT, KEYBOARD_Y, KEY_COUNT, MIDI_MIN, WHITE_KEY_LENGTH } from '../keyboard/layout'
+import { NoteColorResolver } from './noteColor'
 
 const VERTEX_SHADER = /* glsl */ `
   attribute float instanceIntensity;
@@ -111,6 +112,13 @@ export function LandingFlashes() {
     a.fill(-1)
     return a
   }, [])
+  // Song note id of that note-on (-1 = live input), for per-note random colours.
+  const lastNoteId = useMemo(() => {
+    const a = new Int32Array(KEY_COUNT)
+    a.fill(-1)
+    return a
+  }, [])
+  const colorResolver = useMemo(() => new NoteColorResolver(), [])
   // Flash level before the retrigger dip; `intensities` (the uploaded
   // attribute) is this × retriggerDip, rebuilt each frame.
   const levels = useMemo(() => new Float32Array(KEY_COUNT), [])
@@ -170,6 +178,7 @@ export function LandingFlashes() {
         intensities[idx] = levels[idx] * retriggerDip[idx]
         heldUntil[idx] = now() + MIN_HOLD_SECONDS
         lastTrack[idx] = ev.track ?? -1
+        lastNoteId[idx] = ev.id ?? -1
         intensityAttr.needsUpdate = true
       } else {
         heldCount[idx] = Math.max(0, heldCount[idx] - 1)
@@ -177,7 +186,7 @@ export function LandingFlashes() {
       }
     })
     return off
-  }, [heldCount, sustainLevels, heldUntil, lastTrack, levels, intensities, intensityAttr])
+  }, [heldCount, sustainLevels, heldUntil, lastTrack, lastNoteId, levels, intensities, intensityAttr])
 
   // Attribute wiring only. The per-instance transforms used to be
   // rebuilt here on flashSize / flashWidth change, but those are
@@ -274,40 +283,24 @@ export function LandingFlashes() {
     }
     if (dirty) intensityAttr.needsUpdate = true
 
-    // Per-track RGB cache for this frame. Only keys with intensity > 0
-    // get a fresh tint write — saves cost when the keyboard is idle.
-    // Colours are pin-resolved; flashFollowNote is non-animatable.
-    const fallbackHex = settings.flashFollowNote
-      ? rs.noteColor
-      : rs.flashColor
-    tmpColor.set(fallbackHex)
-    const defaultR = tmpColor.r
-    const defaultG = tmpColor.g
-    const defaultB = tmpColor.b
-    const trackColors = rs.trackColors
-    const trackRgbCache = new Map<number, readonly [number, number, number]>()
-    const resolveTint = (
-      trackIdx: number,
-    ): readonly [number, number, number] => {
-      if (trackIdx < 0 || !settings.flashFollowNote)
-        return [defaultR, defaultG, defaultB]
-      const cached = trackRgbCache.get(trackIdx)
-      if (cached) return cached
-      const override = trackColors[String(trackIdx)]
-      if (!override) {
-        const v: [number, number, number] = [defaultR, defaultG, defaultB]
-        trackRgbCache.set(trackIdx, v)
-        return v
-      }
-      tmpColor.set(override)
-      const v: [number, number, number] = [tmpColor.r, tmpColor.g, tmpColor.b]
-      trackRgbCache.set(trackIdx, v)
-      return v
+    // Per-key tint: the note's colour (notes/noteColor.ts) when the flash
+    // follows the note, else the explicit flashColor. Colours are
+    // pin-resolved; flashFollowNote is non-animatable.
+    const followNote = settings.flashFollowNote
+    if (followNote) colorResolver.update(rs)
+    tmpColor.set(rs.flashColor)
+    const flashRgb = [tmpColor.r, tmpColor.g, tmpColor.b] as const
+    const resolveTint = (i: number): readonly [number, number, number] => {
+      if (!followNote) return flashRgb
+      const t = lastTrack[i]
+      const id = lastNoteId[i]
+      const c = colorResolver.rgb(i + MIDI_MIN, t < 0 ? undefined : t, id < 0 ? undefined : id)
+      return [c[0], c[1], c[2]]
     }
     let tintDirty = false
     for (let i = 0; i < KEY_COUNT; i++) {
       if (intensities[i] === 0) continue
-      const [r, g, b] = resolveTint(lastTrack[i])
+      const [r, g, b] = resolveTint(i)
       const o = i * 3
       if (tints[o] !== r || tints[o + 1] !== g || tints[o + 2] !== b) {
         tints[o] = r

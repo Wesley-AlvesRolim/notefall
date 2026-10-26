@@ -183,6 +183,7 @@ export function EditTools() {
           width: b.xMax - b.xMin,
           length: b.yMax - b.yMin,
           track: n.track,
+          id: n.id,
         })
         cur.setSongPreview(deleteNotes(cur.song, [n.id]))
         if (cur.selection.has(n.id)) {

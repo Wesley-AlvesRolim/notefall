@@ -10,6 +10,7 @@ const HIT_LINE_KEYS = [
   'hitLineBarY',
   'hitLineColor',
   'hitLineEnabled',
+  'hitLineColorMode',
   'hitLineIntensity',
   'hitLineThickness',
   'hitLineWaveAmplitude',
@@ -24,6 +25,26 @@ const HIT_LINE_KEYS = [
   'hitLineWaveY',
 ] as const
 import { now } from '../audio/clock'
+import {
+  NOTE_GRADIENT_GLSL,
+  createGradientUniforms,
+  hitLineGradient,
+  noteGradient,
+  writeGradientUniforms,
+} from './noteColor'
+
+type GradientUniforms = ReturnType<typeof createGradientUniforms>
+
+// The line's colour: uColor, or the note gradient along the line (uPlaneWidth
+// = the plane's world width, centred on x = 0) when following the notes.
+const LINE_COLOR_GLSL = /* glsl */ `
+  uniform float uPlaneWidth;
+  ${NOTE_GRADIENT_GLSL}
+  vec3 lineColor() {
+    if (uGradient < 0.5) return uColor;
+    return gradientAt(vec2((vUv.x - 0.5) * uPlaneWidth, uGradArea.y));
+  }
+`
 
 const VERTEX_SHADER = /* glsl */ `
   varying vec2 vUv;
@@ -43,6 +64,7 @@ const BAR_FRAGMENT = /* glsl */ `
   uniform float uIntensity;
   uniform float uThickness;
   uniform float uHalo;
+  ${LINE_COLOR_GLSL}
   void main() {
     // Distance from horizontal centerline of the plane (0 at center, 1 at edge).
     float d = abs(vUv.y - 0.5) * 2.0;
@@ -54,7 +76,7 @@ const BAR_FRAGMENT = /* glsl */ `
     float halo = exp(-d * d * (12.0 / (h * h)));
     float a = core + halo * 0.35;
     if (a < 0.005) discard;
-    gl_FragColor = vec4(uColor * uIntensity * a, a);
+    gl_FragColor = vec4(lineColor() * uIntensity * a, a);
   }
 `
 
@@ -74,6 +96,7 @@ const WAVE_FRAGMENT = /* glsl */ `
   uniform float uMorphSpeed;
   uniform float uHalo;
   uniform float uGrain;
+  ${LINE_COLOR_GLSL}
 
   float hash21(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -148,7 +171,7 @@ const WAVE_FRAGMENT = /* glsl */ `
 
     float a = (core + halo * 0.4) * brightness;
     if (a < 0.005) discard;
-    gl_FragColor = vec4(uColor * uIntensity * a, a);
+    gl_FragColor = vec4(lineColor() * uIntensity * a, a);
   }
 `
 
@@ -160,6 +183,7 @@ const WAVE_PLANE_HEIGHT = 0.7
 // Extra width past the keyboard so the additive glow fades at the edges
 // instead of cutting off in a hard rectangle.
 const PLANE_WIDTH_PAD = 0.5
+const PLANE_WIDTH = KEYBOARD_LAYOUT.totalWidth + PLANE_WIDTH_PAD
 
 /**
  * Glowing horizontal laser at the keyboard hit line. Composed of a steady
@@ -178,6 +202,8 @@ export function HitLine() {
         uIntensity: { value: settings.hitLineIntensity },
         uThickness: { value: settings.hitLineThickness },
         uHalo: { value: settings.hitLineBarHalo },
+        uPlaneWidth: { value: PLANE_WIDTH },
+        ...createGradientUniforms(NOTE_HIT_Y),
       },
       vertexShader: VERTEX_SHADER,
       fragmentShader: BAR_FRAGMENT,
@@ -204,6 +230,8 @@ export function HitLine() {
         uMorphSpeed: { value: settings.hitLineWaveMorphSpeed },
         uHalo: { value: settings.hitLineWaveHalo },
         uGrain: { value: settings.hitLineWaveGrain },
+        uPlaneWidth: { value: PLANE_WIDTH },
+        ...createGradientUniforms(NOTE_HIT_Y),
       },
       vertexShader: VERTEX_SHADER,
       fragmentShader: WAVE_FRAGMENT,
@@ -238,11 +266,24 @@ export function HitLine() {
   useFrame(() => {
     const r = getResolvedSettings()
     waveMaterial.uniforms.uTime.value = now() % TIME_WRAP_SECONDS
-    barMaterial.uniforms.uColor.value.set(r.hitLineColor)
+    // line colouring: its own gradient, the notes' (their gradient along
+    // the line, noteColor for solid notes; random notes have no single
+    // colour, so the line keeps hitLineColor), or the plain hitLineColor
+    const mode = settings.hitLineColorMode
+    const gradient =
+      mode === 'gradient'
+        ? hitLineGradient(r)
+        : mode === 'note' && r.noteColorMode === 'gradient'
+          ? noteGradient(r)
+          : null
+    const lineHex = mode === 'note' && r.noteColorMode === 'solid' ? r.noteColor : r.hitLineColor
+    writeGradientUniforms(barMaterial.uniforms as unknown as GradientUniforms, gradient)
+    writeGradientUniforms(waveMaterial.uniforms as unknown as GradientUniforms, gradient)
+    barMaterial.uniforms.uColor.value.set(lineHex)
     barMaterial.uniforms.uIntensity.value = r.hitLineIntensity
     barMaterial.uniforms.uThickness.value = r.hitLineThickness
     barMaterial.uniforms.uHalo.value = r.hitLineBarHalo
-    waveMaterial.uniforms.uColor.value.set(r.hitLineColor)
+    waveMaterial.uniforms.uColor.value.set(lineHex)
     waveMaterial.uniforms.uIntensity.value = r.hitLineWaveIntensity
     waveMaterial.uniforms.uAmplitude.value = r.hitLineWaveAmplitude
     waveMaterial.uniforms.uThickness.value = r.hitLineWaveThickness
@@ -260,7 +301,7 @@ export function HitLine() {
   if (!settings.hitLineEnabled) return null
 
   const hitY = NOTE_HIT_Y
-  const planeWidth = KEYBOARD_LAYOUT.totalWidth + PLANE_WIDTH_PAD
+  const planeWidth = PLANE_WIDTH
 
   // z = 0.14 / 0.141: in front of the 3D black keys (top z ≈ 0.09),
   // falling notes (0.1) and landing flashes (0.105) so the laser
@@ -274,16 +315,16 @@ export function HitLine() {
           0.061/0.062 — fine when every key was a flat plane at z≈0, but
           the 3D black keys would have hidden the bar/wave behind their
           tops near the back edge. */}
-      {/* Explicit renderOrder pins the bar below the falling notes in
-          the transparent-object paint sequence — notes (renderOrder=2)
-          draw on top so the user-coloured note body isn't overlaid by
-          the bar's additive glow as it crosses the hit line. The z
+      {/* Explicit renderOrder puts the line OVER the falling notes in
+          the transparent-object paint sequence (notes 2, line 2.2,
+          particles 2.5, landing flashes 3): a note reaching the keys
+          slides under the glowing line instead of covering it. The z
           coordinate stays where it is (in front of the 3D black keys
           at z=0.125) so the line is still visible against the keys. */}
       <mesh
         ref={barMeshRef}
         position={[0, hitY + settings.hitLineBarY, 0.14]}
-        renderOrder={0}
+        renderOrder={2.2}
       >
         <planeGeometry args={[planeWidth, BAR_PLANE_HEIGHT]} />
         <primitive object={barMaterial} attach="material" />
@@ -292,7 +333,7 @@ export function HitLine() {
         <mesh
           ref={waveMeshRef}
           position={[0, hitY + settings.hitLineWaveY, 0.141]}
-          renderOrder={0}
+          renderOrder={2.2}
         >
           <planeGeometry args={[planeWidth, WAVE_PLANE_HEIGHT]} />
           <primitive object={waveMaterial} attach="material" />

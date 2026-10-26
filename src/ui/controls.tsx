@@ -462,6 +462,24 @@ function useSliderTrackGestures({
   return { ref, menuNode }
 }
 
+/**
+ * "Whole song" badge: shown while a pin is targeted on rows whose setting a pin can't hold (discrete choices, counts,
+ * audio…), because editing them changes the base look for the whole song, not the targeted pin.
+ */
+function ScopeBadge({ settingKey }: { settingKey?: keyof Settings }) {
+  const { t } = useTranslation('inspector')
+  const pinTargeted = useStore((st) => st.editingKeyframeTime !== null)
+  if (!settingKey || !pinTargeted || isAnimatableKey(settingKey)) return null
+  return (
+    <span
+      title={t('scope.wholeSongTooltip')}
+      className="ml-1 rounded border border-neutral-700 px-1 text-[9px] leading-[14px] text-neutral-400"
+    >
+      {t('scope.wholeSong')}
+    </span>
+  )
+}
+
 type SliderRowProps = {
   label: string
   value: number
@@ -472,9 +490,11 @@ type SliderRowProps = {
   format?: (v: number) => string
   /** Double-clicking the label / value row resets to this. */
   defaultValue?: number
+  /** The setting this row edits: while a pin is targeted, a key a pin can't hold gets a "whole song" badge. */
+  scopeKey?: keyof Settings
 }
 
-export function SliderRow({ label, value, min, max, step = 0.01, onChange, format, defaultValue }: SliderRowProps) {
+export function SliderRow({ label, value, min, max, step = 0.01, onChange, format, defaultValue, scopeKey }: SliderRowProps) {
   const visible = useRowMatchesQuery(label)
   const { ref: trackRef, menuNode } = useSliderTrackGestures({
     value,
@@ -515,7 +535,10 @@ export function SliderRow({ label, value, min, max, step = 0.01, onChange, forma
       className="flex flex-col gap-1 py-1"
     >
       <div className="flex items-center justify-between text-xs select-none">
-        <Label className="text-neutral-400">{label}</Label>
+        <span className="flex items-center gap-1">
+          <Label className="text-neutral-400">{label}</Label>
+          <ScopeBadge settingKey={scopeKey} />
+        </span>
         <SliderOutput className="text-neutral-200 tabular-nums">
           {format ? format(value) : value.toFixed(step < 1 ? 2 : 0)}
         </SliderOutput>
@@ -560,9 +583,11 @@ type SwitchRowProps = {
   onChange: (v: boolean) => void
   /** Double-clicking the label resets to this. */
   defaultValue?: boolean
+  /** The setting this row edits: while a pin is targeted, a key a pin can't hold gets a "whole song" badge. */
+  scopeKey?: keyof Settings
 }
 
-export function SwitchRow({ label, value, onChange, defaultValue }: SwitchRowProps) {
+export function SwitchRow({ label, value, onChange, defaultValue, scopeKey }: SwitchRowProps) {
   const { t } = useTranslation('inspector')
   if (!useRowMatchesQuery(label)) return null
   return (
@@ -593,6 +618,7 @@ export function SwitchRow({ label, value, onChange, defaultValue }: SwitchRowPro
         }
       >
         {label}
+        <ScopeBadge settingKey={scopeKey} />
       </span>
       <span className="relative inline-block h-4 w-7 rounded-full bg-neutral-700 transition group-data-[selected]:bg-sky-500">
         <span className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white transition group-data-[selected]:translate-x-3" />
@@ -624,6 +650,8 @@ type ColorRowProps = {
    * when `value` happens to equal `defaultValue`.
    */
   isModified?: boolean
+  /** The setting this row edits: while a pin is targeted, a key a pin can't hold gets a "whole song" badge. */
+  scopeKey?: keyof Settings
 }
 
 export function ColorRow({
@@ -633,6 +661,7 @@ export function ColorRow({
   defaultValue,
   onReset,
   isModified: isModifiedOverride,
+  scopeKey,
 }: ColorRowProps) {
   const { t } = useTranslation('inspector')
   const reset =
@@ -661,6 +690,7 @@ export function ColorRow({
         title={reset ? t('reset.doubleClickReset') : undefined}
       >
         {label}
+        <ScopeBadge settingKey={scopeKey} />
       </span>
       <div className="flex items-center gap-1">
         {reset && isModified && (
@@ -748,9 +778,11 @@ type SelectRowProps<T extends string> = {
   onChange: (v: T) => void
   /** Double-clicking the label resets to this. */
   defaultValue?: T
+  /** The setting this row edits: while a pin is targeted, a key a pin can't hold gets a "whole song" badge. */
+  scopeKey?: keyof Settings
 }
 
-export function SelectRow<T extends string>({ label, value, options, onChange, defaultValue }: SelectRowProps<T>) {
+export function SelectRow<T extends string>({ label, value, options, onChange, defaultValue, scopeKey }: SelectRowProps<T>) {
   const { t } = useTranslation('inspector')
   const reset =
     defaultValue !== undefined
@@ -765,6 +797,7 @@ export function SelectRow<T extends string>({ label, value, options, onChange, d
         title={reset ? t('reset.doubleClickReset') : undefined}
       >
         {label}
+        <ScopeBadge settingKey={scopeKey} />
       </span>
       <Select
         selectedKey={value}
@@ -776,7 +809,10 @@ export function SelectRow<T extends string>({ label, value, options, onChange, d
           <SelectValue />
           <span className="text-neutral-500">▾</span>
         </Button>
-        <Popover className="rounded border border-neutral-700 bg-neutral-900 p-1 shadow-xl">
+        {/* react-aria caps the popover's max-height to the space available;
+            overflow-y-auto keeps a long option list (e.g. the note-look
+            presets) scrollable inside it instead of spilling out. */}
+        <Popover className="scroll-thin overflow-y-auto rounded border border-neutral-700 bg-neutral-900 p-1 shadow-xl">
           <ListBox className="outline-none">
             {options.map((o) => (
               <ListBoxItem
@@ -821,33 +857,37 @@ function useStoredBool(
 }
 
 /**
- * Collapsible section with header (title + optional action slot). Title
- * click toggles the collapsed state, which is persisted to localStorage
- * under `inspector.section.<title>`. Plays into the Inspector's search
- * bar: when a query is active, the section force-expands; if no
- * descendant row carries `data-search-label` matching the query AND the
- * title itself doesn't match, the whole section is hidden. When the
- * title matches, every row inside renders regardless of label match
- * (a relayed empty query via SearchContext.Provider).
+ * Collapsible card with a header (title + optional on/off switch + optional action slot). Title click toggles the
+ * collapsed state, persisted to localStorage under `inspector.section.<title>`. `enabledKey` puts the feature's
+ * on/off switch in the header: while it is off the body stays closed, so a disabled effect costs one line. The header
+ * sticks to the top of the scrolling panel. Plays into the Inspector's search bar: when a query is active, the card
+ * force-expands; if no descendant row carries `data-search-label` matching the query AND the title itself doesn't
+ * match, the whole card is hidden. When the title matches, every row inside renders regardless of label match (a
+ * relayed empty query via SearchContext.Provider).
  */
 export function Section({
   title,
   action,
+  enabledKey,
   defaultOpen = true,
   children,
 }: {
   title: string
   action?: ReactNode
+  enabledKey?: BooleanKeys
   defaultOpen?: boolean
   children: ReactNode
 }) {
+  const { t } = useTranslation('inspector')
   const q = useSearchQuery()
   const titleMatches = !q || title.toLowerCase().includes(q)
   const [storedOpen, setStoredOpen] = useStoredBool(
     `inspector.section.${title}`,
     defaultOpen,
   )
-  const open = q ? true : storedOpen
+  const enabled = useEffectiveSetting(enabledKey ?? 'notesEnabled') as boolean
+  const isOn = !enabledKey || enabled
+  const open = q ? true : storedOpen && isOn
   const contentRef = useRef<HTMLDivElement>(null)
   const [hasRow, setHasRow] = useState(true)
   useLayoutEffect(() => {
@@ -867,20 +907,19 @@ export function Section({
   // row renders (no per-row filter applied inside this section).
   const childQuery = titleMatches && q ? '' : q
   return (
-    <div data-search-label={title} className="mt-4 border-t border-neutral-800/80 first:mt-1 first:border-t-0">
-      <div className="mt-4 mb-3 flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-300">
+    <div data-search-label={title} className="mt-2 border-t border-neutral-800/80 first:mt-0 first:border-t-0">
+      <div className="sticky top-0 z-10 -mx-3 flex items-center justify-between gap-2 bg-neutral-950 px-3 pt-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-300">
         <button
           type="button"
           onClick={() => setStoredOpen(!storedOpen)}
-          disabled={!!q}
-          className="flex flex-1 items-center justify-between outline-none hover:text-white disabled:cursor-default disabled:opacity-80"
+          disabled={!!q || !isOn}
+          className={`flex flex-1 items-center gap-1.5 outline-none hover:text-white disabled:cursor-default ${isOn ? '' : 'text-neutral-500'}`}
         >
-          <span>{title}</span>
           <svg
             width="9"
             height="9"
             viewBox="0 0 12 12"
-            className={`transition-transform ${open ? 'rotate-90' : ''}`}
+            className={`transition-transform ${open ? 'rotate-90' : ''} ${isOn ? '' : 'opacity-0'}`}
             aria-hidden
           >
             <path
@@ -892,14 +931,59 @@ export function Section({
               strokeLinejoin="round"
             />
           </svg>
+          <span>{title}</span>
         </button>
         {action}
+        {enabledKey && (
+          <Switch
+            aria-label={t('row.enabled')}
+            isSelected={enabled}
+            onChange={(v) => {
+              commitAtomic(() => writeSetting(enabledKey, v as Settings[BooleanKeys]))
+              if (v) setStoredOpen(true)
+            }}
+            className="group relative flex cursor-pointer items-center normal-case"
+          >
+            <span className="relative inline-block h-4 w-7 rounded-full bg-neutral-700 transition group-data-[selected]:bg-sky-500">
+              <span className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white transition group-data-[selected]:translate-x-3" />
+            </span>
+          </Switch>
+        )}
       </div>
-      <div ref={contentRef} hidden={!open}>
+      <div ref={contentRef} hidden={!open} className="pb-2">
         <SearchContext.Provider value={childQuery}>
           {children}
         </SearchContext.Provider>
       </div>
+    </div>
+  )
+}
+
+/**
+ * "Detail" disclosure inside a card: the card shows its everyday rows, the rest waits behind this toggle (open state
+ * persisted per `id`; always open while searching so matches inside are visible).
+ */
+export function Detail({ id, children }: { id: string; children: ReactNode }) {
+  const { t } = useTranslation('inspector')
+  const q = useSearchQuery()
+  const [storedOpen, setStoredOpen] = useStoredBool(`inspector.detail.${id}`, false)
+  const open = q ? true : storedOpen
+  return (
+    <div className="mt-1">
+      {!q && (
+        <button
+          type="button"
+          onClick={() => setStoredOpen(!storedOpen)}
+          aria-expanded={open}
+          className="flex w-full items-center gap-1.5 py-1 text-[11px] text-neutral-500 outline-none hover:text-neutral-300 focus-visible:text-neutral-200"
+        >
+          <svg width="8" height="8" viewBox="0 0 12 12" className={`transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
+            <path d="M4 2 L8 6 L4 10" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {open ? t('detail.hide') : t('detail.show')}
+        </button>
+      )}
+      <div hidden={!open}>{children}</div>
     </div>
   )
 }
@@ -1063,13 +1147,13 @@ function Band({ label, value, min, max, step, trackHeight, defaultValue, onChang
 // re-rendered the Inspector and forced all ~80 rows through React's
 // reconciliation, even though only one of them actually changed).
 
-type NumericKeys = {
+export type NumericKeys = {
   [K in keyof Settings]: Settings[K] extends number ? K : never
 }[keyof Settings]
-type BooleanKeys = {
+export type BooleanKeys = {
   [K in keyof Settings]: Settings[K] extends boolean ? K : never
 }[keyof Settings]
-type StringKeys = {
+export type StringKeys = {
   [K in keyof Settings]: Settings[K] extends string ? K : never
 }[keyof Settings]
 
@@ -1103,6 +1187,7 @@ export function BoundSliderRow({
       format={format}
       onChange={(v) => writeSetting(settingKey, v as Settings[NumericKeys])}
       defaultValue={defaultSettings[settingKey] as number}
+      scopeKey={settingKey}
     />
   )
 }
@@ -1121,6 +1206,7 @@ export function BoundSwitchRow({
       value={value}
       onChange={(v) => writeSetting(settingKey, v as Settings[BooleanKeys])}
       defaultValue={defaultSettings[settingKey] as boolean}
+      scopeKey={settingKey}
     />
   )
 }
@@ -1139,6 +1225,7 @@ export function BoundColorRow({
       value={value}
       onChange={(v) => writeSetting(settingKey, v as Settings[StringKeys])}
       defaultValue={defaultSettings[settingKey] as string}
+      scopeKey={settingKey}
     />
   )
 }

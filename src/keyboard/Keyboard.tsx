@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect, useCallback } from "react";
 import * as THREE from "three";
 import * as Tone from "tone";
-import { resolveTrackColorHex } from "../notes/trackColor";
+import { NoteColorResolver } from "../notes/noteColor";
 import { markLivePlay } from "../usage";
 import { useFrame, useThree } from "@react-three/fiber";
 import type { ThreeEvent } from "@react-three/fiber";
@@ -321,6 +321,13 @@ export function Keyboard() {
     a.fill(-1);
     return a;
   }, []);
+  // Song note id of that note-on (-1 = live input), for per-note random colours.
+  const lastNoteId = useMemo(() => {
+    const a = new Int32Array(KEY_COUNT);
+    a.fill(-1);
+    return a;
+  }, []);
+  const colorResolver = useMemo(() => new NoteColorResolver(), []);
   useEffect(() => {
     // held[] is a refcount, not a flag — back-to-back retriggers may emit
     // on/off in either order within a frame; counting handles overlap.
@@ -335,12 +342,13 @@ export function Keyboard() {
         glow[idx] = Math.max(glow[idx], 0.5 + ev.velocity * 0.6);
         held[idx]++;
         lastTrack[idx] = ev.track ?? -1;
+        lastNoteId[idx] = ev.id ?? -1;
       } else {
         held[idx] = Math.max(0, held[idx] - 1);
       }
     });
     return off;
-  }, [glow, held, press, liftUntil, lastTrack]);
+  }, [glow, held, press, liftUntil, lastTrack, lastNoteId]);
 
   // Window-level release so dragging off the canvas still stops the note.
   useEffect(() => {
@@ -481,6 +489,12 @@ export function Keyboard() {
     // slice. Zero pins ⇒ `rs` is the live settings object by reference,
     // so every value below is bit-identical to the pre-pin code.
     const rs = getResolvedSettings();
+    colorResolver.update(rs);
+    const noteHexAt = (i: number): string => {
+      const t = lastTrack[i];
+      const id = lastNoteId[i];
+      return colorResolver.hex(i + MIDI_MIN, t < 0 ? undefined : t, id < 0 ? undefined : id);
+    };
     // A clock swap (the exporter installing its virtual clock) starts a
     // new timeline. The engine already sent note-offs for everything
     // sounding, but glow / press only decay over `keyGlowDecay`, so keys
@@ -528,14 +542,11 @@ export function Keyboard() {
       mat.color.set(baseColor).multiplyScalar(brightness);
       const e = shownGlow[i];
       const glowOn = e > 0.001 && settings.keyGlowEnabled;
-      // Resolve the glow tint per-key: in "follow note" mode, prefer
-      // the per-track override (if the most recent note-on on this
-      // key carried a track index and that track has a colour set in
-      // settings.trackColors); otherwise the global noteColor. The
-      // explicit `keyGlowColor` mode stays global.
-      const trackIdx = lastTrack[i] >= 0 ? lastTrack[i] : undefined;
+      // Resolve the glow tint per-key: in "follow note" mode, the colour
+      // of the most recent note-on on this key (notes/noteColor.ts);
+      // the explicit `keyGlowColor` mode stays global.
       const glowColorHex = settings.keyGlowFollowNote
-        ? resolveTrackColorHex(trackIdx, rs.trackColors, rs.noteColor)
+        ? noteHexAt(i)
         : rs.keyGlowColor;
       // Black-key surface tint: bring the actual color toward the glow
       // color, scaled brightness. White keys keep their pristine surface
@@ -634,7 +645,6 @@ export function Keyboard() {
       : rs.flashColor;
     const flashBrightness = rs.flashBrightness;
     const followNote = settings.flashFollowNote;
-    const trackColorMap = rs.trackColors;
     // Pre-compute the fallback in linear RGB, post-brightness-lerp,
     // so per-track keys that hit the fallback don't recompute it.
     LIGHT_COLOR_SCRATCH.set(fallbackHex).lerp(WHITE_LIGHT_TARGET, flashBrightness);
@@ -666,12 +676,9 @@ export function Keyboard() {
         lightIntensities[slot] = Math.min(1, bestVal);
         lightXYs[slot * 2] = KEYBOARD_LAYOUT.keys[bestI].x;
         lightXYs[slot * 2 + 1] = WHITE_KEY_LENGTH;
-        // Per-slot colour: use the per-track override if this key's
-        // most recent note-on came from a tracked song note AND that
-        // track has a color set; else the brightness-lifted fallback.
-        const ti = lastTrack[bestI];
-        const override =
-          followNote && ti >= 0 ? trackColorMap[String(ti)] : undefined;
+        // Per-slot colour: the colour of this key's most recent note-on
+        // when following the note; else the brightness-lifted fallback.
+        const override = followNote ? noteHexAt(bestI) : undefined;
         const c3 = slot * 3;
         if (override) {
           LIGHT_COLOR_SCRATCH.set(override).lerp(WHITE_LIGHT_TARGET, flashBrightness);
