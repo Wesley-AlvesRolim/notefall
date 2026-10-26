@@ -1,4 +1,20 @@
 import { create } from 'zustand'
+import {
+  NOTE_LOOK_PRESETS,
+  type NoteBump,
+  type NoteMaterial,
+  type Note2dOutline,
+  type NotePattern,
+  type NoteShape,
+  type NoteSurface,
+} from './notes/looks/noteLook'
+import {
+  HIT_LINE_COLOR_DEFAULTS,
+  NOTE_COLOR_DEFAULTS,
+  type HitLineColorMode,
+  type NoteColorMode,
+  type NoteRandomBy,
+} from './notes/noteColor'
 import { useShallow } from 'zustand/react/shallow'
 import type { ParsedSong } from './midi/types'
 import type { SpeedPoint } from './midi/speedMap'
@@ -25,23 +41,17 @@ const HISTORY_LIMIT = 50
 export type FallDirection = 'down' | 'up'
 
 /**
- * Surface treatment applied to falling-note instances. Add new entries here
- * AND add a matching code path inside FallingNotes' fragment shader.
- * - 'solid'  — flat tinted fill (legacy behavior)
- * - 'liquid' — molten-metal flow with bright glassy edge, FBM-driven
- * - 'gem'    — cut-crystal facets with bright cell edges, Voronoi-driven
+ * Image applied to falling-note instances (multiplies the note colour under
+ * either note material). Add new entries here AND add a matching code path
+ * inside the note fragment shader (notes/noteShader.ts).
+ * - 'solid'  — the plain note colour
  * - 'custom' — user-provided image (managed via useCustomTexture store)
  */
-export type NoteTexture = 'solid' | 'liquid' | 'gem' | 'custom'
+export type NoteTexture = 'solid' | 'custom'
 
 export type StageBackgroundFit = 'cover' | 'contain' | 'stretch'
 
 export type Settings = {
-  // Theme — a single color the user can apply across notes / hit line /
-  // particles / keyboard glow at once via the Inspector's "Apply to All"
-  // button. Stored separately so it persists between applies; individual
-  // color settings can still be tweaked independently afterward.
-  themeColor: string
   // Layout
   // On-screen keyboard position: 0 = its front edge on the bottom of the
   // view, 1 = its back edge on the top. Applied as a lens shift, so the
@@ -60,22 +70,206 @@ export type Settings = {
   // round-trip safety). Unset / missing keys fall back to `noteColor`.
   // Index matches `NoteEvent.track` / `ParsedSong.tracks[i]`.
   trackColors: Record<string, string>
+  // Note colouring (notes/noteColor.ts): solid = noteColor + trackColors,
+  // gradient = up to 5 stops across the note area at an angle, random = a
+  // seeded palette pick per note / pitch / pitch class / track.
+  noteColorMode: NoteColorMode
+  noteGradientStops: number
+  noteGradientAngle: number
+  noteGradientSoftness: number
+  noteGradientColor1: string
+  noteGradientColor2: string
+  noteGradientColor3: string
+  noteGradientColor4: string
+  noteGradientColor5: string
+  noteGradientPos1: number
+  noteGradientPos2: number
+  noteGradientPos3: number
+  noteGradientPos4: number
+  noteGradientPos5: number
+  noteRandomBy: NoteRandomBy
+  noteRandomSeed: number
+  noteRandomCount: number
+  noteRandomColor1: string
+  noteRandomColor2: string
+  noteRandomColor3: string
+  noteRandomColor4: string
+  noteRandomColor5: string
   noteEmissive: number
   noteOpacity: number
   noteCornerRadius: number
   noteWidthScale: number
   // Minimum visible length so very short notes do not collapse into a line
   noteMinLength: number
-  // Surface treatment preset — see NoteTexture for the registry.
+  // Note look (notes/looks/noteLook.ts): 'flat' = plain tinted fill, 'reflective' = lit bevel + bump reflecting an
+  // animated light pattern. The look keys below apply to 'reflective'. Lengths are world units.
+  noteMaterial: NoteMaterial
+  // Outline of the note (applies to every material): see NoteShape. Gem: corner radius = chamfer leg, bevel = crown;
+  // angled: bevel = frame width.
+  noteShape: NoteShape
+  // Bevelled rim measured inward from the edge; depth = slope at the very edge.
+  noteBevelWidth: number
+  noteBevelDepth: number
+  // 0 = rounded-over (slope fades across the band), 1 = chamfer (flat slope that rolls into the top over Softness).
+  noteBevelProfile: number
+  noteBevelSoftness: number
+  // How much the bevel bends the reflected pattern (1 = fully; the lights always see it fully).
+  noteBevelReflect: number
+  // Darkens (> 0) / brightens (< 0) the bevel band along its profile.
+  noteRimShade: number
+  // 0..1: fade the bevel's pattern bend where it would alias on steep rims.
+  noteRimFade: number
+  // Key light: intensity, direction it comes FROM in the screen plane (deg, 0 = top, 90 = right), height above
+  // the note plane (deg). The fill light sits opposite at the same height.
+  noteLightIntensity: number
+  noteLightAzimuth: number
+  noteLightElevation: number
+  noteFillIntensity: number
+  noteAmbient: number
+  // Weight of the reflected pattern; sheen = how far its hot spots push toward white.
+  noteReflectivity: number
+  noteSheen: number
+  // 0 = opaque; 1 = the body is see-through where the pattern is dark.
+  noteTransparency: number
+  noteSaturation: number
+  // Realistic material: map set, albedo gain, key/fill highlight weight, emissive seams, albedo variation
+  // (1 = as baked, 0 = its mean, > 1 = exaggerated). Cells (0 = the set's default) / irregularity are bake-time.
+  noteSurface: NoteSurface
+  noteAlbedoGain: number
+  noteSpecular: number
+  noteEmission: number
+  noteSurfaceContrast: number
+  noteSurfaceCells: number
+  noteSurfaceIrregularity: number
+  // Light pattern source (see NotePattern) and its sideways scroll (world units / s).
+  notePattern: NotePattern
+  notePatternDrift: number
+  // Animated silk texture multiplied into the pattern (0 = off), its tile size and animation rate.
+  noteSilk: number
+  noteSilkScale: number
+  noteSilkSpeed: number
+  // Light pattern: tile size, cells per tile, focus of its bright lines, contrast / brightness of the reflection,
+  // animation rate, 0 = fixed on screen … 1 = carried with the note, how far the surface bends the lookup,
+  // and 1 = full modulation … 0 = flat at its mean.
+  notePatternScale: number
+  notePatternDensity: number
+  notePatternSharpness: number
+  notePatternContrast: number
+  notePatternBrightness: number
+  notePatternSpeed: number
+  notePatternLock: number
+  notePatternDistortion: number
+  notePatternAmount: number
+  // Soft knee: reflected-light level above which the pattern rolls off smoothly (0 = off) + how gradually.
+  notePatternKnee: number
+  notePatternKneeSoftness: number
+  // 0..1: bright pattern plateaus turn grey-translucent with brighter edges.
+  notePatternRibbon: number
+  // Baked normal map carried by the note (see NoteBump); tile size + slope gain.
+  noteBump: NoteBump
+  noteBumpScale: number
+  noteBumpDepth: number
+  // 0 = crisp creases … 1 = strongly rounded (reads a blurrier mip).
+  noteBumpSoftness: number
+  // 0..1: melt the creases where the cloud is strong (everywhere without a cloud).
+  noteBumpMelt: number
+  // Song-space per-key frame for the note-carried maps (bump, cloud, frost grain): continuous along a key,
+  // different on every key, so chords never repeat the same interior.
+  noteBumpScatter: boolean
+  // Faint glass lines along the bump's facet boundaries (kept when melted / frosted).
+  noteFacetEdges: number
+  // Soft cloudy volume: light added by large soft blobs, their size, edge softness, and how see-through the body
+  // gets between them.
+  noteCloud: number
+  noteCloudScale: number
+  noteCloudSoftness: number
+  noteCloudClear: number
+  // White-hot cores: luminance above Threshold rolls into white over Softness (> 1 overdrives for Bloom).
+  noteHighlight: number
+  noteHighlightThreshold: number
+  noteHighlightSoftness: number
+  // Frosted glass: diffusion of the seen pattern, satin grain + its size, milky veil (lifts darks).
+  noteFrost: number
+  noteFrostGrain: number
+  noteFrostScale: number
+  noteFrostVeil: number
+  // Ring OUTSIDE the body (width 0 = off): brightness, colour, 0 = Color … 1 = note colour, pattern reflection.
+  noteOutlineWidth: number
+  noteOutlineBrightness: number
+  noteOutlineColor: string
+  noteOutlineBlend: number
+  noteOutlineReflect: number
+  // Thick-glass rim INSIDE the edge (width 0 = off): bright band, then a darker gap.
+  noteRimBand: number
+  noteRimBandBrightness: number
+  noteRimBandColor: string
+  // 0 = Color, 1 = the note colour lifted toward white (so the band follows every track's colour).
+  noteRimBandBlend: number
+  noteRimGap: number
+  noteRimGapDark: number
+  // Liquid merge (round shape): fillet size (0 = off; gaps below ≈ 1.4× this bridge), colour blend width across the
+  // fillet, whether consecutive notes on ONE key fuse too, opt-in closing of same-key legato joints into one column
+  // (0..1), and the depth of a groove at those closed joints (× bevel depth).
+  noteMergeRadius: number
+  noteMergeColorSpread: number
+  noteMergeSameKey: boolean
+  noteMergeLegatoClose: number
+  noteMergeCrease: number
+  // 2D (sprite) material — see looks/noteLook.ts. Shares noteLightIntensity / Azimuth / Elevation (key light),
+  // noteFillIntensity, noteAmbient and noteCornerRadius. Lengths world units, angles degrees.
+  // Rounded-over rim band width + how far the normal tips over at the edge (0 = flat), ring width (0 = solid).
+  note2dRimWidth: number
+  note2dRimTilt: number
+  note2dHollow: number
+  // Fill light direction (its intensity is noteFillIntensity).
+  note2dFillAzimuth: number
+  note2dFillElevation: number
+  // Specular lobe weight / sharpness; shade → tint gain (the tint is reached at shade = 1 / exposure); whitening
+  // above WhitenStart; black-key notes darker / white-key notes lighter by KeySplit.
+  note2dGloss: number
+  note2dGlossPower: number
+  note2dExposure: number
+  note2dWhiten: number
+  note2dWhitenStart: number
+  note2dKeySplit: number
+  // Moving light pattern (0 = off): brightness gain while on, cell size, rate, 0 = fixed on screen … 1 = carried.
+  note2dShimmer: number
+  note2dShimmerGain: number
+  note2dShimmerScale: number
+  note2dShimmerSpeed: number
+  note2dShimmerLock: number
+  // Embossed silk filaments: spacing, elongation along travel, contrast, albedo gain, relief, rate, lock.
+  note2dTexture: boolean
+  note2dTextureScale: number
+  note2dTextureStretch: number
+  note2dTextureContrast: number
+  note2dTextureGain: number
+  note2dTextureRelief: number
+  note2dTextureSpeed: number
+  note2dTextureLock: number
+  // Outline band (see Note2dOutline): width, 0 = grey … 1 = darkened tint, tint multiplier, grey level,
+  // brightness, 0 = flat band … 1 = lit tube.
+  note2dOutline: Note2dOutline
+  note2dOutlineWidth: number
+  note2dOutlineTint: number
+  note2dOutlineShade: number
+  note2dOutlineGrey: number
+  note2dOutlineBrightness: number
+  note2dOutlineRelief: number
+  // Glow halo (0 = off): core radius, weight of the long tail, whitening, body brightness while on.
+  note2dGlow: number
+  note2dGlowRadius: number
+  note2dGlowTail: number
+  note2dGlowWhiten: number
+  note2dGlowBoost: number
+  // Image applied to the note — see NoteTexture.
   noteTexture: NoteTexture
   // Spatial frequency of the texture pattern (higher = denser detail /
   // more repetitions; lower = zoomed in).
   noteTextureScale: number
-  // Animation speed along X. Used by 'custom' for horizontal scroll. Other
-  // presets ignore X (their patterns aren't directional).
+  // Animation speed along X. Used by 'custom' for horizontal scroll.
   noteAnimSpeedX: number
-  // Animation speed along Y. Used by 'custom' for vertical scroll. Liquid
-  // and gem use this as their generic time multiplier (flow / twinkle rate).
+  // Animation speed along Y. Used by 'custom' for vertical scroll.
   noteAnimSpeedY: number
   // Static positional shift of the texture sample point. Positive X = image
   // moves right on the note; positive Y = image moves up. Texture wrap is
@@ -107,6 +301,9 @@ export type Settings = {
   flashEnabled: boolean
   // When true, flash uses noteColor instead of the explicit flashColor.
   flashFollowNote: boolean
+  // When true, particles take the colour of their note; else particleColor.
+  particleColorFollowNote: boolean
+  particleColor: string
   // Lift the flash colour toward white. 0 = pure flashColor, 1 = pure white.
   // Lets a coloured flash keep a bright white core for that "spark" feel.
   flashBrightness: number
@@ -160,6 +357,21 @@ export type Settings = {
   // Glowing laser line at the keyboard hit point — straight bar + animated wavy beam
   hitLineEnabled: boolean
   hitLineColor: string
+  // Line colouring (notes/noteColor.ts): solid = hitLineColor, gradient =
+  // its own 2..5 stops along the line, note = the notes' colouring.
+  hitLineColorMode: HitLineColorMode
+  hitLineGradientStops: number
+  hitLineGradientSoftness: number
+  hitLineGradientColor1: string
+  hitLineGradientColor2: string
+  hitLineGradientColor3: string
+  hitLineGradientColor4: string
+  hitLineGradientColor5: string
+  hitLineGradientPos1: number
+  hitLineGradientPos2: number
+  hitLineGradientPos3: number
+  hitLineGradientPos4: number
+  hitLineGradientPos5: number
   hitLineIntensity: number   // straight-bar brightness
   hitLineThickness: number   // straight-bar core thickness (fraction of plane height)
   hitLineWaveEnabled: boolean   // gates JUST the wavy laser overlay (the straight bar is gated by hitLineEnabled)
@@ -372,7 +584,6 @@ export type Settings = {
 }
 
 export const defaultSettings: Settings = {
-  themeColor: '#5ad7ff',
   keyboardScreenY: 0.27,
   cameraFov: 32,
   cameraPos: [0, 0, 12],
@@ -382,11 +593,13 @@ export const defaultSettings: Settings = {
   fallDurationSec: 2.5,
   noteColor: '#5ad7ff',
   trackColors: {},
+  ...NOTE_COLOR_DEFAULTS,
   noteEmissive: 1.0,
   noteOpacity: 1.0,
-  noteCornerRadius: 0.05,
-  noteWidthScale: 1.0,
+  noteWidthScale: 1.2,
   noteMinLength: 0.15,
+  // corner radius + every look key: the 'plain' look preset
+  ...NOTE_LOOK_PRESETS.plain,
   noteTexture: 'solid',
   noteTextureScale: 3.0,
   noteAnimSpeedX: 0.0,
@@ -402,6 +615,8 @@ export const defaultSettings: Settings = {
   noteEdgeIntensity: 1.0,
   flashEnabled: true,
   flashFollowNote: true,
+  particleColorFollowNote: true,
+  particleColor: '#5ad7ff',
   flashBrightness: 0.5,
   flashIntensity: 1.1,
   flashSize: 2.5,
@@ -446,6 +661,7 @@ export const defaultSettings: Settings = {
   particleFogOpacity: 0.08,
   hitLineEnabled: true,
   hitLineColor: '#5ad7ff',
+  ...HIT_LINE_COLOR_DEFAULTS,
   hitLineIntensity: 2.5,
   hitLineThickness: 0.3,
   hitLineWaveEnabled: true,

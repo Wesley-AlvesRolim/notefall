@@ -6,7 +6,7 @@ import { computeLiveVisibleTop, keyboardViewShift } from '../scene/visibleTop'
 import { getResolvedSettings } from '../scene/automatedSettings'
 import { audioEngine } from '../audio/engine'
 import { now } from '../audio/clock'
-import { KEYBOARD_LAYOUT, MIDI_MIN, KEY_COUNT, NOTE_HIT_Y } from '../keyboard/layout'
+import { KEYBOARD_LAYOUT, MIDI_MIN, KEY_COUNT, NOTE_HIT_Y, WHITE_KEY_WIDTH, isBlackKey } from '../keyboard/layout'
 import { useCustomTexture } from './customTexture'
 import { deleteNotes, moveNotes, splitNote } from '../midi/edit'
 import { ensureSamplerLoaded, previewNote } from '../audio/preview'
@@ -22,6 +22,23 @@ import {
 } from './positions'
 import { buildSpeedMap, midiToTimeline } from '../midi/speedMap'
 import { noteDeathFx, FADE_DURATION as DEATH_FADE_DURATION } from './noteDeathFx'
+import {
+  NOTE_VERTEX_SHADER,
+  NOTE_FRAGMENT_SHADER,
+  TEXTURE_SOLID,
+  TEXTURE_CUSTOM,
+  MATERIAL_FLAT,
+  MATERIAL_REFLECTIVE,
+  MATERIAL_REALISTIC,
+  MATERIAL_SPRITE,
+  SHAPE_ROUND,
+  SHAPE_GEM,
+  SHAPE_ANGLED,
+  linearToSrgbChannel,
+} from './noteShader'
+import { NoteLookResources } from './looks/noteLookResources'
+import { NoteColorResolver, createGradientUniforms, noteGradient, writeGradientUniforms } from './noteColor'
+import { MergeData, type MergeNote } from './looks/merge'
 
 const MAX_INSTANCES = 4096
 // Texture-phase wrap period (see the wrap in the useFrame). A power of
@@ -85,360 +102,46 @@ function computeRisingRect(
   return _risingRect
 }
 
-const VERTEX_SHADER = /* glsl */ `
-  attribute vec2 instanceSize;
-  attribute vec2 instanceSeed;
-  attribute float instanceSelected;
-  // Per-instance opacity multiplier. 1.0 for normal notes; ramped down
-  // 1 → 0 over FADE_DURATION for the dying-note ghosts the renderer
-  // appends after the live-note pass.
-  attribute float instanceAlpha;
-  // Per-instance RGB tint. Resolved from settings.trackColors[note.track]
-  // with fallback to settings.noteColor — populated each frame on the
-  // CPU side. The fragment shader uses this in place of a uColor uniform
-  // so different tracks can show different colours simultaneously.
-  attribute vec3 instanceTint;
-  varying vec2 vUv;
-  varying vec2 vSize;
-  varying vec2 vSeed;
-  varying float vSelected;
-  varying float vAlpha;
-  varying float vWorldY;
-  varying vec3 vTint;
-  void main() {
-    vUv = uv;
-    vSize = instanceSize;
-    vSeed = instanceSeed;
-    vSelected = instanceSelected;
-    vAlpha = instanceAlpha;
-    vTint = instanceTint;
-    vec4 worldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
-    vWorldY = worldPos.y;
-    gl_Position = projectionMatrix * viewMatrix * worldPos;
-  }
-`
+// Same-key gaps below this are closed into one column when the merge's
+// legato closing is on (world units; a quarter white key).
+const MERGE_LEGATO_GAP = 0.25 * WHITE_KEY_WIDTH
 
-// Texture mode IDs. Keep in sync with TEXTURE_MODE in this file and the
-// NoteTexture union in store.ts. Adding a new preset = new constant + new
-// branch in the fragment shader's main() + new entry in TEXTURE_MODE map +
-// new option in the Inspector SelectRow.
-const TEXTURE_SOLID = 0
-const TEXTURE_LIQUID = 1
-const TEXTURE_GEM = 2
-const TEXTURE_CUSTOM = 3
-
-const FRAGMENT_SHADER = /* glsl */ `
-  precision highp float;
-  varying vec2 vUv;
-  varying vec2 vSize;
-  varying vec2 vSeed;
-  varying float vSelected;
-  varying float vAlpha;
-  varying float vWorldY;
-  varying vec3 vTint;
-  uniform float uEmissive;
-  uniform float uOpacity;
-  uniform float uRadius;
-  uniform float uHitY;
-  // Accumulated per-axis texture phase = integral of animSpeed dt,
-  // integrated CPU-side. Integrating the RATE rather than multiplying
-  // absolute clock time by the current speed (the old uTime*uAnimSpeed)
-  // keeps the visual velocity exactly animSpeed even while a pin
-  // animates it: with the old form the velocity picked up a
-  // now()*dSpeed/dt term, and now() is a large absolute timestamp, so
-  // any speed slope between pins exploded the flow speed. X = custom UV
-  // scroll X, Y = generic time multiplier (custom UV Y, liquid/gem).
-  uniform vec2 uPhase;
-  // Texture preset selector — branched in main(). See TEXTURE_* constants
-  // (CPU side) for the value mapping.
-  uniform int uTextureMode;
-  uniform float uTextureScale;
-  // Static positional shift on the texture sample point. Subtracted from
-  // the UV so positive offset visually moves the image in the positive
-  // direction (right / up) on the note.
-  uniform vec2 uTextureOffset;
-  // LOD bias applied to the custom-image sampler. Each unit doubles the
-  // effective blur radius — the GPU's trilinear mipmap filter handles the
-  // smoothing in hardware, so even large values stay artifact-free
-  // (compared to a multi-tap blur, which ghosts at wide radii).
-  uniform float uTextureBlur;
-  // Custom-preset per-note offset weight in [0, 1]. Multiplies the vSeed
-  // component so 0 = every note identical, 1 = full random offset per note.
-  uniform float uTextureVariation;
-  uniform float uTextureContrast;
-  uniform vec3 uEdgeColor;
-  uniform float uEdgeWidth;
-  uniform float uEdgeIntensity;
-  // 'custom' preset — user image. uHasCustomTexture is 1 when a real texture
-  // is bound, 0 otherwise (so the shader can fall back to the tint colour
-  // and not display the placeholder 1x1 default).
-  uniform sampler2D uCustomTexture;
-  uniform float uHasCustomTexture;
-
-  float sdRoundedBox(vec2 p, vec2 b, float r) {
-    vec2 q = abs(p) - b + vec2(r);
-    return min(max(q.x, q.y), 0.0) + length(max(q, vec2(0.0))) - r;
+// The merge's same-key rule assumes the editor's "no same-pitch overlap"
+// (resolveOverlaps); an imported or live overlap would hard-union into a V
+// crease inside the column, so the lower note is clipped to end where the
+// upper one starts. Rects are centre / full size; solo entries are skipped.
+function clipSameKeyOverlaps(notes: MergeNote[]): void {
+  const byKey = new Map<number, MergeNote[]>()
+  for (const n of notes) {
+    if (n.solo) continue
+    const a = byKey.get(n.key)
+    if (a) a.push(n)
+    else byKey.set(n.key, [n])
   }
-
-  // Cheap value-noise primitives — shared across texture presets.
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
-  }
-  float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    float a = hash21(i);
-    float b = hash21(i + vec2(1.0, 0.0));
-    float c = hash21(i + vec2(0.0, 1.0));
-    float d = hash21(i + vec2(1.0, 1.0));
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-  }
-  float fbm(vec2 p) {
-    float v = 0.0;
-    float a = 0.5;
-    for (int i = 0; i < 5; i++) {
-      v += a * vnoise(p);
-      p *= 2.02;
-      a *= 0.5;
+  for (const a of byKey.values()) {
+    if (a.length < 2) continue
+    a.sort((p, q) => p.y - p.h / 2 - (q.y - q.h / 2))
+    for (let i = 0; i + 1 < a.length; i++) {
+      const lo = a[i]
+      const bottom = lo.y - lo.h / 2
+      const top = Math.max(Math.min(lo.y + lo.h / 2, a[i + 1].y - a[i + 1].h / 2), bottom + 1e-3)
+      lo.y = (bottom + top) / 2
+      lo.h = top - bottom
     }
-    return v;
   }
+}
 
-  // 2D hash → vec2 for Voronoi cell sites.
-  vec2 hash22(vec2 p) {
-    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
-    return fract(sin(p) * 43758.5453);
-  }
+// Direction TOWARDS a light at `azimuthDeg` in the screen plane (0 = from
+// the top, 90 = from the right) and `elevationDeg` above the note plane.
+function setLightDir(out: THREE.Vector3, azimuthDeg: number, elevationDeg: number): void {
+  const a = THREE.MathUtils.degToRad(azimuthDeg)
+  const e = THREE.MathUtils.degToRad(elevationDeg)
+  out.set(Math.sin(a) * Math.cos(e), Math.cos(a) * Math.cos(e), Math.sin(e))
+}
 
-  // 'gem': Voronoi-cell faceting. Each cell is a polygonal facet with its
-  // own brightness; the boundary between cells lights up as a thin specular
-  // line — together this gives the "cut crystal" feel where light catches
-  // different facets at different angles.
-  vec3 textureGem(vec2 p, float d) {
-    // Per-note offset (vSeed in 0..1 scaled by 100) shifts the Voronoi
-    // tiling sample window so each note shows a different cell layout.
-    vec2 uv = p * uTextureScale + vSeed * 100.0 - uTextureOffset;
-    vec2 i = floor(uv);
-    vec2 f = fract(uv);
-    float t = uPhase.y;
-
-    // 3x3 neighborhood is mandatory for correct Voronoi (a pixel's nearest
-    // site can live in a diagonal neighbor). Tracks the smallest and 2nd-
-    // smallest distances so the gap between them gives us a clean edge,
-    // AND tracks BOTH adjacent cell IDs so edge brightness can react to the
-    // brightness of cells on either side (dark/dark boundaries stay dim).
-    float dMin = 1e10;
-    float dSecond = 1e10;
-    vec2 cellId = vec2(0.0);
-    vec2 cellId2 = vec2(0.0);
-    for (int y = -1; y <= 1; y++) {
-      for (int x = -1; x <= 1; x++) {
-        vec2 c = vec2(float(x), float(y));
-        vec2 site = c + hash22(i + c);
-        float dist = length(site - f);
-        if (dist < dMin) {
-          dSecond = dMin;
-          cellId2 = cellId;
-          dMin = dist;
-          cellId = i + c;
-        } else if (dist < dSecond) {
-          dSecond = dist;
-          cellId2 = i + c;
-        }
-      }
-    }
-
-    // Per-facet brightness — gamma-curved so most facets stay dark with
-    // occasional bright "lit" facets (matches a real gem catching light).
-    float h = hash22(cellId).x;
-    float facet = pow(h, max(0.5, uTextureContrast));
-
-    // Sharp per-facet sparkle. Each cell has its own phase (hash-derived) so
-    // different facets flash at different moments. Two superposed sine waves
-    // raised to a high power produce a sharp spike whenever both terms
-    // approach 1, simulating a diamond catching light. uTextureSpeed scales
-    // the phase progression — speed 0 freezes the pattern, higher = more
-    // frequent twinkling.
-    float phase = h * 31.4 + t * 2.0;
-    float spark = max(
-      pow(0.5 + 0.5 * sin(phase), 14.0),
-      pow(0.5 + 0.5 * sin(phase * 1.7 + 2.1), 10.0)
-    );
-
-    // Brightness of the facet across the boundary. Used to taper edge
-    // intensity — a dim facet's seam doesn't catch as much light.
-    float h2 = hash22(cellId2).x;
-    float facet2 = pow(h2, max(0.5, uTextureContrast));
-
-    // Per-edge random hash. The combine (a + b + a*b) is symmetric in a/b
-    // so the same edge gets the same hash regardless of which side of the
-    // boundary the pixel is on. Drives both edge thickness and visibility,
-    // breaking the uniform "every seam is white" look.
-    vec2 edgeKey = cellId + cellId2 + cellId * cellId2;
-    float edgeHash = hash22(edgeKey).x;
-
-    // Edge mask from the dist gap. Width varies per edge so seams have
-    // different sharpness — some razor-thin, some softer.
-    float edgeWidth = mix(0.015, 0.06, edgeHash);
-    float edgeMask = 1.0 - smoothstep(0.0, edgeWidth, dSecond - dMin);
-
-    // Edge brightness: scale by the brighter of the two adjacent facets
-    // (dark ⨯ dark = barely visible) and by a per-edge random (some seams
-    // mostly hidden, some prominent). Sparkle promotes the edge too so a
-    // flashing facet's perimeter joins in.
-    float edgeStrength = max(facet, facet2) * mix(0.15, 1.0, edgeHash);
-    edgeStrength = max(edgeStrength, spark);
-
-    vec3 base = vTint * (facet * 1.4 + 0.12);
-    // Sparkle flashes the facet toward pure white — the hallmark of a real
-    // gem reflection.
-    base = mix(base, vec3(1.0), spark * 0.9);
-    // Edges blend toward white where they actually catch light.
-    base = mix(base, vec3(1.0), edgeMask * edgeStrength * 0.9);
-    return base;
-  }
-
-  // 'custom': user-uploaded image.
-  // - UV is per-note local: vUv * vSize gives a coordinate in world units
-  //   from the note's bottom-left corner. Multiplied by uTextureScale, the
-  //   image tiles within the note. Every note starts the image at the
-  //   same origin → identical appearance across notes.
-  // - uTextureScale = "tiles per world unit". Higher = smaller tiles
-  //   (image repeats more times within the note). Both axes scale
-  //   uniformly so the source aspect ratio is preserved.
-  // - uPhase (X, Y) scrolls the UV per axis. Same world-unit
-  //   semantics as the position term, so motion looks consistent
-  //   regardless of scale.
-  // - uTextureOffset shifts the image inside each note (positive = right
-  //   / up).
-  // - Per-note vSeed offset is gated by uTextureVariation: 0 = all notes
-  //   show the image identically, 1 = each note starts at its own random
-  //   spot. (Liquid / gem always use vSeed, since their patterns are
-  //   abstract and benefit from variation.)
-  // - Contrast pushes pixel values away from mid gray (1 = identity).
-  // - Tinted by uColor (set Color = white for pass-through).
-  // Texture wrap is RepeatWrapping in customTexture.ts so values outside
-  // [0,1] tile naturally.
-  vec3 textureCustom(vec2 p, float d) {
-    vec2 uv = (vUv * vSize + uPhase) * uTextureScale + vSeed * 100.0 * uTextureVariation - uTextureOffset;
-    // Single tap with LOD bias — the texture is configured with mipmaps
-    // and trilinear filtering, so the bias selects a progressively-blurred
-    // mip level. This is what GPU hardware is built to do, and produces a
-    // smooth gaussian-like blur with no ghosting at any radius.
-    vec3 sampled = texture2D(uCustomTexture, uv, uTextureBlur).rgb;
-    sampled = clamp((sampled - 0.5) * uTextureContrast + 0.5, 0.0, 1.0);
-    // When no image is bound yet, fall back to the tint color so the user
-    // doesn't see a black rectangle while picking a file.
-    return mix(vTint, sampled * vTint, uHasCustomTexture);
-  }
-
-  // 'liquid': domain-warped FBM (molten metal flow). Edge is composited in
-  // main() so it isn't subject to uEmissive.
-  vec3 textureLiquid(vec2 p, float d) {
-    // Per-note offset so each note samples a different region of the noise
-    // field — otherwise every note shows the same flow pattern.
-    vec2 uv = p * uTextureScale + vSeed * 100.0 - uTextureOffset;
-    float t = uPhase.y;
-    // Domain warp — feeding noise into noise's input gives the swirling
-    // "lava lamp" / molten gold look.
-    vec2 q = vec2(fbm(uv + vec2(0.0, t * 0.4)),
-                  fbm(uv + vec2(5.2, 1.3) - t * 0.3));
-    float pattern = fbm(uv + 4.0 * q + vec2(0.0, t * 0.6));
-    // Push contrast — bright streaks become "highlights", dark areas darken.
-    float lit = pow(clamp(pattern, 0.0, 1.0), max(0.1, uTextureContrast));
-    return vTint * (lit * 1.4 + 0.18);
-  }
-
-  void main() {
-    if (vWorldY < uHitY) discard;
-    if (vSize.x < 0.0001 || vSize.y < 0.0001) discard;
-    vec2 halfSize = vSize * 0.5;
-    vec2 p = (vUv - 0.5) * vSize;
-    float r = min(uRadius, min(halfSize.x, halfSize.y) - 0.0001);
-    r = max(r, 0.0);
-    float d = sdRoundedBox(p, halfSize, r);
-    if (d > 0.001) discard;
-    float aa = max(fwidth(d), 0.0001);
-    float alpha = clamp(-d / aa + 0.5, 0.0, 1.0);
-
-    // Texture functions return JUST the fill — edge is composited below so
-    // the user's Edge Color / Intensity are not magnified by the note's
-    // Emissive setting (which is meant to drive Bloom on the note body).
-    vec3 fill;
-    if (uTextureMode == ${TEXTURE_LIQUID}) {
-      fill = textureLiquid(p, d);
-    } else if (uTextureMode == ${TEXTURE_GEM}) {
-      fill = textureGem(p, d);
-    } else if (uTextureMode == ${TEXTURE_CUSTOM}) {
-      fill = textureCustom(p, d);
-    } else {
-      // 'solid' — flat tint.
-      fill = vTint;
-    }
-    // Emissive boost feeds Bloom — applies only to the fill so edge stays
-    // strictly user-controlled via its own Color + Intensity.
-    fill *= (1.0 + uEmissive);
-
-    float edge = smoothstep(uEdgeWidth, 0.0, abs(d));
-    vec3 edgeCol = uEdgeColor * edge * uEdgeIntensity;
-
-    vec3 finalColor = fill + edgeCol;
-
-    // Selection treatment. Has to remain perceptible against every
-    // possible fill colour AND luminance — a single-colour treatment
-    // (white halo, black halo, even adaptive luminance shift) all
-    // collapse on certain colours: white halo vanishes on white fills,
-    // dark halo on black fills, luminance shift on mid-greys (~#A1A1A1)
-    // where neither "brighten" nor "darken" produces meaningful
-    // contrast. Three composited layers cover the whole spectrum:
-    //   1. Adaptive luminance shift — brighten dark fills, dim bright
-    //      fills. Carries most of the cue for high-contrast colours.
-    //   2. Soft inner halo with HDR-adaptive accent — feeds Bloom into
-    //      a glow when Bloom is on, contributes a subtle tint when off.
-    //   3. Dual-edge stroke (bright stripe + dark stripe placed a few
-    //      antialiased pixels apart) — guarantees that AT LEAST one
-    //      stripe contrasts strongly with the underlying fill no matter
-    //      what its luminance is. This is the "always works" layer
-    //      that catches grey/mid-tone fills the other layers miss.
-    //      Same principle as macOS / Windows focus rings.
-    if (vSelected > 0.5) {
-      float fillLum = dot(fill, vec3(0.299, 0.587, 0.114));
-      float brightT = smoothstep(0.5, 0.7, fillLum);   // 0 dark → 1 bright
-      float edgeDepth = min(halfSize.x, halfSize.y) * 0.18;
-      float edgeT = smoothstep(-edgeDepth, 0.0, d);    // 0 inside → 1 at edge
-
-      // 1. Uniform luminance shift.
-      finalColor += fill * (1.0 - brightT);   // up to +1× for very dark fills
-      finalColor *= mix(1.0, 0.5, brightT);   // down to ×0.5 for very bright fills
-
-      // 2. Soft inner halo with adaptive accent.
-      vec3 accent = mix(vec3(2.0), vec3(0.0), brightT);
-      finalColor = mix(finalColor, accent, edgeT * 0.5);
-
-      // 3. Dual-edge stroke. Two parallel ~1px stripes inset from the
-      // edge: a bright HDR stripe near the outside, a dark stripe just
-      // inside it. Pixel-scale offsets via fwidth keep both stripes a
-      // consistent screen width at any zoom.
-      float aaW = fwidth(d);
-      float brightStrokeMid = -aaW * 2.0;
-      float darkStrokeMid = -aaW * 5.0;
-      float brightMask = 1.0 - smoothstep(aaW * 0.5, aaW * 1.5, abs(d - brightStrokeMid));
-      float darkMask = 1.0 - smoothstep(aaW * 0.5, aaW * 1.5, abs(d - darkStrokeMid));
-      finalColor = mix(finalColor, vec3(2.5), brightMask * 0.9);
-      finalColor = mix(finalColor, vec3(0.0), darkMask * 0.9);
-    }
-
-    gl_FragColor = vec4(finalColor, alpha * uOpacity * vAlpha);
-  }
-`
-
+// Unknown values (the removed 'liquid' / 'gem' of older projects) fall back to solid.
 const TEXTURE_MODE: Record<string, number> = {
   solid: TEXTURE_SOLID,
-  liquid: TEXTURE_LIQUID,
-  gem: TEXTURE_GEM,
   custom: TEXTURE_CUSTOM,
 }
 
@@ -477,6 +180,20 @@ const FALLING_NOTES_KEYS = [
   'noteEdgeIntensity',
   'noteEdgeWidth',
   'noteEmissive',
+  'noteMaterial',
+  'noteBump',
+  'noteBumpScatter',
+  'noteShape',
+  'notePattern',
+  'noteSurface',
+  'noteSurfaceCells',
+  'noteSurfaceIrregularity',
+  'noteSilk',
+  'noteMergeSameKey',
+  'noteMergeLegatoClose',
+  'noteMergeCrease',
+  'note2dTexture',
+  'note2dOutline',
   'noteMinLength',
   'noteOpacity',
   'noteTexture',
@@ -522,7 +239,7 @@ export function FallingNotes() {
   // Scratch Color used to parse hex strings into linear RGB once per
   // track per frame. Reused across all calls in the resolveTint cache
   // so we don't allocate per note.
-  const tmpColor = useMemo(() => new THREE.Color(), [])
+  const colorResolver = useMemo(() => new NoteColorResolver(), [])
   const { camera, gl } = useThree()
 
   // per-instance world size attribute (width, length)
@@ -573,18 +290,35 @@ export function FallingNotes() {
     a.setUsage(THREE.DynamicDrawUsage)
     return a
   }, [tints])
+  // Per-instance black-key flag (the 2D look's key split).
+  const blacks = useMemo(() => new Float32Array(MAX_INSTANCES), [])
+  const blackAttr = useMemo(() => {
+    const a = new THREE.InstancedBufferAttribute(blacks, 1)
+    a.setUsage(THREE.DynamicDrawUsage)
+    return a
+  }, [blacks])
   // Maps the per-frame instance slot back to the song's note id. Click
   // handling reads from this; useFrame writes it.
   const instanceToNoteId = useRef<number[]>([])
 
+  // Liquid merge (looks/merge.ts): neighbour attributes + data texture.
+  // Its uniforms are shared into the material below.
+  const mergeData = useMemo(() => new MergeData(), [])
+  useEffect(() => () => mergeData.dispose(), [mergeData])
+  // Per-slot key index (merge's same-key rule) — -1 = solo (dying ghosts).
+  const mergeKeys = useMemo(() => new Int16Array(MAX_INSTANCES), [])
+  const mergeNotes = useRef<MergeNote[]>([])
+
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
       uniforms: {
+        ...mergeData.uniforms,
         uEmissive: { value: settings.noteEmissive },
         uOpacity: { value: settings.noteOpacity },
         uRadius: { value: settings.noteCornerRadius },
         uHitY: { value: 0 },
         uTextureMode: { value: TEXTURE_MODE[settings.noteTexture] ?? TEXTURE_SOLID },
+        ...createGradientUniforms(NOTE_HIT_Y),
         uTextureScale: { value: settings.noteTextureScale },
         uPhase: { value: new THREE.Vector2(0, 0) },
         uTextureOffset: { value: new THREE.Vector2(settings.noteTextureOffsetX, settings.noteTextureOffsetY) },
@@ -596,9 +330,121 @@ export function FallingNotes() {
         uEdgeIntensity: { value: settings.noteEdgeIntensity },
         uCustomTexture: { value: PLACEHOLDER_TEXTURE },
         uHasCustomTexture: { value: 0 },
+        uLinearTarget: { value: 0 },
+        // note look — pushed per frame from the pin-resolved settings
+        uMaterial: { value: MATERIAL_FLAT },
+        uShape: { value: SHAPE_ROUND },
+        uDriftX: { value: 0 },
+        uNoteTex: { value: null },
+        uNoteTexAmount: { value: 0 },
+        uNoteTexTile: { value: 1 },
+        uAlbedoMap: { value: null },
+        uGlossMap: { value: null },
+        uEmissiveMap: { value: null },
+        uAlbedoGain: { value: 1.6 },
+        uSpecular: { value: 0.5 },
+        uEmission: { value: 0 },
+        uSurfaceContrast: { value: 1 },
+        uBumpZEnc: { value: 0 },
+        uUnit: { value: WHITE_KEY_WIDTH },
+        uBevelW: { value: 0 },
+        uBevelD: { value: 0 },
+        uBevelProfile: { value: 0 },
+        uBevelSoft: { value: 0.5 },
+        uBevelReflect: { value: 1 },
+        uRimShade: { value: 0 },
+        uRimFade: { value: 1 },
+        uKey: { value: new THREE.Vector3(0, 0, 1) },
+        uFill: { value: new THREE.Vector3(0, 0, 1) },
+        uKeyI: { value: 0 },
+        uFillI: { value: 0 },
+        uAmbient: { value: 0 },
+        uReflect: { value: 1 },
+        uTransparency: { value: 0 },
+        uSaturation: { value: 1 },
+        uSheen: { value: 0 },
+        uPattern: { value: null },
+        uPatternTile: { value: 1 },
+        uContrast: { value: 1 },
+        uBrightness: { value: 0 },
+        uLock: { value: 0 },
+        uDistort: { value: 0 },
+        uPatternAmount: { value: 1 },
+        uKnee: { value: 0 },
+        uKneeSoft: { value: 0.3 },
+        uRibbon: { value: 0 },
+        uBump: { value: null },
+        uBumpTile: { value: 1 },
+        uBumpDepth: { value: 0 },
+        uDetail: { value: 0 },
+        uBumpSoft: { value: 0 },
+        uMelt: { value: 0 },
+        uScatter: { value: 0 },
+        uFacetEdges: { value: 0 },
+        uFacetMap: { value: 0 },
+        uScroll: { value: 0 },
+        uTime: { value: 0 },
+        uCloud: { value: 0 },
+        uCloudTile: { value: 1 },
+        uCloudSoft: { value: 0.6 },
+        uCloudClear: { value: 0 },
+        uHighlight: { value: 0 },
+        uHighlightThr: { value: 0.7 },
+        uHighlightSoft: { value: 0.45 },
+        uFrost: { value: 0 },
+        uFrostGrain: { value: 0 },
+        uFrostTile: { value: 1 },
+        uFrostVeil: { value: 0 },
+        uMargin: { value: 0.01 },
+        uOutlineW: { value: 0 },
+        uOutlineBright: { value: 1 },
+        uOutlineBlend: { value: 0.8 },
+        uOutlineReflect: { value: 1 },
+        uOutlineColor: { value: new THREE.Color(1, 1, 1) },
+        uBandW: { value: 0 },
+        uBandBright: { value: 1 },
+        uBandBlend: { value: 0 },
+        uGapW: { value: 0 },
+        uGapDark: { value: 0 },
+        uBandColor: { value: new THREE.Color(1, 1, 1) },
+        u2dRimW: { value: 0 },
+        u2dRimTilt: { value: 0 },
+        u2dHollow: { value: 0 },
+        u2dFill: { value: new THREE.Vector3(0, 0, 1) },
+        u2dGloss: { value: 0 },
+        u2dGlossPow: { value: 16 },
+        u2dExposure: { value: 1 },
+        u2dWhiten: { value: 0 },
+        u2dWhitenStart: { value: 1 },
+        u2dKeySplit: { value: 0 },
+        u2dShimmer: { value: 0 },
+        u2dShimmerGain: { value: 1 },
+        u2dShimmerCell: { value: 1 },
+        u2dShimmerSpeed: { value: 0 },
+        u2dShimmerLock: { value: 0 },
+        u2dTex: { value: 0 },
+        u2dTexCell: { value: 1 },
+        u2dTexStretch: { value: 1 },
+        u2dTexContrast: { value: 0 },
+        u2dTexGain: { value: 1 },
+        u2dTexRelief: { value: 0 },
+        u2dTexSpeed: { value: 0 },
+        u2dTexLock: { value: 0 },
+        u2dOutline: { value: 0 },
+        u2dOutW: { value: 0 },
+        u2dOutTint: { value: 0 },
+        u2dOutShade: { value: 0 },
+        u2dOutGrey: { value: 0 },
+        u2dOutBright: { value: 1 },
+        u2dOutRelief: { value: 0 },
+        u2dGlow: { value: 0 },
+        u2dGlowR: { value: 1 },
+        u2dGlowTail: { value: 0 },
+        u2dGlowWhiten: { value: 0 },
+        u2dGlowBoost: { value: 1 },
       },
-      vertexShader: VERTEX_SHADER,
-      fragmentShader: FRAGMENT_SHADER,
+      vertexShader: NOTE_VERTEX_SHADER,
+      fragmentShader: NOTE_FRAGMENT_SHADER,
       transparent: true,
       depthWrite: false,
       toneMapped: false,
@@ -627,6 +473,9 @@ export function FallingNotes() {
     mesh.geometry.setAttribute('instanceSelected', selectedAttr)
     mesh.geometry.setAttribute('instanceAlpha', alphaAttr)
     mesh.geometry.setAttribute('instanceTint', tintAttr)
+    mesh.geometry.setAttribute('instanceBlack', blackAttr)
+    mesh.geometry.setAttribute('iMergeNbrA', mergeData.nbrA)
+    mesh.geometry.setAttribute('iMergeNbrB', mergeData.nbrB)
     // Pin a large bounding sphere so raycasting never short-circuits.
     // Three.js's InstancedMesh.raycast() does an early-reject against the
     // mesh's bounding sphere, but auto-computes it ONCE (lazily, on first
@@ -637,16 +486,123 @@ export function FallingNotes() {
     // realistic camera frame keeps every instance in scope; the per-
     // instance triangle test is what actually decides hits.
     mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1000)
+    // Bloom on = the composer's linear target, off = the canvas (sRGB).
+    mesh.onBeforeRender = (renderer, _scene, cam) => {
+      const target = renderer.getRenderTarget()
+      material.uniforms.uLinearTarget.value = target ? 1 : 0
+      // merge: gl_FragCoord → world on the note plane, for exactly the
+      // camera + target of this draw
+      if (material.defines.MERGE !== undefined) mergeData.updateCamera(cam, target, renderer, NOTE_PLANE_Z)
+    }
     return () => {
       mesh.geometry.deleteAttribute('instanceSize')
       mesh.geometry.deleteAttribute('instanceSeed')
       mesh.geometry.deleteAttribute('instanceSelected')
       mesh.geometry.deleteAttribute('instanceAlpha')
       mesh.geometry.deleteAttribute('instanceTint')
+      mesh.geometry.deleteAttribute('instanceBlack')
+      mesh.geometry.deleteAttribute('iMergeNbrA')
+      mesh.geometry.deleteAttribute('iMergeNbrB')
     }
-  }, [sizeAttr, seedAttr, selectedAttr, alphaAttr, tintAttr])
+  }, [sizeAttr, seedAttr, selectedAttr, alphaAttr, tintAttr, blackAttr, material, mergeData])
+
+  // The 2D look's glow halo: a second instanced mesh over the SAME geometry,
+  // instance matrices and uniforms (shader variant GLOW_PASS), drawn just
+  // under the notes. A child of the note mesh, so it inherits the parallax
+  // transform; it is never raycast (picking stays on the notes).
+  const glowMeshRef = useRef<THREE.InstancedMesh | null>(null)
+  useEffect(() => {
+    const mesh = meshRef.current
+    if (!mesh) return
+    const glowMaterial = new THREE.ShaderMaterial({
+      uniforms: material.uniforms,
+      vertexShader: NOTE_VERTEX_SHADER,
+      fragmentShader: NOTE_FRAGMENT_SHADER,
+      defines: { GLOW_PASS: '' },
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    })
+    const glow = new THREE.InstancedMesh(mesh.geometry, glowMaterial, MAX_INSTANCES)
+    glow.instanceMatrix = mesh.instanceMatrix
+    glow.frustumCulled = false
+    glow.renderOrder = mesh.renderOrder - 0.01
+    glow.raycast = () => {}
+    glow.visible = false
+    glow.count = 0
+    glow.onBeforeRender = (renderer) => {
+      material.uniforms.uLinearTarget.value = renderer.getRenderTarget() ? 1 : 0
+    }
+    mesh.add(glow)
+    glowMeshRef.current = glow
+    return () => {
+      mesh.remove(glow)
+      glowMaterial.dispose()
+      glowMeshRef.current = null
+    }
+  }, [material])
 
   useEffect(() => () => material.dispose(), [material])
+
+  // Pattern generators, baked bump maps / realistic map sets and the silk
+  // texture of the lit looks. Created lazily on first use (a flat look
+  // never allocates them).
+  const lookResources = useMemo(() => new NoteLookResources(gl), [gl])
+  useEffect(() => () => lookResources.dispose(), [lookResources])
+  const lastPatternNow = useRef<number | null>(null)
+  // Sideways pattern scroll (∫ drift dt, world units), wrapped by whole tiles.
+  const driftRef = useRef(0)
+
+  // Material / shape / pattern source / bump / map set are discrete
+  // (non-animatable) — bind on change.
+  useEffect(() => {
+    const u = material.uniforms
+    const m = settings.noteMaterial
+    // the 2D look draws everything analytically — no pattern / maps
+    const lit = m === 'reflective' || m === 'realistic'
+    u.uMaterial.value =
+      m === 'sprite'
+        ? MATERIAL_SPRITE
+        : m === 'realistic'
+          ? MATERIAL_REALISTIC
+          : m === 'reflective'
+            ? MATERIAL_REFLECTIVE
+            : MATERIAL_FLAT
+    u.uShape.value = settings.noteShape === 'gem' ? SHAPE_GEM : settings.noteShape === 'angled' ? SHAPE_ANGLED : SHAPE_ROUND
+    u.uPattern.value = lit ? lookResources.pattern(settings.notePattern) : lookResources.greyPattern
+    u.uNoteTex.value = lit && settings.noteSilk > 0 ? lookResources.silkTexture() : lookResources.white
+    if (m === 'realistic') {
+      // the set's normal map replaces the bump map (tile / depth still apply)
+      const set = lookResources.surface(settings.noteSurface, settings.noteSurfaceCells, settings.noteSurfaceIrregularity)
+      u.uBump.value = set.normal
+      u.uBumpZEnc.value = 1
+      u.uFacetMap.value = 0
+      u.uAlbedoMap.value = set.albedo
+      u.uGlossMap.value = set.gloss
+      u.uEmissiveMap.value = set.emissive ?? lookResources.black
+      u.uDetail.value = 0
+    } else {
+      u.uBump.value = lit ? lookResources.bump(settings.noteBump) : lookResources.flatNormal
+      u.uBumpZEnc.value = 0
+      // the crystal bake carries its facet edges in alpha (looks/crystalNormal.ts)
+      u.uFacetMap.value = lit && settings.noteBump === 'crystal' ? 1 : 0
+      u.uAlbedoMap.value = lookResources.white
+      u.uGlossMap.value = lookResources.white
+      u.uEmissiveMap.value = lookResources.black
+      u.uDetail.value = settings.noteBump === 'cast' ? 0.45 : 0
+    }
+  }, [
+    material,
+    lookResources,
+    settings.noteMaterial,
+    settings.noteShape,
+    settings.notePattern,
+    settings.noteBump,
+    settings.noteSurface,
+    settings.noteSurfaceCells,
+    settings.noteSurfaceIrregularity,
+    settings.noteSilk,
+  ])
 
   // Bind the user-uploaded texture (or the placeholder) to the shader's
   // sampler whenever it changes. uHasCustomTexture lets the shader ignore
@@ -733,7 +689,9 @@ export function FallingNotes() {
     // Pin-resolved animatable note uniforms (formerly a settings-deps
     // useEffect). Edge gating still keys off the non-animatable
     // `edgeEnabled` toggle but the width/intensity it gates are
-    // animatable. Idempotent with zero pins.
+    // animatable. Only the flat material draws it — the other materials
+    // have their own outline / rim band. Idempotent with zero pins.
+    const edgeOn = settings.edgeEnabled && settings.noteMaterial === 'flat'
     material.uniforms.uEmissive.value = rs.noteEmissive
     material.uniforms.uOpacity.value = rs.noteOpacity
     material.uniforms.uRadius.value = rs.noteCornerRadius
@@ -742,15 +700,146 @@ export function FallingNotes() {
     material.uniforms.uTextureBlur.value = rs.noteTextureBlur
     material.uniforms.uTextureVariation.value = rs.noteTextureVariation
     material.uniforms.uTextureContrast.value = rs.noteTextureContrast
+    // gradient colouring, shaded per pixel
+    writeGradientUniforms(
+      material.uniforms as unknown as ReturnType<typeof createGradientUniforms>,
+      rs.noteColorMode === 'gradient' ? noteGradient(rs) : null,
+    )
     material.uniforms.uEdgeColor.value.set(rs.noteEdgeColor)
-    material.uniforms.uEdgeWidth.value = settings.edgeEnabled ? rs.noteEdgeWidth : 0
-    material.uniforms.uEdgeIntensity.value = settings.edgeEnabled ? rs.noteEdgeIntensity : 0
+    material.uniforms.uEdgeWidth.value = edgeOn ? rs.noteEdgeWidth : 0
+    material.uniforms.uEdgeIntensity.value = edgeOn ? rs.noteEdgeIntensity : 0
+    if (settings.noteMaterial !== 'flat') {
+      const u = material.uniforms
+      u.uAlbedoGain.value = rs.noteAlbedoGain
+      u.uSpecular.value = rs.noteSpecular
+      u.uEmission.value = rs.noteEmission
+      u.uSurfaceContrast.value = rs.noteSurfaceContrast
+      u.uNoteTexAmount.value = settings.noteSilk > 0 ? Math.min(rs.noteSilk, 1) : 0
+      u.uNoteTexTile.value = Math.max(rs.noteSilkScale, 0.01)
+      u.uBevelW.value = rs.noteBevelWidth
+      u.uBevelD.value = rs.noteBevelDepth
+      u.uBevelProfile.value = rs.noteBevelProfile
+      u.uBevelSoft.value = rs.noteBevelSoftness
+      u.uBevelReflect.value = rs.noteBevelReflect
+      u.uRimShade.value = rs.noteRimShade
+      u.uRimFade.value = rs.noteRimFade
+      setLightDir(u.uKey.value, rs.noteLightAzimuth, rs.noteLightElevation)
+      setLightDir(u.uFill.value, rs.noteLightAzimuth + 180, rs.noteLightElevation)
+      u.uKeyI.value = rs.noteLightIntensity
+      u.uFillI.value = rs.noteFillIntensity
+      u.uAmbient.value = rs.noteAmbient
+      u.uReflect.value = rs.noteReflectivity
+      u.uTransparency.value = rs.noteTransparency
+      u.uSaturation.value = rs.noteSaturation
+      u.uSheen.value = rs.noteSheen
+      u.uPatternTile.value = Math.max(rs.notePatternScale, 0.01)
+      u.uContrast.value = rs.notePatternContrast
+      u.uBrightness.value = rs.notePatternBrightness
+      u.uLock.value = rs.notePatternLock
+      u.uDistort.value = rs.notePatternDistortion
+      u.uPatternAmount.value = rs.notePatternAmount
+      u.uBumpTile.value = Math.max(rs.noteBumpScale, 0.01)
+      u.uBumpDepth.value = settings.noteMaterial !== 'realistic' && settings.noteBump === 'none' ? 0 : rs.noteBumpDepth
+      u.uBumpSoft.value = rs.noteBumpSoftness * 5
+      u.uMelt.value = rs.noteBumpMelt
+      u.uScatter.value = settings.noteBumpScatter ? 1 : 0
+      u.uFacetEdges.value = rs.noteFacetEdges
+      u.uKnee.value = rs.notePatternKnee
+      u.uKneeSoft.value = rs.notePatternKneeSoftness
+      u.uRibbon.value = rs.notePatternRibbon
+      u.uCloud.value = rs.noteCloud
+      u.uCloudTile.value = Math.max(rs.noteCloudScale, 0.01)
+      u.uCloudSoft.value = rs.noteCloudSoftness
+      u.uCloudClear.value = rs.noteCloudClear
+      u.uHighlight.value = rs.noteHighlight
+      u.uHighlightThr.value = rs.noteHighlightThreshold
+      u.uHighlightSoft.value = Math.max(rs.noteHighlightSoftness, 0.02)
+      u.uFrost.value = rs.noteFrost
+      u.uFrostGrain.value = rs.noteFrostGrain
+      u.uFrostTile.value = Math.max(rs.noteFrostScale, 0.001)
+      u.uFrostVeil.value = rs.noteFrostVeil
+      u.uOutlineW.value = rs.noteOutlineWidth
+      u.uOutlineBright.value = rs.noteOutlineBrightness
+      u.uOutlineBlend.value = rs.noteOutlineBlend
+      u.uOutlineReflect.value = rs.noteOutlineReflect
+      // the look's colours are sRGB-encoded in the shader (see noteShader.ts)
+      u.uOutlineColor.value.set(rs.noteOutlineColor).convertLinearToSRGB()
+      u.uBandW.value = rs.noteRimBand
+      u.uBandBright.value = rs.noteRimBandBrightness
+      u.uBandBlend.value = rs.noteRimBandBlend
+      u.uBandColor.value.set(rs.noteRimBandColor).convertLinearToSRGB()
+      u.uGapW.value = rs.noteRimGap
+      u.uGapDark.value = rs.noteRimGapDark
+      u.uMargin.value = 0.01 + Math.max(rs.noteOutlineWidth, 0)
+      if (settings.noteMaterial === 'sprite') {
+        u.u2dRimW.value = rs.note2dRimWidth
+        u.u2dRimTilt.value = THREE.MathUtils.degToRad(rs.note2dRimTilt)
+        u.u2dHollow.value = rs.note2dHollow
+        setLightDir(u.u2dFill.value, rs.note2dFillAzimuth, rs.note2dFillElevation)
+        u.u2dGloss.value = rs.note2dGloss
+        u.u2dGlossPow.value = rs.note2dGlossPower
+        u.u2dExposure.value = rs.note2dExposure
+        u.u2dWhiten.value = rs.note2dWhiten
+        u.u2dWhitenStart.value = rs.note2dWhitenStart
+        u.u2dKeySplit.value = rs.note2dKeySplit
+        u.u2dShimmer.value = rs.note2dShimmer
+        u.u2dShimmerGain.value = rs.note2dShimmer > 0 ? rs.note2dShimmerGain : 1
+        u.u2dShimmerCell.value = Math.max(rs.note2dShimmerScale, 0.01)
+        u.u2dShimmerSpeed.value = rs.note2dShimmerSpeed
+        u.u2dShimmerLock.value = rs.note2dShimmerLock
+        u.u2dTex.value = settings.note2dTexture ? 1 : 0
+        u.u2dTexCell.value = Math.max(rs.note2dTextureScale, 0.01)
+        u.u2dTexStretch.value = Math.max(rs.note2dTextureStretch, 0.01)
+        u.u2dTexContrast.value = rs.note2dTextureContrast
+        u.u2dTexGain.value = rs.note2dTextureGain
+        u.u2dTexRelief.value = rs.note2dTextureRelief
+        u.u2dTexSpeed.value = rs.note2dTextureSpeed
+        u.u2dTexLock.value = rs.note2dTextureLock
+        u.u2dOutline.value = settings.note2dOutline === 'whole' ? 1 : settings.note2dOutline === 'half' ? 2 : 0
+        u.u2dOutW.value = rs.note2dOutlineWidth
+        u.u2dOutTint.value = rs.note2dOutlineTint
+        u.u2dOutShade.value = rs.note2dOutlineShade
+        u.u2dOutGrey.value = rs.note2dOutlineGrey
+        u.u2dOutBright.value = rs.note2dOutlineBrightness
+        u.u2dOutRelief.value = rs.note2dOutlineRelief
+        u.u2dGlow.value = rs.note2dGlow
+        u.u2dGlowR.value = Math.max(rs.note2dGlowRadius, 1e-4)
+        u.u2dGlowTail.value = rs.note2dGlowTail
+        u.u2dGlowWhiten.value = rs.note2dGlowWhiten
+        u.u2dGlowBoost.value = rs.note2dGlowBoost
+        // quad padding: room for the halo tail and an outside outline band
+        // (+ ~0.06 white-key widths of slack; the halo fades out over the last 40 % of the pad)
+        const glowPad = rs.note2dGlow > 0 ? rs.note2dGlowRadius * (rs.note2dGlowTail > 0 ? 4.5 : 2.2) : 0
+        const outPad = settings.note2dOutline === 'off' ? 0 : rs.note2dOutlineWidth
+        u.uMargin.value = Math.max(glowPad, outPad) + 0.06 * WHITE_KEY_WIDTH
+      }
+      // Animated light pattern: stepped by the clamped now() delta like the
+      // texture phase above, so it is pause-proof and the export's virtual
+      // clock drives it identically.
+      const nowT = now()
+      const prev = lastPatternNow.current
+      const dt = prev === null ? 0 : Math.min(Math.max(nowT - prev, 0), 0.1)
+      lastPatternNow.current = nowT
+      lookResources.tickPattern(settings.notePattern, dt, rs.notePatternSpeed, rs.notePatternDensity, rs.notePatternSharpness)
+      if (settings.noteSilk > 0) lookResources.tickSilk(dt * rs.noteSilkSpeed)
+      const tile = Math.max(rs.notePatternScale, 0.01)
+      driftRef.current = (driftRef.current + dt * rs.notePatternDrift) % (tile * 64)
+      u.uDriftX.value = driftRef.current
+      // cloud evolution clock, wrapped like uPhase (float precision)
+      u.uTime.value = (u.uTime.value + dt) % 4096
+    } else {
+      lastPatternNow.current = null
+      material.uniforms.uMargin.value = 0.01
+    }
 
     // FALL_DISTANCE is locked to the *default* camera framing
     // (FALL_REFERENCE_DISTANCE) — re-deriving it from the live camera
     // would resize every note's visual length the moment the user
     // orbits / zooms, breaking the user's spatial timing reference.
     const FALL_DISTANCE = FALL_REFERENCE_DISTANCE
+    // World units the song has scrolled: world y ± this is fixed on every
+    // song note (the bump-scatter song-space frame).
+    material.uniforms.uScroll.value = ((isDown ? 1 : -1) * tl * FALL_DISTANCE) / fall
     // Visible-range bound for spawn / cull — derived from the live
     // camera so song notes (down spawn), 'up' history trails, and live
     // notes all rise / appear up to the user's actual viewport. Capped
@@ -787,31 +876,13 @@ export function FallingNotes() {
     const selection = useStore.getState().selection
     const noteIds = instanceToNoteId.current
 
-    // Per-track tint cache, populated on demand. The cache resets every
-    // frame so changes to `noteColor` / `trackColors` apply immediately.
-    // For a song with N tracks (typically <5), this saves the per-note
-    // hex parse cost.
-    const trackColors = rs.trackColors
-    const defaultTintColor = tmpColor.set(rs.noteColor)
-    const defaultR = defaultTintColor.r
-    const defaultG = defaultTintColor.g
-    const defaultB = defaultTintColor.b
-    const trackTintCache = new Map<number, readonly [number, number, number]>()
-    const resolveTint = (trackIdx: number | undefined): readonly [number, number, number] => {
-      if (trackIdx == null) return [defaultR, defaultG, defaultB]
-      const cached = trackTintCache.get(trackIdx)
-      if (cached) return cached
-      const override = trackColors[String(trackIdx)]
-      if (!override) {
-        const v: [number, number, number] = [defaultR, defaultG, defaultB]
-        trackTintCache.set(trackIdx, v)
-        return v
-      }
-      tmpColor.set(override)
-      const v: [number, number, number] = [tmpColor.r, tmpColor.g, tmpColor.b]
-      trackTintCache.set(trackIdx, v)
-      return v
-    }
+    // Per-note tint (linear): solid = track colour / noteColor, random =
+    // palette pick, gradient = the hit-line colour at the note's key (the
+    // shader shades the gradient itself per pixel; the instance tint still
+    // feeds the merge data and the 2D glow).
+    colorResolver.update(rs)
+    const resolveTint = (midi: number, trackIdx: number | undefined, id?: number) =>
+      colorResolver.rgb(midi, trackIdx, id)
 
     let count = 0
     const notes = song?.notes ?? []
@@ -903,8 +974,10 @@ export function FallingNotes() {
       selectedAttrData[count] = selection.has(n.id) ? 1 : 0
       alphaAttrData[count] = 1
       noteIds[count] = n.id
+      mergeKeys[count] = idx
+      blacks[count] = key.isBlack ? 1 : 0
 
-      const tint = resolveTint(n.track)
+      const tint = resolveTint(n.midi + transpose, n.track, n.id)
       tints[count * 3] = tint[0]
       tints[count * 3 + 1] = tint[1]
       tints[count * 3 + 2] = tint[2]
@@ -958,10 +1031,13 @@ export function FallingNotes() {
         selectedAttrData[count] = 0
         alphaAttrData[count] = 1
         noteIds[count] = -1
-        // Live notes have no track — fall back to noteColor.
-        tints[count * 3] = defaultR
-        tints[count * 3 + 1] = defaultG
-        tints[count * 3 + 2] = defaultB
+        mergeKeys[count] = idx
+        blacks[count] = key.isBlack ? 1 : 0
+        // Live notes have no track / id.
+        const liveTint = resolveTint(ln.midi, undefined)
+        tints[count * 3] = liveTint[0]
+        tints[count * 3 + 1] = liveTint[1]
+        tints[count * 3 + 2] = liveTint[2]
 
         count++
         if (count >= MAX_INSTANCES) break
@@ -996,14 +1072,59 @@ export function FallingNotes() {
       selectedAttrData[count] = 0
       alphaAttrData[count] = fadeAlpha
       noteIds[count] = -1 // not editable / not selectable
+      mergeKeys[count] = -1 // fades on its own, never fuses
+      blacks[count] = isBlackKey(d.midi) ? 1 : 0
       // Preserve the deleted note's track tint so the fade-out reads
       // as "this exact note is dissolving" instead of flashing back
       // to the global noteColor for its final 0.12s.
-      const ghostTint = resolveTint(d.track)
+      const ghostTint = resolveTint(d.midi, d.track, d.id)
       tints[count * 3] = ghostTint[0]
       tints[count * 3 + 1] = ghostTint[1]
       tints[count * 3 + 2] = ghostTint[2]
       count++
+    }
+
+    // Liquid merge: world-space rects in instance order (round shape only).
+    const merging = rs.noteMergeRadius > 0 && settings.noteShape === 'round' && settings.noteMaterial !== 'sprite'
+    if (merging !== (material.defines.MERGE !== undefined)) {
+      if (merging) material.defines.MERGE = ''
+      else delete material.defines.MERGE
+      material.needsUpdate = true
+    }
+    if (merging) {
+      const mi = mesh.instanceMatrix.array
+      const sx = mesh.scale.x
+      const x0 = mesh.position.x
+      const MN = mergeNotes.current
+      for (let i = 0; i < count; i++) {
+        const o = MN[i] ?? (MN[i] = { x: 0, y: 0, w: 0, h: 0, color: [0, 0, 0], key: 0, seed: [0, 0] })
+        o.x = x0 + mi[i * 16 + 12] * sx
+        o.y = mi[i * 16 + 13]
+        o.w = sizes[i * 2] * sx
+        o.h = sizes[i * 2 + 1]
+        // sRGB-encoded: the fillet blends colours in display space (noteShader.ts decodes)
+        o.color[0] = linearToSrgbChannel(tints[i * 3])
+        o.color[1] = linearToSrgbChannel(tints[i * 3 + 1])
+        o.color[2] = linearToSrgbChannel(tints[i * 3 + 2])
+        o.key = mergeKeys[i]
+        o.seed![0] = seeds[i * 2]
+        o.seed![1] = seeds[i * 2 + 1]
+        o.solo = mergeKeys[i] < 0
+      }
+      MN.length = count
+      clipSameKeyOverlaps(MN)
+      const lit = settings.noteMaterial === 'reflective' || settings.noteMaterial === 'realistic'
+      mergeData.build(MN, {
+        mergeRadius: rs.noteMergeRadius,
+        colorSpread: rs.noteMergeColorSpread,
+        sameKey: settings.noteMergeSameKey,
+        cornerRadius: rs.noteCornerRadius,
+        bevelWidth: rs.noteBevelWidth,
+        outlineWidth: lit ? Math.max(rs.noteOutlineWidth, 0) : 0,
+        creaseDepth: settings.noteMergeCrease,
+        legatoClose: settings.noteMergeLegatoClose,
+        legatoGap: MERGE_LEGATO_GAP,
+      })
     }
 
     mesh.count = count
@@ -1013,6 +1134,12 @@ export function FallingNotes() {
     selectedAttr.needsUpdate = true
     alphaAttr.needsUpdate = true
     tintAttr.needsUpdate = true
+    blackAttr.needsUpdate = true
+    const glow = glowMeshRef.current
+    if (glow) {
+      glow.visible = settings.noteMaterial === 'sprite' && rs.note2dGlow > 0
+      glow.count = count
+    }
   })
 
   // Project a screen-space pointer to the falling-note z plane.
@@ -1518,11 +1645,8 @@ export function FallingNotes() {
       frustumCulled={false}
       material={material}
       count={0}
-      // Force notes to draw AFTER the hit-line bar so the note body
-      // visually sits in front of the line as it falls past. Without
-      // this, three.js's transparent-object sort lands the bar (z=0.14)
-      // on top of the notes (z=0.1) and the bar's additive blend
-      // brightens / overlays the note where they overlap.
+      // Paint order of the transparent layers: notes 2, then the hit
+      // line (2.2) over them, particles (2.5), landing flashes (3).
       renderOrder={2}
       onPointerDown={onPointerDownNote}
       onPointerMove={onPointerMoveNote}

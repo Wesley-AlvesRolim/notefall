@@ -29,6 +29,8 @@ import {
 } from './icons'
 import { SettingsPinLane, PIN_LANE_HEIGHT } from './SettingsPinLane'
 import { resolveNoteTintAt } from '../midi/settingsKeyframes'
+import { NoteColorResolver, noteColoringDeps } from '../notes/noteColor'
+import { useShallow } from 'zustand/react/shallow'
 
 /**
  * Multi-row timeline that replaces the legacy single-slider seek bar.
@@ -1491,23 +1493,23 @@ export function Timeline() {
   // is `midiOffset + midiToTimeline(speedMap, n.time)` — the same
   // MIDI-time → TL_audio mapping the pin strip uses, so a note sitting
   // under a pin gets that pin's colour.
+  // Gradient / random colouring always takes the per-note path (each
+  // note's colour depends on its key / id, not just its track).
+  const noteColoring = useStore(useShallow((s) => noteColoringDeps(s.settings)))
   const midiNoteTints = useMemo<string[] | null>(() => {
-    if (!song || settingsKeyframes.length === 0) return null
     const base = useStore.getState().settings
+    if (!song || (settingsKeyframes.length === 0 && base.noteColorMode === 'solid')) return null
     const out = new Array<string>(song.notes.length)
+    const resolver = new NoteColorResolver()
     for (let i = 0; i < song.notes.length; i++) {
       const n = song.notes[i]
       const audioT = midiOffsetSec + midiToTimeline(speedMap, n.time)
-      const { noteColor: nc, trackColors: tc } = resolveNoteTintAt(
-        base,
-        settingsKeyframes,
-        audioT,
-      )
-      out[i] = tc[String(n.track)] ?? nc
+      resolver.update(resolveNoteTintAt(base, settingsKeyframes, audioT))
+      out[i] = resolver.hex(n.midi, n.track, n.id)
     }
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [song, settingsKeyframes, baseNoteColor, baseTrackColors, speedMap, midiOffsetSec])
+  }, [song, settingsKeyframes, baseNoteColor, baseTrackColors, noteColoring, speedMap, midiOffsetSec])
   // Drop a pin at the live playhead (TL_audio = currentSongTime — the
   // same axis a pin's `time` lives on). addKeyframe captures the
   // resolved look there + selects the new pin (one undo entry).

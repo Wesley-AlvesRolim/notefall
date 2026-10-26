@@ -24,6 +24,14 @@
 
 import * as THREE from 'three'
 import type { Settings } from '../store'
+import {
+  GRADIENT_COLOR_KEYS,
+  GRADIENT_POS_KEYS,
+  HIT_LINE_GRADIENT_COLOR_KEYS,
+  HIT_LINE_GRADIENT_POS_KEYS,
+  RANDOM_COLOR_KEYS,
+  type NoteColorSettings,
+} from '../notes/noteColor'
 
 export type SettingsKeyframe = {
   /** Timeline-time, seconds. ≥ 0. */
@@ -78,6 +86,102 @@ export const ANIMATABLE_NUMBER_KEYS = [
   'noteTextureContrast',
   'noteEdgeWidth',
   'noteEdgeIntensity',
+  // Note look. `notePatternSpeed` / `notePatternDrift` / `noteSilkSpeed`
+  // are excluded for the same reason as `noteAnimSpeedX/Y`: they are flow
+  // RATES. `noteSurfaceCells` / `noteSurfaceIrregularity` are bake-time.
+  'noteAlbedoGain',
+  'noteSpecular',
+  'noteEmission',
+  'noteSurfaceContrast',
+  'noteSilk',
+  'noteSilkScale',
+  'noteBevelWidth',
+  'noteBevelDepth',
+  'noteBevelProfile',
+  'noteBevelSoftness',
+  'noteBevelReflect',
+  'noteRimShade',
+  'noteRimFade',
+  'noteLightIntensity',
+  'noteLightAzimuth',
+  'noteLightElevation',
+  'noteFillIntensity',
+  'noteAmbient',
+  'noteReflectivity',
+  'noteSheen',
+  'noteTransparency',
+  'noteSaturation',
+  'notePatternScale',
+  'notePatternDensity',
+  'notePatternSharpness',
+  'notePatternContrast',
+  'notePatternBrightness',
+  'notePatternLock',
+  'notePatternDistortion',
+  'notePatternAmount',
+  'notePatternKnee',
+  'notePatternKneeSoftness',
+  'notePatternRibbon',
+  'noteBumpScale',
+  'noteBumpDepth',
+  'noteBumpSoftness',
+  'noteBumpMelt',
+  'noteFacetEdges',
+  'noteCloud',
+  'noteCloudScale',
+  'noteCloudSoftness',
+  'noteCloudClear',
+  'noteHighlight',
+  'noteHighlightThreshold',
+  'noteHighlightSoftness',
+  'noteFrost',
+  'noteFrostGrain',
+  'noteFrostScale',
+  'noteFrostVeil',
+  'noteOutlineWidth',
+  'noteOutlineBrightness',
+  'noteOutlineBlend',
+  'noteOutlineReflect',
+  'noteRimBand',
+  'noteRimBandBrightness',
+  'noteRimBandBlend',
+  'noteRimGap',
+  'noteRimGapDark',
+  'noteMergeRadius',
+  'noteMergeColorSpread',
+  // 2D look (`note2dShimmerSpeed` / `note2dTextureSpeed` are rates — excluded)
+  'note2dRimWidth',
+  'note2dRimTilt',
+  'note2dHollow',
+  'note2dFillAzimuth',
+  'note2dFillElevation',
+  'note2dGloss',
+  'note2dGlossPower',
+  'note2dExposure',
+  'note2dWhiten',
+  'note2dWhitenStart',
+  'note2dKeySplit',
+  'note2dShimmer',
+  'note2dShimmerGain',
+  'note2dShimmerScale',
+  'note2dShimmerLock',
+  'note2dTextureScale',
+  'note2dTextureStretch',
+  'note2dTextureContrast',
+  'note2dTextureGain',
+  'note2dTextureRelief',
+  'note2dTextureLock',
+  'note2dOutlineWidth',
+  'note2dOutlineTint',
+  'note2dOutlineShade',
+  'note2dOutlineGrey',
+  'note2dOutlineBrightness',
+  'note2dOutlineRelief',
+  'note2dGlow',
+  'note2dGlowRadius',
+  'note2dGlowTail',
+  'note2dGlowWhiten',
+  'note2dGlowBoost',
   'flashBrightness',
   'flashIntensity',
   'flashSize',
@@ -133,13 +237,23 @@ export const ANIMATABLE_NUMBER_KEYS = [
   'keyboardBrightness',
   'keyGlowIntensity',
   'keyGlowDecay',
+  'noteGradientAngle',
+  ...GRADIENT_POS_KEYS,
+  ...HIT_LINE_GRADIENT_POS_KEYS,
+  'noteGradientSoftness',
+  'hitLineGradientSoftness',
 ] as const satisfies readonly (keyof Settings)[]
 
 export const ANIMATABLE_COLOR_KEYS = [
-  'themeColor',
   'noteColor',
+  ...GRADIENT_COLOR_KEYS,
+  ...RANDOM_COLOR_KEYS,
+  ...HIT_LINE_GRADIENT_COLOR_KEYS,
   'noteEdgeColor',
+  'noteOutlineColor',
+  'noteRimBandColor',
   'flashColor',
+  'particleColor',
   'hitLineColor',
   'backgroundColor',
   'whiteKeyColor',
@@ -376,35 +490,64 @@ export function resolveSettingsAt(
 }
 
 /**
- * Cheap variant that interpolates ONLY the note tint (`noteColor` +
- * `trackColors`) at time `t`. The timeline MIDI overview tints every
- * note by its OWN time so the whole colour automation is visible as a
- * static gradient even while paused. Doing that with `resolveSettingsAt`
- * — which spreads the ~100-key `Settings` per call — would be needlessly
- * heavy across a thousand-note song; this touches just the two keys with
- * the identical segment-selection + easing logic. Equal endpoints short-
- * circuit the THREE.Color work so segments where only the camera (etc.)
- * animates cost almost nothing per note.
+ * Cheap variant that interpolates ONLY the note colouring keys
+ * (`noteColor` + `trackColors` + the gradient / palette colours) at time
+ * `t`. The timeline MIDI overview tints every note by its OWN time so the
+ * whole colour automation is visible as a static gradient even while
+ * paused. Doing that with `resolveSettingsAt` — which spreads the ~100-key
+ * `Settings` per call — would be needlessly heavy across a thousand-note
+ * song; this touches just the colouring keys with the identical
+ * segment-selection + easing logic. Equal endpoints short-circuit the
+ * THREE.Color work so segments where only the camera (etc.) animates cost
+ * almost nothing per note. The discrete keys (mode, stop / palette count,
+ * random-by, seed) always come from `base`.
  */
 export function resolveNoteTintAt(
   base: Settings,
   keyframes: readonly SettingsKeyframe[] | undefined,
   t: number,
-): { noteColor: string; trackColors: Record<string, string> } {
-  if (!keyframes || keyframes.length === 0) {
-    return { noteColor: base.noteColor, trackColors: base.trackColors }
+): NoteColorSettings {
+  const out: NoteColorSettings = {
+    noteColor: base.noteColor,
+    trackColors: base.trackColors,
+    noteColorMode: base.noteColorMode,
+    noteGradientStops: base.noteGradientStops,
+    noteGradientAngle: base.noteGradientAngle,
+    noteGradientSoftness: base.noteGradientSoftness,
+    noteRandomBy: base.noteRandomBy,
+    noteRandomSeed: base.noteRandomSeed,
+    noteRandomCount: base.noteRandomCount,
+    noteGradientColor1: base.noteGradientColor1,
+    noteGradientColor2: base.noteGradientColor2,
+    noteGradientColor3: base.noteGradientColor3,
+    noteGradientColor4: base.noteGradientColor4,
+    noteGradientColor5: base.noteGradientColor5,
+    noteGradientPos1: base.noteGradientPos1,
+    noteGradientPos2: base.noteGradientPos2,
+    noteGradientPos3: base.noteGradientPos3,
+    noteGradientPos4: base.noteGradientPos4,
+    noteGradientPos5: base.noteGradientPos5,
+    noteRandomColor1: base.noteRandomColor1,
+    noteRandomColor2: base.noteRandomColor2,
+    noteRandomColor3: base.noteRandomColor3,
+    noteRandomColor4: base.noteRandomColor4,
+    noteRandomColor5: base.noteRandomColor5,
   }
+  if (!keyframes || keyframes.length === 0) return out
   const kfs = sortByTime(keyframes)
   const { from, to, u } = pickBlend(base, kfs, t)
-  const an = (from.noteColor as string | undefined) ?? base.noteColor
-  const bn = (to.noteColor as string | undefined) ?? base.noteColor
-  const at =
-    (from.trackColors as Record<string, string> | undefined) ??
-    base.trackColors
-  const bt =
-    (to.trackColors as Record<string, string> | undefined) ?? base.trackColors
-  return {
-    noteColor: an === bn ? an : lerpColor(an, bn, u),
-    trackColors: at === bt ? at : lerpColorMap(at, bt, u),
+  for (const k of ['noteColor', ...GRADIENT_COLOR_KEYS, ...RANDOM_COLOR_KEYS] as const) {
+    const a = (from[k] as string | undefined) ?? base[k]
+    const b = (to[k] as string | undefined) ?? base[k]
+    out[k] = a === b ? a : lerpColor(a, b, u)
   }
+  for (const k of ['noteGradientAngle', 'noteGradientSoftness', ...GRADIENT_POS_KEYS] as const) {
+    const a = (from[k] as number | undefined) ?? base[k]
+    const b = (to[k] as number | undefined) ?? base[k]
+    out[k] = lerpNumber(a, b, u)
+  }
+  const at = (from.trackColors as Record<string, string> | undefined) ?? base.trackColors
+  const bt = (to.trackColors as Record<string, string> | undefined) ?? base.trackColors
+  out.trackColors = at === bt ? at : lerpColorMap(at, bt, u)
+  return out
 }

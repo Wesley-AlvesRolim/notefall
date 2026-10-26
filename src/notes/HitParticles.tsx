@@ -4,6 +4,7 @@ import { useFrame } from '@react-three/fiber'
 import { useSettingsSlice } from '../store'
 
 const HIT_PARTICLES_KEYS = [
+  'particleColorFollowNote',
   'cameraFov',
   'cameraLookAt',
   'cameraPos',
@@ -52,6 +53,7 @@ import { audioEngine } from '../audio/engine'
 import { clockEpoch, now } from '../audio/clock'
 import { getResolvedSettings } from '../scene/automatedSettings'
 import { KEYBOARD_LAYOUT, KEY_COUNT, MIDI_MIN, NOTE_HIT_Y } from '../keyboard/layout'
+import { NoteColorResolver } from './noteColor'
 import { noteDeathFx } from './noteDeathFx'
 import {
   DOT_SIZE_SCALE,
@@ -392,6 +394,10 @@ export function HitParticles() {
 
   const group = useMemo(() => {
     const g = new THREE.Group()
+    // Drawn after the falling notes (renderOrder 2) so the plume stays
+    // visible over them, but before the landing flashes (3).
+    fogBatch.mesh.renderOrder = 2.5
+    dotBatch.mesh.renderOrder = 2.5
     // Same renderOrder, same object position → three falls back to
     // creation order, so adding fog first keeps it underneath.
     g.add(fogBatch.mesh, dotBatch.mesh)
@@ -408,6 +414,13 @@ export function HitParticles() {
     a.fill(-1)
     return a
   }, [])
+  // Song note id of that note-on (-1 = live input), for per-note random colours.
+  const lastNoteId = useMemo(() => {
+    const a = new Int32Array(KEY_COUNT)
+    a.fill(-1)
+    return a
+  }, [])
+  const colorResolver = useMemo(() => new NoteColorResolver(), [])
   // Set on note-on; the next emission for that key is the press burst.
   const pendingBurst = useMemo(() => new Uint8Array(KEY_COUNT), [])
   // Per-key timestamp of the most recent note-on, used to enforce a
@@ -432,6 +445,7 @@ export function HitParticles() {
       if (ev.type === 'on') {
         heldCount[idx]++
         lastTrack[idx] = ev.track ?? -1
+        lastNoteId[idx] = ev.id ?? -1
         pendingBurst[idx] = 1
         noteOnTime[idx] = now()
       } else {
@@ -439,7 +453,7 @@ export function HitParticles() {
       }
     })
     return off
-  }, [heldCount, lastTrack, pendingBurst, noteOnTime])
+  }, [heldCount, lastTrack, lastNoteId, pendingBurst, noteOnTime])
 
   // Active "death emitters" — each death event spawns one of these and it
   // emits particles for DEATH_EMIT_DURATION using the same per-frame rate
@@ -579,31 +593,21 @@ export function HitParticles() {
     const minEmitDurationSec = Math.max(0, rs.noteMinLength) / fallDistance * rs.fallDurationSec
 
     // Particles take their note's colour, resolved exactly like
-    // FallingNotes: the track's override, else the global note colour
-    // (also used for live input, which has no track). sRGB — see the
-    // blending note at the top.
-    colorVec.set(rs.noteColor).convertLinearToSRGB()
-    const cr = colorVec.r
-    const cg = colorVec.g
-    const cb = colorVec.b
-    // Per-track RGB cache, built lazily as we emit.
-    const trackColors = rs.trackColors
-    const trackColorCache = new Map<number, readonly [number, number, number]>()
-    const setSourceColor = (trackIdx: number) => {
-      let rgb = trackIdx < 0 ? undefined : trackColorCache.get(trackIdx)
-      if (!rgb) {
-        const override = trackIdx < 0 ? undefined : trackColors[String(trackIdx)]
-        if (override) {
-          colorVec.set(override).convertLinearToSRGB()
-          rgb = [colorVec.r, colorVec.g, colorVec.b]
-        } else {
-          rgb = [cr, cg, cb]
-        }
-        if (trackIdx >= 0) trackColorCache.set(trackIdx, rgb)
-      }
-      source.r = rgb[0]
-      source.g = rgb[1]
-      source.b = rgb[2]
+    // FallingNotes (notes/noteColor.ts; live input has no track / id).
+    // sRGB — see the blending note at the top.
+    // Or the explicit particleColor when not following.
+    const follow = settings.particleColorFollowNote
+    if (follow) colorResolver.update(rs)
+    else colorVec.set(rs.particleColor)
+    const fixed = [colorVec.r, colorVec.g, colorVec.b] as const
+    const setSourceColor = (i: number) => {
+      const t = lastTrack[i]
+      const id = lastNoteId[i]
+      const rgb = follow ? colorResolver.rgb(i + MIDI_MIN, t < 0 ? undefined : t, id < 0 ? undefined : id) : fixed
+      colorVec.setRGB(rgb[0], rgb[1], rgb[2]).convertLinearToSRGB()
+      source.r = colorVec.r
+      source.g = colorVec.g
+      source.b = colorVec.b
     }
 
     for (let i = 0; i < KEY_COUNT; i++) {
@@ -620,7 +624,7 @@ export function HitParticles() {
       source.halfWidth = KEY_EMITTER_HALF_WIDTH
       source.y = KEY_SPAWN_Y
       source.halfHeight = KEY_SPAWN_Y
-      setSourceColor(lastTrack[i])
+      setSourceColor(i)
       sim.emit(source, dt, pendingBurst[i] === 1, params)
       pendingBurst[i] = 0
     }

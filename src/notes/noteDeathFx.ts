@@ -32,6 +32,8 @@ export type DyingNote = {
   /** Source track index (so the death puff inherits the note's
    *  per-track tint). Undefined for notes that have no track tag. */
   track?: number
+  /** Song note id (so a per-note random colour stays the same while it fades). */
+  id?: number
 }
 
 /** How long the fading ghost is rendered (seconds). Linear ramp from 1
