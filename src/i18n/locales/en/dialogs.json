@@ -97,5 +97,58 @@
     "couldNotLoadAudioMessage": "\"{{name}}\" could not be decoded.\n\n{{detail}}",
     "notAudioFile": "\"{{name}}\" is not an audio file. Choose an MP3, WAV, OGG, M4A, AAC, FLAC or WebM file.",
     "somethingWentWrong": "Something went wrong"
+  },
+  "feedback": {
+    "ariaLabel": "Send feedback",
+    "title": "Report a bug or request a feature",
+    "publicNotice": "Your report becomes a public GitHub issue — please don't include personal information.",
+    "statusLink": "See reports and their status",
+    "kind": "Report type",
+    "kinds": {
+      "bug": "Bug",
+      "feature": "Feature request"
+    },
+    "summary": "Summary",
+    "optional": "(optional)",
+    "fields": {
+      "bug": {
+        "description": "What happened?",
+        "details": "Steps to reproduce",
+        "expected": "What did you expect?"
+      },
+      "feature": {
+        "description": "What would you like to do?",
+        "details": "How could it work?"
+      }
+    },
+    "placeholders": {
+      "bug": {
+        "summary": "e.g. Notes disappear after dragging",
+        "description": "Describe what went wrong.",
+        "details": "1. Open a project\n2. Drag a note\n3. …"
+      },
+      "feature": {
+        "summary": "e.g. Jump to a bar",
+        "description": "The problem it solves or what you want to make.",
+        "details": "Behaviour, UI, shortcuts…"
+      }
+    },
+    "includeEnv": "Include device info (sent as shown)",
+    "send": "Send",
+    "sending": "Sending…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "useGitHub": "Report on GitHub instead",
+    "openGitHub": "Open the GitHub form",
+    "unavailable": "The report form isn't available here.",
+    "errors": {
+      "verification": "The spam check failed — please try again.",
+      "invalid": "Please fill in the summary and description.",
+      "server": "The report couldn't be sent.",
+      "network": "No connection — the report couldn't be sent."
+    },
+    "sentTitle": "Thanks — your report was sent",
+    "sentBody": "It was filed as issue #{{number}}.",
+    "sentLink": "Follow its status on GitHub (#{{number}})"
   }
 }

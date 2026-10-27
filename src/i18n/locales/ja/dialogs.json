@@ -97,5 +97,58 @@
     "couldNotLoadAudioMessage": "「{{name}}」をデコードできませんでした。\n\n{{detail}}",
     "notAudioFile": "「{{name}}」はオーディオファイルではありません。MP3・WAV・OGG・M4A・AAC・FLAC・WebM のファイルを選んでください。",
     "somethingWentWrong": "問題が発生しました"
+  },
+  "feedback": {
+    "ariaLabel": "フィードバックを送る",
+    "title": "不具合の報告・機能のリクエスト",
+    "publicNotice": "送信した内容は GitHub の Issue として公開されます。個人情報は書かないでください。",
+    "statusLink": "これまでの報告と対応状況",
+    "kind": "報告の種類",
+    "kinds": {
+      "bug": "不具合",
+      "feature": "機能のリクエスト"
+    },
+    "summary": "概要",
+    "optional": "（任意）",
+    "fields": {
+      "bug": {
+        "description": "何が起きましたか？",
+        "details": "再現手順",
+        "expected": "本来はどうなるべきでしたか？"
+      },
+      "feature": {
+        "description": "何をしたいですか？",
+        "details": "どんな動きだと嬉しいですか？"
+      }
+    },
+    "placeholders": {
+      "bug": {
+        "summary": "例：ドラッグするとノートが消える",
+        "description": "うまくいかなかったことを書いてください。",
+        "details": "1. プロジェクトを開く\n2. ノートをドラッグする\n3. …"
+      },
+      "feature": {
+        "summary": "例：小節にジャンプしたい",
+        "description": "困っていることや、作りたいものを書いてください。",
+        "details": "動作、画面、ショートカットなど"
+      }
+    },
+    "includeEnv": "端末情報を含める（下の内容がそのまま送られます）",
+    "send": "送信",
+    "sending": "送信中…",
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "useGitHub": "GitHub で報告する",
+    "openGitHub": "GitHub のフォームを開く",
+    "unavailable": "この環境では報告フォームを使えません。",
+    "errors": {
+      "verification": "スパム確認に失敗しました。もう一度お試しください。",
+      "invalid": "概要と内容を入力してください。",
+      "server": "送信できませんでした。",
+      "network": "接続できないため送信できませんでした。"
+    },
+    "sentTitle": "ありがとうございます。送信しました",
+    "sentBody": "Issue #{{number}} として登録されました。",
+    "sentLink": "対応状況は GitHub で確認できます（#{{number}}）"
   }
 }

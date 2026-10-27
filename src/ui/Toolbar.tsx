@@ -59,6 +59,8 @@ import {
 } from '../export/exportVideo'
 import { VIDEO_CODECS, isVideoExportSupported } from '../export/renderVideo'
 import { showAlert } from './confirm'
+import { FeedbackDialog } from './FeedbackDialog'
+import { REPO_URL, type ReportKind } from '../feedback/report'
 import { ExportProgressModal, type ExportProgressState } from './ExportProgressModal'
 import {
   DEFAULT_EXPORT_SETTINGS,
@@ -87,44 +89,6 @@ const RECENT_AVAILABLE = hasFileSystemAccess()
 // a constant rather than read from package.json at runtime — the repo
 // URL doesn't change without a code change anyway, and a constant keeps
 // the bundle from pulling extra metadata.
-const REPO_URL = 'https://github.com/ekkx/notefall'
-
-/**
- * Diagnostic info auto-attached to bug reports / feature requests.
- *
- * Kept intentionally narrow: only browser / OS / viewport / FSA support
- * — nothing about the user's notes, recordings, or settings. The
- * environment field in the issue template renders this as a code block
- * so it stays visually distinct from the user's prose. Reads `window`
- * lazily so the template URL is only built when the menu item fires
- * (irrelevant in practice but cheap to do right).
- */
-function buildEnvironmentBlock(): string {
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'
-  const w = typeof window !== 'undefined' ? window.innerWidth : 0
-  const h = typeof window !== 'undefined' ? window.innerHeight : 0
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1
-  const fsa = hasFileSystemAccess() ? 'yes' : 'no'
-  return [
-    `notefall: ${__APP_COMMIT__}`,
-    `User-Agent: ${ua}`,
-    `Viewport: ${w}×${h} (DPR ${dpr})`,
-    `File System Access: ${fsa}`,
-  ].join('\n')
-}
-
-/**
- * Build a "new issue" URL with the given form template, pre-filling
- * the `environment` field. Pre-fill works because `bug.yml` and
- * `feature.yml` both expose a textarea with `id: environment` — query
- * parameters with matching ids populate the corresponding form field
- * (see GitHub Docs: "Syntax for issue forms").
- */
-function buildIssueUrl(template: 'bug' | 'feature'): string {
-  const env = encodeURIComponent(buildEnvironmentBlock())
-  return `${REPO_URL}/issues/new?template=${template}.yml&environment=${env}`
-}
-
 const openExternal = (url: string) => {
   // `noopener,noreferrer` keeps the new tab from getting `window.opener`
   // back to the app — standard hygiene for any externally-controlled
@@ -218,6 +182,7 @@ export function Toolbar() {
   // dialog. Defaults persist across the session so reopening the
   // dialog shows the user's last choice.
   const [exportSettingsOpen, setExportSettingsOpen] = useState(false)
+  const [feedbackKind, setFeedbackKind] = useState<ReportKind | null>(null)
   const [exportDefaults, setExportDefaults] =
     useState<ExportSettingsValues>(DEFAULT_EXPORT_SETTINGS)
   // Memoise once — `isVideoExportSupported` reads global typeof
@@ -1137,10 +1102,8 @@ export function Toolbar() {
         </div>
 
         {/* Section 3 — Help menu. Single entry point for "tell us
-            something" (bug / feature reports + repo link). The issue
-            URLs pre-fill the template's `environment` textarea with
-            browser / viewport / FSA info so the maintainer doesn't
-            have to ask. Last section, so only `pl-3` to mirror the
+            something" (bug / feature reports open the in-app
+            FeedbackDialog, which files a GitHub issue; + repo link). Last section, so only `pl-3` to mirror the
             previous border's 12px right side. */}
         <div className="flex items-center gap-1.5 border-l border-neutral-800 pl-3">
         <LanguageSwitcher />
@@ -1163,7 +1126,7 @@ export function Toolbar() {
                 <>
                   <Button
                     onPress={() => {
-                      openExternal(buildIssueUrl('bug'))
+                      setFeedbackKind('bug')
                       close()
                     }}
                     className={helpRowClass}
@@ -1172,7 +1135,7 @@ export function Toolbar() {
                   </Button>
                   <Button
                     onPress={() => {
-                      openExternal(buildIssueUrl('feature'))
+                      setFeedbackKind('feature')
                       close()
                     }}
                     className={helpRowClass}
@@ -1279,6 +1242,11 @@ export function Toolbar() {
       defaults={exportDefaults}
     />
     <ExportProgressModal state={exportState} onCancel={onCancelExport} />
+    <FeedbackDialog
+      kind={feedbackKind ?? 'bug'}
+      isOpen={feedbackKind !== null}
+      onClose={() => setFeedbackKind(null)}
+    />
     </>
   )
 }
