@@ -1,6 +1,6 @@
 # notefall
 
-Browser-based piano visualizer. Notes fall onto an 88-key keyboard while a MIDI plays; users can also play live (touch / mouse / PC keyboard / Web MIDI), record, and edit MIDI directly on the canvas. All content (MIDI / recordings / projects / audio) is processed client-side and never uploaded; the **only** outbound data is anonymous, opt-out usage analytics (see `src/usage/`). PolyForm Shield 1.0.0.
+Browser-based piano visualizer. Notes fall onto an 88-key keyboard while a MIDI plays; users can also play live (touch / mouse / PC keyboard / Web MIDI), record, and edit MIDI directly on the canvas. All content (MIDI / recordings / projects / audio) is processed client-side and never uploaded; the **only** outbound data is anonymous, opt-out usage analytics (see `src/usage/`) and reports the user writes and sends from the in-app feedback form (`src/feedback/`). PolyForm Shield 1.0.0.
 
 ## Stack
 
@@ -218,7 +218,7 @@ Zip wrapper present from day 1 even with only `manifest.json`, so audio-sync (fu
 
 **Toolbar File menu** consolidates New / Open / Open Recent ▸ / Save / Save As / Open MIDI / Demo Songs. Disables during recording. Open MIDI replaces just the song; Open Project replaces the whole session. Open Recent submenu hides when no recents OR FSA unavailable. **Open… also accepts audio**: an audio pick is added to the current song as its accompaniment (`importUserAudio`) instead of replacing the session, so the discard-changes prompt runs *after* the picker, once the file type is known. With a song loaded the timeline's audio lane is always shown; empty, it carries an "Add audio…" button (`pickAndImportUserAudio`).
 
-**Help menu** opens GitHub issue templates with `&environment=<encoded>` URL-prefilling browser/viewport/FSA info only — never user content. Also hosts the analytics opt-out toggle (see Analytics).
+**Help menu** → "Report a bug" / "Request a feature" open `FeedbackDialog` (`ui/FeedbackDialog.tsx`, `feedback/report.ts`): the user's text + a device block they can see and untick (browser, screen, GPU, capability flags — never user content) is POSTed to the Cloudflare Pages Function `functions/api/report.ts`, which checks Origin, a honeypot and Cloudflare Turnstile, defuses @mentions and files a **public** GitHub issue (labels `bug`/`enhancement` + `from-app`), returning its URL for the "follow its status" link. Secrets on the Pages project: `GITHUB_TOKEN` (fine-grained, this repo, Issues read/write), `TURNSTILE_SECRET`; client `VITE_TURNSTILE_SITE_KEY` (unset → no widget, and the server skips the check only when its secret is unset too). No token / Vite dev server → the dialog offers GitHub's own issue form (`githubIssueUrl`, `environment` pre-filled). `functions/` has its own tsconfig (`npm run typecheck` covers it). Also hosts the analytics opt-out toggle (see Analytics).
 
 **Global shortcuts** (`useGlobalShortcuts.ts`) for `Cmd+O` / `Cmd+S` / `Cmd+Shift+S` / Space wire on **capture phase** to beat browser native dialogs and any focused react-aria button.
 
