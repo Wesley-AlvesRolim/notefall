@@ -2,6 +2,7 @@ import type { NoteEvent } from '../midi/types'
 import { defaultSettings, type Settings } from '../store'
 import { midiToTimeline, timelineToMidi, type SpeedMap } from '../midi/speedMap'
 import { KEYBOARD_LAYOUT, KEY_COUNT, MIDI_MIN, NOTE_HIT_Y } from '../keyboard/layout'
+import { noteLabelMinLengthAt } from './pitchLabels'
 
 // Falling notes render on the z = NOTE_PLANE_Z plane so they sit in front
 // of the 3D key caps (white at z=0, black tops at z=0.09) instead of
@@ -192,7 +193,12 @@ export function noteVisualBounds(
   const hitY = NOTE_HIT_Y
   const fd = fallDistance(settings)
   const fall = settings.fallDurationSec
-  const minLength = Math.max(0.01, settings.noteMinLength)
+  // the renderer draws labelled notes at least as long as their label
+  const minLength = Math.max(
+    0.01,
+    settings.noteMinLength,
+    noteLabelMinLengthAt(settings, settings.noteWidthScale, idx),
+  )
 
   // Note's head + tail fire moments in TL_audio. Both ends go through
   // the speed map so a note that spans a non-unity-speed region has

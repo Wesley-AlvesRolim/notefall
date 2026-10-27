@@ -66,7 +66,7 @@ const BLACK_BODY_TAPER = BLACK_HALF_W * 0.28;
 // Common half-width at z = skirtZ → t: shared by slope top edge, body
 // sides at z = skirtZ, and top face. Body tapers from ±halfW (z = 0) to
 // ±this (z = skirtZ); above z = skirtZ stays at this width.
-const BLACK_TOP_HALF_W = BLACK_HALF_W - BLACK_BODY_TAPER;
+export const BLACK_TOP_HALF_W = BLACK_HALF_W - BLACK_BODY_TAPER;
 // Edge chamfer radius. The fillet ring above z=skirtZ rounds inward by
 // this amount in BOTH x and y, so the top/side and top/front edges of
 // the body get a visible quarter-circle bevel. 0 = sharp top edge, ≈INSET

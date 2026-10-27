@@ -11,6 +11,9 @@ const HIT_PARTICLES_KEYS = [
   'fallDurationSec',
   'noteColor',
   'noteMinLength',
+  'noteLabelsEnabled',
+  'noteLabelFormat',
+  'noteLabelAccidental',
   'particleAirFriction',
   'particleBlending',
   'particleDotBrightness',
@@ -55,6 +58,7 @@ import { getResolvedSettings } from '../scene/automatedSettings'
 import { KEYBOARD_LAYOUT, KEY_COUNT, MIDI_MIN, NOTE_HIT_Y } from '../keyboard/layout'
 import { NoteColorResolver } from './noteColor'
 import { noteDeathFx } from './noteDeathFx'
+import { noteLabelMinLengthAt } from './pitchLabels'
 import {
   DOT_SIZE_SCALE,
   RAY_SIZE_SCALE,
@@ -590,7 +594,16 @@ export function HitParticles() {
     const halfVisHeight = camDistance * Math.tan((rs.cameraFov * Math.PI) / 360)
     const visibleTop = rs.cameraLookAt[1] + halfVisHeight
     const fallDistance = Math.max(0.5, visibleTop - hitY) + 1.0  // SPAWN_BUFFER = 1.0
-    const minEmitDurationSec = Math.max(0, rs.noteMinLength) / fallDistance * rs.fallDurationSec
+    const minEmitPerLength = rs.fallDurationSec / fallDistance
+    const minLength = Math.max(0, rs.noteMinLength)
+    // labelled notes are drawn at least as long as their label
+    const labelSettings = {
+      noteLabelsEnabled: settings.noteLabelsEnabled,
+      noteLabelFormat: settings.noteLabelFormat,
+      noteLabelAccidental: settings.noteLabelAccidental,
+      noteLabelSize: rs.noteLabelSize,
+      noteLabelOutlineWidth: rs.noteLabelOutlineWidth,
+    }
 
     // Particles take their note's colour, resolved exactly like
     // FallingNotes (notes/noteColor.ts; live input has no track / id).
@@ -615,6 +628,8 @@ export function HitParticles() {
       // min-emission window since the last note-on. Lets staccato notes
       // produce a particle plume that lasts as long as the falling-note
       // visual bar (which is also extended to noteMinLength).
+      const minEmitDurationSec =
+        Math.max(minLength, noteLabelMinLengthAt(labelSettings, rs.noteWidthScale, i)) * minEmitPerLength
       const effectiveHeld = heldCount[i] > 0 || nowSec < noteOnTime[i] + minEmitDurationSec
       if (!effectiveHeld) {
         pendingBurst[i] = 0

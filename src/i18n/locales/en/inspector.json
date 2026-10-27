@@ -15,7 +15,9 @@
     "background": "Background",
     "view": "View",
     "falling": "Falling Notes",
-    "style": "Style"
+    "style": "Style",
+    "noteLabels": "Note Names",
+    "keyLabels": "Key Names"
   },
   "camera": {
     "distance": "Distance",
@@ -356,7 +358,8 @@
     "baseColorHint": "Used for live playing and for tracks without their own color.",
     "randomNotesHint": "Random note colors have no single color to follow, so the line uses its own color.",
     "type": "Type",
-    "solidColor": "Solid color"
+    "solidColor": "Solid color",
+    "blackKeyDarkness": "Black-key darkness"
   },
   "tab": {
     "label": "Settings areas",
@@ -380,5 +383,36 @@
   "scope": {
     "wholeSong": "whole song",
     "wholeSongTooltip": "A pin cannot hold this setting: changing it changes the whole song, not just the selected pin."
+  },
+  "labels": {
+    "format": "Format",
+    "formats": {
+      "letter": "Letter (C)",
+      "letterOctave": "With octave (C4)"
+    },
+    "accidental": "Black keys",
+    "accidentals": {
+      "sharp": "Sharps (C♯)",
+      "flat": "Flats (D♭)"
+    },
+    "size": "Size",
+    "keys": "Keys",
+    "keyModes": {
+      "c": "C only",
+      "white": "White keys",
+      "all": "All keys"
+    },
+    "position": "Position",
+    "positions": {
+      "keyboard": "Keyboard end",
+      "center": "Middle",
+      "far": "Far end"
+    },
+    "offset": "Distance from end",
+    "outlineWidth": "Outline width",
+    "outlineColor": "Outline color",
+    "whiteKeyColor": "Color on white keys",
+    "blackKeyColor": "Color on black keys",
+    "keyOffset": "Distance from front"
   }
 }

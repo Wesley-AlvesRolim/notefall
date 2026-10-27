@@ -53,6 +53,16 @@ import { useStore, useSettingsSlice, defaultSettings } from "../store";
 import { computeLiveVisibleTop, keyboardViewShift } from "../scene/visibleTop";
 import { getResolvedSettings } from "../scene/automatedSettings";
 
+// Key labels: glyph height (world units, size 1). Black-key labels sit on
+// the flat top face (past the front slope, within the tapered width) so
+// they lie on the key instead of hovering over the slope.
+const KEY_LABEL_HEIGHT = 0.2;
+const BLACK_TOP_FROM_FRONT = BLACK_TOP_FRONT_Y + BLACK_KEY_LENGTH / 2;
+const BLACK_TOP_WIDTH = BLACK_TOP_HALF_W * 2 - 0.016;
+const KEY_LABEL_COLOR = new THREE.Color();
+const KEY_LABEL_LOCAL = new THREE.Matrix4();
+const KEY_LABEL_MATRIX = new THREE.Matrix4();
+
 const KEYBOARD_KEYS = [
   "blackKeyColor",
   "cameraFov",
@@ -73,6 +83,10 @@ const KEYBOARD_KEYS = [
   "keyGlowEnabled",
   "keyGlowFollowNote",
   "keyGlowIntensity",
+  "keyLabelsEnabled",
+  "keyLabelsMode",
+  "keyLabelFormat",
+  "keyLabelAccidental",
   "noteColor",
   "octaveLinesEnabled",
   "trackColors",
@@ -81,6 +95,8 @@ const KEYBOARD_KEYS = [
 ] as const;
 import { audioEngine } from "../audio/engine";
 import { clockEpoch, now } from "../audio/clock";
+import { createLabelMesh, labelAtlas, LABEL_CELL_ASPECT, type LabelMesh } from "../notes/pitchLabels";
+import { BLACK_TOP_FRONT_Y, BLACK_TOP_HALF_W } from "./geometry";
 
 // Press animation: each key's group sits at the rear edge; press dips
 // `position.z = -PIVOT_DIP × p` and tilts `rotation.x = ANGLE × p`.
@@ -469,6 +485,24 @@ export function Keyboard() {
 
   usePcKeyboardInput(ensureAudio);
 
+  // Pitch labels on the keys: one instanced mesh under the keyboard group,
+  // each label placed in its key group's frame so it tilts with the press.
+  const rootRef = useRef<THREE.Group>(null);
+  const keyLabelsRef = useRef<LabelMesh | null>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const labels = createLabelMesh(KEY_COUNT);
+    labels.mesh.visible = false;
+    root.add(labels.mesh);
+    keyLabelsRef.current = labels;
+    return () => {
+      root.remove(labels.mesh);
+      labels.dispose();
+      keyLabelsRef.current = null;
+    };
+  }, []);
+
   useFrame(({ camera }, delta) => {
     // Normal = X × (camera − edge point) = (0, −dz, dy): points toward the
     // front of the keyboard, the kept side.
@@ -696,7 +730,54 @@ export function Keyboard() {
         lightIntensities[slot] = 0;
       }
     }
+
+    const keyLabels = keyLabelsRef.current;
+    if (keyLabels) {
+      keyLabels.mesh.visible = settings.keyLabelsEnabled;
+      if (settings.keyLabelsEnabled) writeKeyLabels(keyLabels, rs);
+    }
   });
+
+  function writeKeyLabels(labels: LabelMesh, rs: ReturnType<typeof getResolvedSettings>) {
+    const atlas = labelAtlas(settings.keyLabelFormat, settings.keyLabelAccidental);
+    const u = labels.material.uniforms;
+    u.uAtlas.value = atlas.texture;
+    u.uOutline.value = 0;
+    const offset = Math.max(rs.keyLabelOffset, 0);
+    const colors = labels.colors;
+    KEY_LABEL_COLOR.set(rs.keyLabelWhiteColor).convertLinearToSRGB();
+    const wr = KEY_LABEL_COLOR.r, wg = KEY_LABEL_COLOR.g, wb = KEY_LABEL_COLOR.b;
+    KEY_LABEL_COLOR.set(rs.keyLabelBlackColor).convertLinearToSRGB();
+    const opacity = Math.min(Math.max(rs.keyLabelOpacity, 0), 1);
+    const size = Math.max(rs.keyLabelSize, 0.05);
+    const mode = settings.keyLabelsMode;
+    const out = labels.mesh.instanceMatrix.array as Float32Array;
+    let n = 0;
+    for (let i = 0; i < KEY_COUNT; i++) {
+      const k = KEYBOARD_LAYOUT.keys[i];
+      if (mode === "c" ? k.midi % 12 !== 0 : mode === "white" && k.isBlack) continue;
+      const group = keyGroupRefs.current[i];
+      if (!group) continue;
+      group.updateMatrix();
+      const faceW = k.isBlack ? BLACK_TOP_WIDTH : k.width * 0.8;
+      const h = Math.min(KEY_LABEL_HEIGHT * size, faceW / atlas.textAspect[i]);
+      // The group pivots at the key's rear edge; its front edge is at -length.
+      const front = -k.length + (k.isBlack ? BLACK_TOP_FROM_FRONT : 0);
+      KEY_LABEL_LOCAL.makeScale(h * LABEL_CELL_ASPECT, h, 1).setPosition(
+        0,
+        front + offset + h / 2,
+        (k.isBlack ? BLACK_KEY_THICKNESS : 0) + 0.001,
+      );
+      KEY_LABEL_MATRIX.multiplyMatrices(group.matrix, KEY_LABEL_LOCAL).toArray(out, n * 16);
+      labels.glyphs[n] = i;
+      labels.alphas[n] = opacity;
+      colors[n * 3] = k.isBlack ? KEY_LABEL_COLOR.r : wr;
+      colors[n * 3 + 1] = k.isBlack ? KEY_LABEL_COLOR.g : wg;
+      colors[n * 3 + 2] = k.isBlack ? KEY_LABEL_COLOR.b : wb;
+      n++;
+    }
+    labels.commit(n);
+  }
 
   // X positions of B→C octave boundaries.
   const octaveDividerXs = useMemo(() => {
@@ -735,7 +816,7 @@ export function Keyboard() {
   );
 
   return (
-    <group position={[0, KEYBOARD_Y, 0]}>
+    <group ref={rootRef} position={[0, KEYBOARD_Y, 0]}>
       {KEYBOARD_LAYOUT.keys.map((k, i) => {
         const isBlack = k.isBlack;
         const customMat = whiteKeyMaterials[i];

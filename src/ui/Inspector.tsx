@@ -303,7 +303,81 @@ function NoteColorControls() {
           ))}
         </SubGroup>
       )}
+      <BoundSliderRow label={t('coloring.blackKeyDarkness')} settingKey="noteBlackKeyDarkness" min={0} max={1} step={0.01} />
     </>
+  )
+}
+
+// ── Pitch labels (notes / keys): naming selects ──────────────────────
+function PitchLabelRows({ target }: { target: 'note' | 'key' }) {
+  const { t } = useTranslation('inspector')
+  const formatKey = target === 'note' ? 'noteLabelFormat' : 'keyLabelFormat'
+  const accidentalKey = target === 'note' ? 'noteLabelAccidental' : 'keyLabelAccidental'
+  const format = useStore((st) => st.settings[formatKey])
+  const accidental = useStore((st) => st.settings[accidentalKey])
+  return (
+    <>
+      <SelectRow
+        label={t('labels.format')}
+        value={format}
+        options={[
+          { value: 'letter', label: t('labels.formats.letter') },
+          { value: 'letterOctave', label: t('labels.formats.letterOctave') },
+        ]}
+        onChange={(v) => atomicUpdate({ [formatKey]: v })}
+        defaultValue={def[formatKey]}
+        scopeKey={formatKey}
+      />
+      <SelectRow
+        label={t('labels.accidental')}
+        value={accidental}
+        options={[
+          { value: 'sharp', label: t('labels.accidentals.sharp') },
+          { value: 'flat', label: t('labels.accidentals.flat') },
+        ]}
+        onChange={(v) => atomicUpdate({ [accidentalKey]: v })}
+        defaultValue={def[accidentalKey]}
+        scopeKey={accidentalKey}
+      />
+    </>
+  )
+}
+
+function NoteLabelPositionRow() {
+  const { t } = useTranslation('inspector')
+  const position = useStore((st) => st.settings.noteLabelPosition)
+  return (
+    <SelectRow
+      label={t('labels.position')}
+      value={position}
+      options={[
+        { value: 'keyboard', label: t('labels.positions.keyboard') },
+        { value: 'center', label: t('labels.positions.center') },
+        { value: 'far', label: t('labels.positions.far') },
+      ]}
+      onChange={(v) => atomicUpdate({ noteLabelPosition: v })}
+      defaultValue={def.noteLabelPosition}
+      scopeKey="noteLabelPosition"
+    />
+  )
+}
+
+function KeyLabelsModeRow() {
+  const { t } = useTranslation('inspector')
+  const mode = useStore((st) => st.settings.keyLabelsMode)
+  return (
+    <SelectRow
+      label={t('labels.keys')}
+      value={mode}
+      options={[
+        { value: 'c', label: t('labels.keyModes.c') },
+        { value: 'white', label: t('labels.keyModes.white') },
+        { value: 'all', label: t('labels.keyModes.all') },
+      ]}
+      onChange={(v) => atomicUpdate({ keyLabelsMode: v })}
+      defaultValue={def.keyLabelsMode}
+      scopeKey="keyLabelsMode"
+    />
   )
 }
 
@@ -1213,6 +1287,16 @@ export function Inspector() {
             <BoundSliderRow label={t('row.minLength')} settingKey="noteMinLength" min={0} max={0.6} step={0.01} />
             <FallDirectionRow />
           </Section>
+          <Section title={t('section.noteLabels')} enabledKey="noteLabelsEnabled">
+            <PitchLabelRows target="note" />
+            <NoteLabelPositionRow />
+            <BoundSliderRow label={t('labels.size')} settingKey="noteLabelSize" min={0.3} max={2} step={0.01} />
+            <BoundColorRow label={t('row.color')} settingKey="noteLabelColor" />
+            <BoundSliderRow label={t('row.opacity')} settingKey="noteLabelOpacity" min={0} max={1} step={0.01} />
+            <BoundSliderRow label={t('labels.outlineWidth')} settingKey="noteLabelOutlineWidth" min={0} max={1} step={0.01} />
+            <BoundColorRow label={t('labels.outlineColor')} settingKey="noteLabelOutlineColor" />
+            <BoundSliderRow label={t('labels.offset')} settingKey="noteLabelOffset" min={0} max={1} step={0.01} />
+          </Section>
           <Section title={t('section.texture')} defaultOpen={false}>
             <TextureControls />
           </Section>
@@ -1343,6 +1427,15 @@ export function Inspector() {
             <BoundColorRow label={t('row.whiteKeys')} settingKey="whiteKeyColor" />
             <BoundColorRow label={t('row.blackKeys')} settingKey="blackKeyColor" />
             <BoundColorRow label={t('row.wood')} settingKey="woodColor" />
+          </Section>
+          <Section title={t('section.keyLabels')} enabledKey="keyLabelsEnabled">
+            <KeyLabelsModeRow />
+            <PitchLabelRows target="key" />
+            <BoundSliderRow label={t('labels.size')} settingKey="keyLabelSize" min={0.3} max={2} step={0.01} />
+            <BoundSliderRow label={t('row.opacity')} settingKey="keyLabelOpacity" min={0} max={1} step={0.01} />
+            <BoundColorRow label={t('labels.whiteKeyColor')} settingKey="keyLabelWhiteColor" />
+            <BoundColorRow label={t('labels.blackKeyColor')} settingKey="keyLabelBlackColor" />
+            <BoundSliderRow label={t('labels.keyOffset')} settingKey="keyLabelOffset" min={0} max={0.8} step={0.01} />
           </Section>
           <Section title={t('section.keyGlow')} enabledKey="keyGlowEnabled">
             <FollowColorRows followKey="keyGlowFollowNote" colorKey="keyGlowColor" />
