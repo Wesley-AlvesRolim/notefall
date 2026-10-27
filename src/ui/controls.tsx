@@ -919,7 +919,9 @@ export function Section({
             width="9"
             height="9"
             viewBox="0 0 12 12"
-            className={`transition-transform ${open ? 'rotate-90' : ''} ${isOn ? '' : 'opacity-0'}`}
+            // kept visible (dimmed with the title) while the feature is off, so
+            // the title doesn't float without its chevron
+            className={`transition-transform ${open ? 'rotate-90' : ''} ${isOn ? '' : 'opacity-60'}`}
             aria-hidden
           >
             <path

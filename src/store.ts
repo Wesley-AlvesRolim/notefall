@@ -17,6 +17,7 @@ import {
 } from './notes/noteColor'
 import { useShallow } from 'zustand/react/shallow'
 import type { ParsedSong } from './midi/types'
+import type { Accidental, PitchLabelFormat } from './midi/noteName'
 import type { SpeedPoint } from './midi/speedMap'
 import {
   type SettingsKeyframe,
@@ -395,6 +396,28 @@ export type Settings = {
   // Scene
   backgroundColor: string
   octaveLinesEnabled: boolean   // vertical B→C guide lines above the keyboard
+  // Pitch names on the falling notes (at the keyboard end) and on the keys.
+  noteLabelsEnabled: boolean
+  noteLabelFormat: PitchLabelFormat
+  noteLabelAccidental: Accidental
+  noteLabelSize: number
+  noteLabelColor: string
+  noteLabelOpacity: number
+  noteLabelOutlineWidth: number   // 0 = no outline, 1 = widest
+  noteLabelOutlineColor: string
+  noteLabelPosition: 'keyboard' | 'center' | 'far'   // which part of the note
+  noteLabelOffset: number   // world units from that end, toward the middle
+  keyLabelsEnabled: boolean
+  keyLabelsMode: 'c' | 'white' | 'all'   // which keys carry a label
+  keyLabelFormat: PitchLabelFormat
+  keyLabelAccidental: Accidental
+  keyLabelSize: number
+  keyLabelOpacity: number
+  keyLabelOffset: number   // world units from the key's front edge (black: its flat top)
+  keyLabelWhiteColor: string
+  keyLabelBlackColor: string
+  // Darkens black-key notes (0 = off, 1 = black), every material.
+  noteBlackKeyDarkness: number
   // Project-level image displayed behind the 3D scene. The source bytes
   // live in the standalone stage-background asset store; these settings
   // only describe how that asset is presented. They are deliberately not
@@ -683,6 +706,26 @@ export const defaultSettings: Settings = {
   bloomSmoothing: 0.4,
   backgroundColor: '#05060a',
   octaveLinesEnabled: true,
+  noteLabelsEnabled: false,
+  noteLabelFormat: 'letter',
+  noteLabelAccidental: 'sharp',
+  noteLabelSize: 1,
+  noteLabelColor: '#ffffff',
+  noteLabelOpacity: 0.9,
+  noteLabelOutlineWidth: 0.6,
+  noteLabelOutlineColor: '#000000',
+  noteLabelPosition: 'keyboard',
+  noteLabelOffset: 0,
+  keyLabelsEnabled: false,
+  keyLabelsMode: 'c',
+  keyLabelFormat: 'letterOctave',
+  keyLabelAccidental: 'sharp',
+  keyLabelSize: 1,
+  keyLabelOpacity: 0.85,
+  keyLabelOffset: 0.06,
+  keyLabelWhiteColor: '#2b2b2b',
+  keyLabelBlackColor: '#d1d1d1',
+  noteBlackKeyDarkness: 0,
   backgroundImageFit: 'cover',
   backgroundImageOpacity: 1,
   backgroundImageScale: 1,

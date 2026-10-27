@@ -242,6 +242,14 @@ export const ANIMATABLE_NUMBER_KEYS = [
   ...HIT_LINE_GRADIENT_POS_KEYS,
   'noteGradientSoftness',
   'hitLineGradientSoftness',
+  'noteLabelSize',
+  'noteLabelOpacity',
+  'keyLabelSize',
+  'keyLabelOpacity',
+  'noteLabelOutlineWidth',
+  'noteLabelOffset',
+  'keyLabelOffset',
+  'noteBlackKeyDarkness',
 ] as const satisfies readonly (keyof Settings)[]
 
 export const ANIMATABLE_COLOR_KEYS = [
@@ -260,6 +268,10 @@ export const ANIMATABLE_COLOR_KEYS = [
   'blackKeyColor',
   'woodColor',
   'keyGlowColor',
+  'noteLabelColor',
+  'noteLabelOutlineColor',
+  'keyLabelWhiteColor',
+  'keyLabelBlackColor',
 ] as const satisfies readonly (keyof Settings)[]
 
 /** Vec3 tuple keys — interpolated component-wise. */

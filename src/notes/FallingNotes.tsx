@@ -39,6 +39,15 @@ import {
 import { NoteLookResources } from './looks/noteLookResources'
 import { NoteColorResolver, createGradientUniforms, noteGradient, writeGradientUniforms } from './noteColor'
 import { MergeData, type MergeNote } from './looks/merge'
+import {
+  createLabelMesh,
+  labelAtlas,
+  noteLabelHeight,
+  noteLabelMinLength,
+  noteLabelMinLengths,
+  LABEL_CELL_ASPECT,
+  type LabelMesh,
+} from './pitchLabels'
 
 const MAX_INSTANCES = 4096
 // Texture-phase wrap period (see the wrap in the useFrame). A power of
@@ -204,6 +213,10 @@ const FALLING_NOTES_KEYS = [
   'noteTextureScale',
   'noteTextureVariation',
   'noteWidthScale',
+  'noteLabelsEnabled',
+  'noteLabelFormat',
+  'noteLabelAccidental',
+  'noteLabelPosition',
   'trackColors',
   'transpose',
 ] as const
@@ -290,13 +303,16 @@ export function FallingNotes() {
     a.setUsage(THREE.DynamicDrawUsage)
     return a
   }, [tints])
-  // Per-instance black-key flag (the 2D look's key split).
+  // Per-instance black-key flag (black-key darkness, the 2D look's key split).
   const blacks = useMemo(() => new Float32Array(MAX_INSTANCES), [])
   const blackAttr = useMemo(() => {
     const a = new THREE.InstancedBufferAttribute(blacks, 1)
     a.setUsage(THREE.DynamicDrawUsage)
     return a
   }, [blacks])
+  // Per-instance key index (0..87, transpose applied), for the pitch labels.
+  const labelKeys = useMemo(() => new Int16Array(MAX_INSTANCES), [])
+  const labelMinLen = useMemo(() => new Float32Array(KEY_COUNT), [])
   // Maps the per-frame instance slot back to the song's note id. Click
   // handling reads from this; useFrame writes it.
   const instanceToNoteId = useRef<number[]>([])
@@ -417,6 +433,7 @@ export function FallingNotes() {
         u2dWhiten: { value: 0 },
         u2dWhitenStart: { value: 1 },
         u2dKeySplit: { value: 0 },
+        uBlackDark: { value: 0 },
         u2dShimmer: { value: 0 },
         u2dShimmerGain: { value: 1 },
         u2dShimmerCell: { value: 1 },
@@ -542,6 +559,84 @@ export function FallingNotes() {
     }
   }, [material])
 
+  // One label per note, fixed to the note (it sinks into the hit line with
+  // it): at its keyboard end, middle or far end, fitted to the note width,
+  // hidden when the note is shorter than the label.
+  const labelColor = useMemo(() => new THREE.Color(), [])
+  const writeNoteLabels = (
+    labels: LabelMesh,
+    count: number,
+    rs: ReturnType<typeof getResolvedSettings>,
+    noteZ: number,
+    hitY: number,
+  ) => {
+    const atlas = labelAtlas(settings.noteLabelFormat, settings.noteLabelAccidental)
+    const u = labels.material.uniforms
+    u.uAtlas.value = atlas.texture
+    const outline = Math.min(Math.max(rs.noteLabelOutlineWidth, 0), 1)
+    u.uOutline.value = outline
+    labelColor.set(rs.noteLabelOutlineColor).convertLinearToSRGB()
+    u.uOutlineColor.value.set(labelColor.r, labelColor.g, labelColor.b)
+    u.uClipY.value = hitY
+    labelColor.set(rs.noteLabelColor).convertLinearToSRGB()
+    const position = settings.noteLabelPosition
+    const offset = Math.max(rs.noteLabelOffset, 0)
+    const opacity = Math.min(Math.max(rs.noteLabelOpacity, 0), 1)
+    const m = meshRef.current!.instanceMatrix.array
+    const out = labels.mesh.instanceMatrix.array as Float32Array
+    let n = 0
+    for (let i = 0; i < count; i++) {
+      const k = labelKeys[i]
+      if (k < 0 || k >= KEY_COUNT) continue
+      const x = m[i * 16 + 12]
+      const centerY = m[i * 16 + 13]
+      const width = sizes[i * 2]
+      const length = sizes[i * 2 + 1]
+      const h = noteLabelHeight(atlas, k, width, rs.noteLabelSize, outline)
+      // notes are drawn at least noteLabelMinLength long; only a same-key
+      // clip (liquid merge) or a dying ghost can still be shorter
+      if (length < noteLabelMinLength(h) * 0.99) continue
+      // keyboard end = bottom when falling, also bottom when rising (the
+      // trail grows up from the keys)
+      const room = (length - h) / 2
+      const y =
+        position === 'center'
+          ? centerY
+          : centerY + (position === 'far' ? 1 : -1) * (room - Math.min(offset, room))
+      const w = h * LABEL_CELL_ASPECT
+      const o = n * 16
+      out[o] = w; out[o + 1] = 0; out[o + 2] = 0; out[o + 3] = 0
+      out[o + 4] = 0; out[o + 5] = h; out[o + 6] = 0; out[o + 7] = 0
+      out[o + 8] = 0; out[o + 9] = 0; out[o + 10] = 1; out[o + 11] = 0
+      out[o + 12] = x; out[o + 13] = y; out[o + 14] = noteZ + 0.002; out[o + 15] = 1
+      labels.glyphs[n] = k
+      labels.alphas[n] = opacity * alphaAttrData[i]
+      labels.colors[n * 3] = labelColor.r
+      labels.colors[n * 3 + 1] = labelColor.g
+      labels.colors[n * 3 + 2] = labelColor.b
+      n++
+    }
+    labels.commit(n)
+  }
+
+  // Pitch labels: a child of the note mesh too (same parallax transform),
+  // drawn over the notes and under the hit line.
+  const labelMeshRef = useRef<LabelMesh | null>(null)
+  useEffect(() => {
+    const mesh = meshRef.current
+    if (!mesh) return
+    const labels = createLabelMesh(MAX_INSTANCES)
+    labels.mesh.renderOrder = 2.05
+    labels.mesh.visible = false
+    mesh.add(labels.mesh)
+    labelMeshRef.current = labels
+    return () => {
+      mesh.remove(labels.mesh)
+      labels.dispose()
+      labelMeshRef.current = null
+    }
+  }, [])
+
   useEffect(() => () => material.dispose(), [material])
 
   // Pattern generators, baked bump maps / realistic map sets and the silk
@@ -638,6 +733,18 @@ export function FallingNotes() {
     const fall = rs.fallDurationSec
     const widthScale = rs.noteWidthScale
     const minLength = Math.max(0.01, rs.noteMinLength)
+    // With labels on, a note is drawn at least as long as its label.
+    noteLabelMinLengths(
+      {
+        noteLabelsEnabled: settings.noteLabelsEnabled,
+        noteLabelFormat: settings.noteLabelFormat,
+        noteLabelAccidental: settings.noteLabelAccidental,
+        noteLabelSize: rs.noteLabelSize,
+        noteLabelOutlineWidth: rs.noteLabelOutlineWidth,
+      },
+      widthScale,
+      labelMinLen,
+    )
     // Sit in front of the 3D black keys (top face at z=BLACK_KEY_THICKNESS
     // = 0.09) so notes don't appear stuck inside them at the moment they
     // cross the hit line. Hit-line clipping happens per-pixel in the
@@ -652,6 +759,7 @@ export function FallingNotes() {
     mesh.scale.x = NOTE_PARALLAX_SCALE
     mesh.position.x = parallaxX(0)
     material.uniforms.uHitY.value = hitY
+    material.uniforms.uBlackDark.value = Math.min(Math.max(rs.noteBlackKeyDarkness, 0), 1)
     // Texture phase = ∫ animSpeed dt. `noteAnimSpeed{X,Y}` is a global
     // (non-animatable) value, so this is normally a steady ramp; we
     // still integrate rather than use the old `now() * animSpeed` form
@@ -908,6 +1016,9 @@ export function FallingNotes() {
       // and this collapses to `midiOffset + n.time`.
       const headFire = midiOffset + midiToTimeline(speedMap, n.time)
       const tailFire = midiOffset + midiToTimeline(speedMap, effEndMidi)
+      const idx = (n.midi + transpose) - MIDI_MIN
+      if (idx < 0 || idx >= KEY_COUNT) continue
+      const noteMinLength = Math.max(minLength, labelMinLen[idx])
       let topY: number
       let bottomY: number
 
@@ -922,7 +1033,7 @@ export function FallingNotes() {
         if (headT > downSpawnCutoff) break // sorted by time → no later notes are visible yet
         const headY = hitY + (headT / fall) * FALL_DISTANCE
         const tailY = hitY + (tailT / fall) * FALL_DISTANCE
-        const visualLength = Math.max(minLength, tailY - headY)
+        const visualLength = Math.max(noteMinLength, tailY - headY)
         bottomY = headY
         topY = bottomY + visualLength
         // Skip once the entire visual rect is at or below the hit line.
@@ -937,7 +1048,7 @@ export function FallingNotes() {
           hitY,
           fall,
           FALL_DISTANCE,
-          minLength,
+          noteMinLength,
         )
         if (rect === null) break // not yet emerged (sorted → no later notes either)
         if (rect.bottomY >= visibleTop) continue
@@ -949,8 +1060,6 @@ export function FallingNotes() {
       const length = topY - bottomY
       const centerY = (topY + bottomY) / 2
 
-      const idx = (n.midi + transpose) - MIDI_MIN
-      if (idx < 0 || idx >= KEY_COUNT) continue
       const key = KEYBOARD_LAYOUT.keys[idx]
       const width = key.width * widthScale
 
@@ -976,6 +1085,7 @@ export function FallingNotes() {
       noteIds[count] = n.id
       mergeKeys[count] = idx
       blacks[count] = key.isBlack ? 1 : 0
+      labelKeys[count] = idx
 
       const tint = resolveTint(n.midi + transpose, n.track, n.id)
       tints[count * 3] = tint[0]
@@ -998,7 +1108,16 @@ export function FallingNotes() {
       for (let i = 0; i < liveNotes.length; i++) {
         const ln = liveNotes[i]
         const noteDuration = (ln.endTime ?? liveNow) - ln.startTime
-        const rect = computeRisingRect(liveNow - ln.startTime, noteDuration, hitY, fall, FALL_DISTANCE, minLength)
+        const idx = ln.midi - MIDI_MIN
+        if (idx < 0 || idx >= KEY_COUNT) continue
+        const rect = computeRisingRect(
+          liveNow - ln.startTime,
+          noteDuration,
+          hitY,
+          fall,
+          FALL_DISTANCE,
+          Math.max(minLength, labelMinLen[idx]),
+        )
         if (rect === null) continue
         if (rect.bottomY >= visibleTop) continue
         if (rect.topY <= hitY) continue
@@ -1008,8 +1127,6 @@ export function FallingNotes() {
         const length = topY - bottomY
         const centerY = (topY + bottomY) / 2
 
-        const idx = ln.midi - MIDI_MIN
-        if (idx < 0 || idx >= KEY_COUNT) continue
         const key = KEYBOARD_LAYOUT.keys[idx]
         const width = key.width * widthScale
 
@@ -1033,6 +1150,7 @@ export function FallingNotes() {
         noteIds[count] = -1
         mergeKeys[count] = idx
         blacks[count] = key.isBlack ? 1 : 0
+        labelKeys[count] = idx
         // Live notes have no track / id.
         const liveTint = resolveTint(ln.midi, undefined)
         tints[count * 3] = liveTint[0]
@@ -1074,6 +1192,7 @@ export function FallingNotes() {
       noteIds[count] = -1 // not editable / not selectable
       mergeKeys[count] = -1 // fades on its own, never fuses
       blacks[count] = isBlackKey(d.midi) ? 1 : 0
+      labelKeys[count] = d.midi - MIDI_MIN
       // Preserve the deleted note's track tint so the fade-out reads
       // as "this exact note is dissolving" instead of flashing back
       // to the global noteColor for its final 0.12s.
@@ -1135,6 +1254,11 @@ export function FallingNotes() {
     alphaAttr.needsUpdate = true
     tintAttr.needsUpdate = true
     blackAttr.needsUpdate = true
+    const labels = labelMeshRef.current
+    if (labels) {
+      labels.mesh.visible = settings.noteLabelsEnabled
+      if (settings.noteLabelsEnabled) writeNoteLabels(labels, count, rs, noteZ, hitY)
+    }
     const glow = glowMeshRef.current
     if (glow) {
       glow.visible = settings.noteMaterial === 'sprite' && rs.note2dGlow > 0

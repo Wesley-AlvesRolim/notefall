@@ -15,7 +15,9 @@
     "background": "背景",
     "view": "表示",
     "falling": "落下",
-    "style": "スタイル"
+    "style": "スタイル",
+    "noteLabels": "音名（ノート）",
+    "keyLabels": "音名（鍵盤）"
   },
   "camera": {
     "distance": "距離",
@@ -356,7 +358,8 @@
     "baseColorHint": "ライブ演奏と、色を設定していないトラックに使われます。",
     "randomNotesHint": "ランダム配色には合わせる単一の色がないため、ラインは自身の色を使います。",
     "type": "種類",
-    "solidColor": "単色"
+    "solidColor": "単色",
+    "blackKeyDarkness": "黒鍵ノートの暗さ"
   },
   "tab": {
     "label": "設定の区分",
@@ -380,5 +383,36 @@
   "scope": {
     "wholeSong": "曲全体",
     "wholeSongTooltip": "この設定はピンに保存できません。変更すると選択中のピンだけでなく曲全体が変わります。"
+  },
+  "labels": {
+    "format": "表記",
+    "formats": {
+      "letter": "音名 (C)",
+      "letterOctave": "オクターブ付き (C4)"
+    },
+    "accidental": "黒鍵",
+    "accidentals": {
+      "sharp": "シャープ (C♯)",
+      "flat": "フラット (D♭)"
+    },
+    "size": "サイズ",
+    "keys": "表示する鍵",
+    "keyModes": {
+      "c": "C のみ",
+      "white": "白鍵",
+      "all": "すべて"
+    },
+    "position": "位置",
+    "positions": {
+      "keyboard": "鍵盤側の端",
+      "center": "中央",
+      "far": "反対側の端"
+    },
+    "offset": "端からの距離",
+    "outlineWidth": "縁取りの太さ",
+    "outlineColor": "縁取りの色",
+    "whiteKeyColor": "白鍵上の色",
+    "blackKeyColor": "黒鍵上の色",
+    "keyOffset": "手前からの距離"
   }
 }
