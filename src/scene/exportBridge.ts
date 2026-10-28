@@ -41,3 +41,16 @@ export function registerR3FStateGetter(get: () => RootState): () => void {
 export function getR3FState(): RootState | null {
   return activeStateGetter?.() ?? null
 }
+
+/**
+ * Frame rate of the running offline export, or `null` in live preview. The hands' motion blur sizes its shutter window
+ * from this (1 / fps of song time per exported frame) instead of the preview's nominal 1/60 s, so the exported video
+ * has physically consistent blur. Never derived from a real frame delta.
+ */
+let exportFps: number | null = null
+export function setExportFps(fps: number | null): void {
+  exportFps = fps && fps > 0 ? fps : null
+}
+export function getExportFps(): number | null {
+  return exportFps
+}

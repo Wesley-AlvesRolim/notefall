@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { isLinearTarget } from '../scene/linearTarget'
 import { useFrame } from '@react-three/fiber'
 import { useSettingsSlice } from '../store'
 
@@ -311,7 +312,7 @@ function createBatch(capacity: number, fragmentShader: string, uniforms: Record<
   // Bloom renders the scene into a linear target, bloom off straight onto
   // the sRGB canvas — pick the matching output transform per draw.
   mesh.onBeforeRender = (renderer) => {
-    material.uniforms.uLinearTarget.value = renderer.getRenderTarget() ? 1 : 0
+    material.uniforms.uLinearTarget.value = isLinearTarget(renderer.getRenderTarget()) ? 1 : 0
   }
   const attrs = [pos, shape, color, extra]
   /** Flag the first `n` instances for upload (the rest of the buffer is stale and not drawn). */

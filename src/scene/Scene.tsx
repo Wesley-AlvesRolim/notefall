@@ -23,6 +23,7 @@ const SCENE_CONTENTS_KEYS = [
   'cameraLookAt',
   'cameraPos',
   'flashEnabled',
+  'handsEnabled',
   'keyboardScreenY',
   'notesEnabled',
 ] as const
@@ -39,6 +40,7 @@ import { FallingNotes } from '../notes/FallingNotes'
 import { LandingFlashes } from '../notes/LandingFlashes'
 import { HitParticles } from '../notes/HitParticles'
 import { HitLine } from '../notes/HitLine'
+import { Hands, HandsBlurComposerPass } from '../hands/Hands'
 import { KEYBOARD_Y, KEYBOARD_LAYOUT, NOTE_HIT_Y } from '../keyboard/layout'
 import { audioEngine } from '../audio/engine'
 import { pauseSong, playSong, togglePlayback } from '../audio/playback'
@@ -91,6 +93,7 @@ export function Scene() {
       {!highFps && <ThrottledTicker intervalMs={PREVIEW_FRAME_INTERVAL_MS} />}
       {s.bloomEnabled && (
         <EffectComposer>
+          <HandsBlurComposerPass />
           <Bloom
             // @react-three/postprocessing types the ref as
             // `typeof BloomEffect` (the class) instead of an instance —
@@ -212,6 +215,7 @@ function SceneContents({ recState }: { recState: 'idle' | 'recording' }) {
       {s.flashEnabled && <LandingFlashes />}
       <HitParticles />
       <HitLine />
+      {s.handsEnabled && <Hands />}
     </>
   )
 }

@@ -2,7 +2,7 @@ import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
 import { VirtualClock, resetActiveClock, setActiveClock } from '../audio/clock'
 import { audioEngine } from '../audio/engine'
-import { getR3FState } from '../scene/exportBridge'
+import { getR3FState, setExportFps } from '../scene/exportBridge'
 import { AudioRenderAborted, VideoRenderAborted } from './errors'
 import { renderSongAudio } from './renderAudio'
 import { MAX_ENCODE_QUEUE, raceWithAbort, yieldToEventLoop } from './async'
@@ -98,6 +98,7 @@ export async function renderSongVideo(
   onProgress?.({ phase: 'preparing' })
 
   const restoreScene = enterSceneExportMode(r3f, width, height)
+  setExportFps(fps) // nominal frame duration for the hands' motion blur
   const clock = new VirtualClock()
   setActiveClock(clock)
   audioEngine.beginExportPlayback()
@@ -263,6 +264,7 @@ export async function renderSongVideo(
       /* ignore */
     }
     resetActiveClock()
+    setExportFps(null)
     restoreScene()
   }
 }

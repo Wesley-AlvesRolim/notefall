@@ -17,7 +17,8 @@
     "falling": "落下",
     "style": "スタイル",
     "noteLabels": "音名（ノート）",
-    "keyLabels": "音名（鍵盤）"
+    "keyLabels": "音名（鍵盤）",
+    "hands": "手（アルファ版）"
   },
   "camera": {
     "distance": "距離",
@@ -122,7 +123,11 @@
     "reverbDamping": "吸音",
     "reverbHiCut": "高域カット（Hz）",
     "reverbLowCut": "低域カット（Hz）",
-    "preDelay": "残響までの遅延（ms）"
+    "preDelay": "残響までの遅延（ms）",
+    "handsHumanize": "人間らしさ",
+    "handsFlashLight": "フラッシュの照り返し",
+    "handsMotionBlur": "モーションブラー",
+    "handsBlurSamples": "ブラーのサンプル数（上限）"
   },
   "particleBlending": {
     "alpha": "通常",
@@ -414,5 +419,8 @@
     "whiteKeyColor": "白鍵上の色",
     "blackKeyColor": "黒鍵上の色",
     "keyOffset": "手前からの距離"
+  },
+  "hands": {
+    "hint": "試験機能：読み込んだ曲を仮想の手が鍵盤で弾きます。位置や指使いは音符から推定するため、不自然な動きが出ることがあります。速い曲や音の多い曲では、鍵に届かない、ありえない動きになるなどの破綻が起きやすくなります。"
   }
 }

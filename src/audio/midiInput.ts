@@ -1,4 +1,5 @@
 import * as Tone from 'tone'
+import { devNoAudio } from '../dev/mode'
 import { audioEngine } from './engine'
 import { markLivePlay } from '../usage'
 
@@ -186,6 +187,7 @@ export const midiInput = new MidiInputManager()
 export async function ensureAudioReady(
   onProgress?: (loaded: number, total: number) => void,
 ): Promise<boolean> {
+  if (devNoAudio()) return true // dev "No audio": nothing to start or load
   if (Tone.getContext().state !== 'running') {
     try {
       await Tone.start()

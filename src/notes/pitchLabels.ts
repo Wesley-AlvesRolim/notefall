@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { isLinearTarget } from '../scene/linearTarget'
 import { KEYBOARD_LAYOUT, KEY_COUNT, MIDI_MIN } from '../keyboard/layout'
 import { pitchLabel, type Accidental, type PitchLabelFormat } from '../midi/noteName'
 
@@ -203,7 +204,7 @@ export function createLabelMesh(maxInstances: number) {
   mesh.raycast = () => {}
   mesh.count = 0
   mesh.onBeforeRender = (renderer) => {
-    material.uniforms.uLinearTarget.value = renderer.getRenderTarget() ? 1 : 0
+    material.uniforms.uLinearTarget.value = isLinearTarget(renderer.getRenderTarget()) ? 1 : 0
   }
   return {
     mesh,

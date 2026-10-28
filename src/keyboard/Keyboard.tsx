@@ -27,6 +27,7 @@ import {
   whiteKeyGeometryFor,
   WOOD_TOP_GAP,
 } from "./geometry";
+import { flashLights } from "./flashLights";
 import {
   ACTIVE_SHADOW_GROW,
   BLACK_KEY_BOUNDS,
@@ -264,8 +265,9 @@ export function Keyboard() {
   const sharedLightUniforms = useMemo<SharedLightUniforms>(
     () => ({
       uBlackBounds: { value: BLACK_KEY_BOUNDS },
-      uLightXYs: { value: new Float32Array(MAX_LIGHTS * 2) },
-      uLightIntensities: { value: new Float32Array(MAX_LIGHTS) },
+      // The arrays are shared with `flashLights` so the hands read the same slots.
+      uLightXYs: { value: flashLights.xy },
+      uLightIntensities: { value: flashLights.intensities },
       uLightStrength: { value: 0 },
       uBlackGlow: { value: new Float32Array(BLACK_KEY_COUNT) },
       uActiveShadowGrow: { value: ACTIVE_SHADOW_GROW },
@@ -276,7 +278,7 @@ export function Keyboard() {
       // Per-slot tint, packed as [r,g,b] × MAX_LIGHTS. Each slot can
       // carry its own (per-track) colour so simultaneously-active keys
       // from different tracks light the keyboard in different hues.
-      uLightColors: { value: new Float32Array(MAX_LIGHTS * 3) },
+      uLightColors: { value: flashLights.colors },
     }),
     [],
   );
@@ -703,11 +705,12 @@ export function Keyboard() {
           }
         }
         if (bestI < 0) {
-          for (let s = slot; s < MAX_LIGHTS; s++) lightIntensities[s] = 0;
+          for (let s = slot; s < MAX_LIGHTS; s++) lightIntensities[s] = flashLights.handIntensities[s] = 0;
           break;
         }
         claimed[bestI] = 1;
         lightIntensities[slot] = Math.min(1, bestVal);
+        flashLights.handIntensities[slot] = Math.min(1, glow[bestI]);
         lightXYs[slot * 2] = KEYBOARD_LAYOUT.keys[bestI].x;
         lightXYs[slot * 2 + 1] = WHITE_KEY_LENGTH;
         // Per-slot colour: the colour of this key's most recent note-on
@@ -727,9 +730,14 @@ export function Keyboard() {
       }
     } else {
       for (let slot = 0; slot < MAX_LIGHTS; slot++) {
-        lightIntensities[slot] = 0;
+        lightIntensities[slot] = flashLights.handIntensities[slot] = 0;
       }
     }
+
+    flashLights.strength = sharedLightUniforms.uLightStrength.value;
+    flashLights.boost = sharedLightUniforms.uLightBoost.value;
+    flashLights.falloffX = sharedLightUniforms.uFalloffX.value;
+    flashLights.falloffY = sharedLightUniforms.uFalloffY.value;
 
     const keyLabels = keyLabelsRef.current;
     if (keyLabels) {
