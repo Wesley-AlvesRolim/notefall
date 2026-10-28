@@ -407,6 +407,15 @@ export type Settings = {
   noteLabelOutlineColor: string
   noteLabelPosition: 'keyboard' | 'center' | 'far'   // which part of the note
   noteLabelOffset: number   // world units from that end, toward the middle
+  // Virtual piano hands (alpha, src/hands/). Not pin-animatable.
+  handsEnabled: boolean
+  // 0..1: scales the human-looking variation (sway, rebound, dynamics-driven motion); 0 = mechanical.
+  handsHumanize: number
+  // 0..2: how strongly the landing flashes light the hands (1 = as strong as on the keys, 0 = off).
+  handsFlashLight: number
+  // Temporal-supersampling motion blur on the hands only (src/hands/motionBlur.ts). Samples = cap; the actual count adapts to speed.
+  handsMotionBlur: boolean
+  handsBlurSamples: number
   keyLabelsEnabled: boolean
   keyLabelsMode: 'c' | 'white' | 'all'   // which keys carry a label
   keyLabelFormat: PitchLabelFormat
@@ -716,6 +725,11 @@ export const defaultSettings: Settings = {
   noteLabelOutlineColor: '#000000',
   noteLabelPosition: 'keyboard',
   noteLabelOffset: 0,
+  handsEnabled: false,
+  handsHumanize: 1,
+  handsFlashLight: 1,
+  handsMotionBlur: true,
+  handsBlurSamples: 8,
   keyLabelsEnabled: false,
   keyLabelsMode: 'c',
   keyLabelFormat: 'letterOctave',

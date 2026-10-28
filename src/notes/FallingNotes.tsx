@@ -1,5 +1,6 @@
 import { useMemo, useRef, useEffect } from 'react'
 import * as THREE from 'three'
+import { isLinearTarget } from '../scene/linearTarget'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useStore, useSettingsSlice, defaultSettings } from '../store'
 import { computeLiveVisibleTop, keyboardViewShift } from '../scene/visibleTop'
@@ -506,7 +507,7 @@ export function FallingNotes() {
     // Bloom on = the composer's linear target, off = the canvas (sRGB).
     mesh.onBeforeRender = (renderer, _scene, cam) => {
       const target = renderer.getRenderTarget()
-      material.uniforms.uLinearTarget.value = target ? 1 : 0
+      material.uniforms.uLinearTarget.value = isLinearTarget(target) ? 1 : 0
       // merge: gl_FragCoord → world on the note plane, for exactly the
       // camera + target of this draw
       if (material.defines.MERGE !== undefined) mergeData.updateCamera(cam, target, renderer, NOTE_PLANE_Z)
@@ -548,7 +549,7 @@ export function FallingNotes() {
     glow.visible = false
     glow.count = 0
     glow.onBeforeRender = (renderer) => {
-      material.uniforms.uLinearTarget.value = renderer.getRenderTarget() ? 1 : 0
+      material.uniforms.uLinearTarget.value = isLinearTarget(renderer.getRenderTarget()) ? 1 : 0
     }
     mesh.add(glow)
     glowMeshRef.current = glow

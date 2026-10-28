@@ -14,6 +14,7 @@ import {
   type LoadProgress,
 } from './sampler'
 import { now } from './clock'
+import { devNoAudio } from '../dev/mode'
 import {
   DEFAULT_VELOCITY_CURVE,
   clampVelocityCurve,
@@ -231,6 +232,8 @@ export class AudioEngine {
 
   async init(onProgress?: (p: LoadProgress) => void): Promise<void> {
     if (this.piano) return
+    // Dev "No audio": skip the ~60 MB sample load; the timeline / listeners still run (see tick()).
+    if (devNoAudio()) return
     if (this.initPromise) return this.initPromise
     this.initPromise = (async () => {
       try {
@@ -257,6 +260,11 @@ export class AudioEngine {
   }
 
   isReady(): boolean {
+    return this.piano !== null || devNoAudio()
+  }
+
+  /** True once the real sampler is loaded (isReady() is also true in dev no-audio mode). */
+  hasSampler(): boolean {
     return this.piano !== null
   }
 
@@ -562,7 +570,7 @@ export class AudioEngine {
    *   - audio is past its end (relPos ≥ duration): nothing to play
    */
   private startUserAudioFromCurrent(): void {
-    if (!this.userAudioBuffer) return
+    if (!this.userAudioBuffer || devNoAudio()) return
     const gain = this.ensureUserAudioGain()
     if (!gain) return
     const ctx = gain.context as AudioContext
@@ -696,7 +704,7 @@ export class AudioEngine {
 
   async play(): Promise<void> {
     if (!this.song) return
-    if (Tone.getContext().state !== 'running') {
+    if (!devNoAudio() && Tone.getContext().state !== 'running') {
       await Tone.start()
     }
     this.startedAt = now()
@@ -810,7 +818,7 @@ export class AudioEngine {
     // gets a normal note-on so listeners (particles / glow / flash) react,
     // and audio is started at the new context time so the user hears what
     // would be sounding at this moment in the song.
-    if (this.song && this.piano) {
+    if (this.song && (this.piano || devNoAudio())) {
       for (const n of this.song.notes) {
         if (n.time > midiClamped) break
         if (!newActiveIds.has(n.id)) continue
@@ -818,7 +826,7 @@ export class AudioEngine {
         const playedMidi = n.midi + this.transpose
         if (playedMidi < 0 || playedMidi > 127) continue
         const shaped = this.shapeVelocity(n.velocity)
-        const stopFn = this.piano.start(playedMidi, shaped, audioBase, `s${n.id}`)
+        const stopFn = this.piano ? this.piano.start(playedMidi, shaped, audioBase, `s${n.id}`) : noopStop
         const endTime = Math.min(n.time + n.duration, seekTrimEnd)
         this.active.set(n.id, { id: n.id, midi: playedMidi, endTime, stop: stopFn })
         this.emit({ type: 'on', midi: playedMidi, velocity: shaped, songTime: clamped, track: n.track, id: n.id })
@@ -910,10 +918,10 @@ export class AudioEngine {
    * Returns null if the piano isn't loaded yet.
    */
   triggerKey(midi: number, velocity = 0.75): { id: number; release: () => void } | null {
-    if (!this.piano) return null
+    if (!this.piano && !devNoAudio()) return null
     const id = this.liveIdCounter++
     const shaped = this.shapeVelocity(velocity)
-    const stopFn = this.piano.start(midi, shaped, undefined, `live${id}`)
+    const stopFn = this.piano ? this.piano.start(midi, shaped, undefined, `live${id}`) : noopStop
     const startTime = now()
     const note: LiveNote = { id, midi, velocity: shaped, startTime, endTime: null }
     this.liveNotes.push(note)
@@ -1105,7 +1113,7 @@ export class AudioEngine {
     // In silent mode (export pass) we operate without a sampler — the
     // tick still walks the song to fire listener events for the
     // visual layer, but no audio is scheduled.
-    if (!this.silent && !this.piano) return
+    if (!this.silent && !this.piano && !devNoAudio()) return
     if (!this.silent && this.piano) {
       // Some browsers suspend the AudioContext on background tabs even with
       // sources active; nudge it back to running so scheduled notes still fire.

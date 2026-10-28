@@ -1442,6 +1442,13 @@ export function Inspector() {
             <BoundSliderRow label={t('row.glowIntensity')} settingKey="keyGlowIntensity" min={0} max={5} step={0.05} />
             <BoundSliderRow label={t('row.glowDecay')} settingKey="keyGlowDecay" min={0.05} max={2} step={0.01} />
           </Section>
+          <Section title={t('section.hands')} enabledKey="handsEnabled">
+            <p className="px-2 pb-1 text-[10px] leading-snug text-neutral-500">{t('hands.hint')}</p>
+            <BoundSliderRow label={t('row.handsHumanize')} settingKey="handsHumanize" min={0} max={1} step={0.01} />
+            <BoundSliderRow label={t('row.handsFlashLight')} settingKey="handsFlashLight" min={0} max={2} step={0.05} />
+            <BoundSwitchRow label={t('row.handsMotionBlur')} settingKey="handsMotionBlur" />
+            <BoundSliderRow label={t('row.handsBlurSamples')} settingKey="handsBlurSamples" min={2} max={16} step={1} />
+          </Section>
         </TabPanel>
 
         <TabPanel title={t('tab.sound')} active={tab === 'sound'}>

@@ -17,7 +17,8 @@
     "falling": "Falling Notes",
     "style": "Style",
     "noteLabels": "Note Names",
-    "keyLabels": "Key Names"
+    "keyLabels": "Key Names",
+    "hands": "Hands (alpha)"
   },
   "camera": {
     "distance": "Distance",
@@ -122,7 +123,11 @@
     "reverbDamping": "Damping",
     "reverbHiCut": "Hi Cut (Hz)",
     "reverbLowCut": "Low Cut (Hz)",
-    "preDelay": "Pre-Delay (ms)"
+    "preDelay": "Pre-Delay (ms)",
+    "handsHumanize": "Humanize",
+    "handsFlashLight": "Flash light",
+    "handsMotionBlur": "Motion blur",
+    "handsBlurSamples": "Blur samples (max)"
   },
   "particleBlending": {
     "alpha": "Normal",
@@ -414,5 +419,8 @@
     "whiteKeyColor": "Color on white keys",
     "blackKeyColor": "Color on black keys",
     "keyOffset": "Distance from front"
+  },
+  "hands": {
+    "hint": "Experimental: virtual hands play the loaded song on the keyboard. Positions and fingering are estimated from the notes, so expect mistakes. Fast or dense pieces are likely to show missed keys and impossible movements."
   }
 }
