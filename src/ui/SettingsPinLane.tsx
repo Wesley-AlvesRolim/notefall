@@ -6,7 +6,7 @@ import { midiToTimeline, timelineToMidi, type SpeedMap } from '../midi/speedMap'
 import type { SettingsKeyframe } from '../midi/settingsKeyframes'
 
 /**
- * Timeline "pins" strip — modelled on `SpeedAutomationLane`, but a
+ * Timeline "keyframes" strip — modelled on `SpeedAutomationLane`, but a
  * thin VALUE-LESS marker track: each pin is a whole settings
  * snapshot, so there's no y-axis curve to draw — just diamond
  * markers at each pin's time. Sits as a fixed-height strip directly
@@ -28,8 +28,8 @@ import type { SettingsKeyframe } from '../midi/settingsKeyframes'
 
 // Fixed strip height — independent of the per-lane ratio settings
 // (those store keys are frozen). Tall enough for a comfortable
-// diamond hit target plus the "pins" label.
-export const PIN_LANE_HEIGHT = 16
+// diamond hit target.
+export const PIN_LANE_HEIGHT = 24
 
 /** Pin TL_audio time → editor display-time. */
 function audioToDisplay(
@@ -289,9 +289,9 @@ export function SettingsPinLane({
         // mirroring the note editor's empty-area crosshair.
         cursor: erasing ? 'not-allowed' : undefined,
       }}
-      className="relative cursor-crosshair overflow-hidden rounded bg-neutral-900/40"
-      aria-label={t('pin.laneAria')}
-      title={t('pin.laneTitle')}
+      className="relative cursor-crosshair overflow-hidden rounded-field bg-white/5"
+      aria-label={t('keyframe.laneAria')}
+      title={t('keyframe.laneTitle')}
     >
       {keyframes.map((kf, i) => {
         const displayT = audioToDisplay(kf.time, speedMap, midiOffsetSec)
@@ -306,7 +306,7 @@ export function SettingsPinLane({
             onPointerMove={onPinPointerMove}
             onPointerUp={onPinPointerUp}
             onPointerCancel={onPinPointerUp}
-            title={t('pin.markerTitle', { time: fmtTime(kf.time) })}
+            title={t('keyframe.markerTitle', { time: fmtTime(kf.time) })}
             className={
               // Note-editor parity: a pin behaves like a note body, so
               // hover/drag shows the four-way `move` cursor. While an
@@ -319,30 +319,19 @@ export function SettingsPinLane({
             }
             style={{ left: x, width: 12, height: 12, touchAction: 'none' }}
           >
-            {/* Diamond marker — a rotated square. Sky-toned to match
-                the rest of the timeline chrome; the DIAMOND shape (vs
-                the speed lane's round dots) is what distinguishes it.
-                The targeted pin brightens toward white, mirroring the
-                speed lane's selected-breakpoint treatment. */}
+            {/* Diamond marker — a rotated square (.nf-kf). The targeted
+                keyframe is filled ink, the others outlined. */}
             <div
+              aria-current={selected ? 'true' : undefined}
               className={
                 selected
-                  ? 'h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[1px] bg-white ring-2 ring-sky-300/40'
-                  : 'h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[1px] bg-sky-300/80 ring-1 ring-sky-300/20 hover:bg-white'
+                  ? 'absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] border-[1.5px] border-ink bg-ink'
+                  : 'absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] border-[1.5px] border-ink hover:bg-fill-selected'
               }
-              style={{ position: 'absolute', left: '50%', top: '50%' }}
             />
           </div>
         )
       })}
-      {/* Static label so the strip is identifiable when empty.
-          Click-through so it never blocks a marker. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 font-mono text-[9px] text-neutral-500"
-      >
-        {t('lane.pinsLabel')}
-      </div>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Button, Dialog, Heading, Modal, ModalOverlay, ProgressBar } from 'react-aria-components'
+import { Button, Dialog, Progress } from './kit'
 import type { TFunction } from 'i18next'
 
 export type ExportProgressState = {
@@ -35,8 +35,7 @@ function formatEta(seconds: number, t: TFunction<'dialogs'>): string {
  * actual render usually can't be stopped mid-flight, but the
  * resulting Blob is discarded so nothing lands on disk.
  *
- * Visual language matches `ConfirmModal` (translucent black card +
- * blurred backdrop) so it feels native to the rest of the UI.
+ * Built on the kit Dialog like every other dialog.
  */
 export function ExportProgressModal({
   state,
@@ -51,61 +50,31 @@ export function ExportProgressModal({
   const pct = state ? Math.max(0, Math.min(100, Math.floor(state.progress * 100))) : 0
 
   return (
-    <ModalOverlay
+    <Dialog
       isOpen={state !== null}
-      isDismissable={false}
-      isKeyboardDismissDisabled
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm data-[entering]:animate-in data-[entering]:fade-in data-[entering]:duration-150 data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:duration-100"
+      dismissable={false}
+      role="alertdialog"
+      width={420}
+      title={state?.title ?? ''}
+      actions={
+        <Button autoFocus onPress={onCancel}>
+          {t('progress.cancel')}
+        </Button>
+      }
     >
-      <Modal className="outline-none data-[entering]:animate-in data-[entering]:zoom-in-95 data-[entering]:duration-150">
-        <Dialog
-          role="alertdialog"
-          className="flex w-80 flex-col gap-4 rounded-md bg-black/55 p-4 shadow-lg ring-1 ring-white/10 backdrop-blur-md outline-none"
-        >
-          <div className="flex flex-col gap-1.5">
-            <Heading slot="title" className="text-sm font-medium text-neutral-100">
-              {state?.title ?? ''}
-            </Heading>
-            <p className="text-[11px] leading-relaxed text-neutral-400">
-              {t('progress.note')}
-            </p>
-          </div>
-          <ProgressBar
-            value={pct}
-            minValue={0}
-            maxValue={100}
-            aria-label={state?.phaseLabel ?? ''}
-            className="flex flex-col gap-1.5"
-          >
-            <div className="flex items-baseline justify-between">
-              <span className="text-[11px] text-neutral-300">{state?.phaseLabel ?? ''}</span>
-              <span className="font-mono text-[11px] tabular-nums text-neutral-400">
-                {pct}%
-              </span>
-            </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
-              <div
-                className="h-full rounded-full bg-sky-500 transition-[width] duration-100"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <div className="flex items-baseline justify-end text-[10px] tabular-nums text-neutral-500">
-              {state?.etaSeconds != null
-                ? t('progress.eta', { eta: formatEta(state.etaSeconds, t) })
-                : ' '}
-            </div>
-          </ProgressBar>
-          <div className="flex justify-end">
-            <Button
-              autoFocus
-              onPress={onCancel}
-              className="rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-200 outline-none hover:border-neutral-600 focus-visible:border-sky-500"
-            >
-              {t('progress.cancel')}
-            </Button>
-          </div>
-        </Dialog>
-      </Modal>
-    </ModalOverlay>
+      <div className="grid gap-2">
+        <div className="flex items-baseline justify-between">
+          <span>{state?.phaseLabel ?? ''}</span>
+          <span className="tabular-nums text-ink-muted">{pct}%</span>
+        </div>
+        <Progress value={pct / 100} label={state?.phaseLabel ?? ''} />
+        <div className="min-h-[18px] text-right tabular-nums text-ink-muted">
+          {state?.etaSeconds != null && pct >= 5
+            ? t('progress.eta', { eta: formatEta(state.etaSeconds, t) })
+            : ' '}
+        </div>
+      </div>
+      <p className="m-0 text-ink-muted">{t('progress.note')}</p>
+    </Dialog>
   )
 }

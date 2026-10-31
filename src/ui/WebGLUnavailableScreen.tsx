@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
+import { Button, LogoMark } from './kit'
 import { MonitorIcon } from './icons'
 
 /**
@@ -17,51 +18,39 @@ import { MonitorIcon } from './icons'
 export function WebGLUnavailableScreen() {
   const { t } = useTranslation('screens')
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-neutral-950 px-6 text-center text-neutral-200">
-      <span className="flex items-center gap-2">
-        <img src="/favicon.svg" alt="" className="h-6 w-6" draggable={false} />
-        <span className="text-lg font-semibold tracking-wide">notefall</span>
-      </span>
+    <div className="flex h-full w-full items-center justify-center overflow-auto bg-canvas px-6 py-8 text-ink">
+      <div className="nf-glass-strong grid w-full max-w-[460px] justify-items-center gap-3 rounded-panel px-6 py-8 text-center">
+        <span className="flex items-center gap-2 text-title">
+          <LogoMark className="h-6 w-6" />
+          notefall
+        </span>
+        <MonitorIcon className="mt-2 h-10 w-10 text-ink-muted" />
+        <h1 className="m-0 text-display">{t('webgl.title')}</h1>
+        <p className="m-0 max-w-sm text-ink-muted">{t('webgl.body')}</p>
 
-      <MonitorIcon className="h-10 w-10 text-amber-400/80" />
+        <div className="mt-2 grid w-full gap-1.5 rounded-field bg-fill-well px-4 py-3 text-left">
+          <p className="m-0 text-heading">{t('webgl.howToTitle')}</p>
+          <p className="m-0 text-ink-muted">
+            <span className="text-ink">{t('webgl.chromeLabel')}</span> {t('webgl.chromePath')}{' '}
+            <span className="text-ink">{t('webgl.chromeSetting')}</span>
+            {t('webgl.chromeAfter')}
+          </p>
+          <p className="m-0 text-ink-muted">
+            <span className="text-ink">{t('webgl.firefoxLabel')}</span> {t('webgl.firefoxPath')}{' '}
+            <span className="text-ink">{t('webgl.firefoxSetting')}</span>
+            {t('webgl.firefoxAfter')}
+          </p>
+          <p className="m-0 text-ink-muted">
+            <span className="text-ink">{t('webgl.safariLabel')}</span> {t('webgl.safariPath')}{' '}
+            <span className="text-ink">{t('webgl.safariSetting')}</span>
+            {t('webgl.safariAfter')}
+          </p>
+        </div>
 
-      <h1 className="text-base font-medium">{t('webgl.title')}</h1>
-      <p className="max-w-sm text-xs leading-relaxed text-neutral-400">
-        {t('webgl.body')}
-      </p>
-
-      <div className="mt-2 flex max-w-sm flex-col gap-1 rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-3 text-left text-[11px] leading-relaxed text-neutral-300">
-        <p className="font-medium text-neutral-100">{t('webgl.howToTitle')}</p>
-        <p className="text-neutral-400">
-          <span className="text-neutral-200">{t('webgl.chromeLabel')}</span> Settings →
-          System → enable{' '}
-          <span className="font-mono text-neutral-200">
-            {t('webgl.chromeSetting')}
-          </span>
-          , then restart the browser.
-        </p>
-        <p className="text-neutral-400">
-          <span className="text-neutral-200">{t('webgl.firefoxLabel')}</span> Settings →
-          General → Performance → enable{' '}
-          <span className="font-mono text-neutral-200">
-            {t('webgl.firefoxSetting')}
-          </span>
-          .
-        </p>
-        <p className="text-neutral-400">
-          <span className="text-neutral-200">{t('webgl.safariLabel')}</span> Develop menu →
-          enable{' '}
-          <span className="font-mono text-neutral-200">{t('webgl.safariSetting')}</span> (if shown).
-        </p>
+        <Button variant="primary" className="mt-1" onPress={() => window.location.reload()}>
+          {t('webgl.reload')}
+        </Button>
       </div>
-
-      <button
-        type="button"
-        onClick={() => window.location.reload()}
-        className="mt-1 rounded border border-sky-500/60 bg-sky-500/10 px-3 py-1.5 text-xs text-sky-200 outline-none hover:bg-sky-500/20 focus-visible:border-sky-300"
-      >
-        {t('webgl.reload')}
-      </button>
     </div>
   )
 }

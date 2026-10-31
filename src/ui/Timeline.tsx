@@ -27,6 +27,7 @@ import {
   VolumeLowIcon,
   VolumeMuteIcon,
 } from './icons'
+import { Button } from './kit'
 import { SettingsPinLane, PIN_LANE_HEIGHT } from './SettingsPinLane'
 import { resolveNoteTintAt } from '../midi/settingsKeyframes'
 import { NoteColorResolver, noteColoringDeps } from '../notes/noteColor'
@@ -58,11 +59,24 @@ import { useShallow } from 'zustand/react/shallow'
 // or drag pans the visible window; does NOT seek (seek lives on the
 // ruler + the canvas-overlay progress slider). Keeps the user
 // oriented in long songs while zoomed in for fine work.
+/** `--ink` token as an rgba() string for canvas chrome (fallback = the token's value). */
+function inkRgba(alpha: number): string {
+  let hex = '#f3f2ee'
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()
+    if (/^#[0-9a-f]{6}$/i.test(v)) hex = v
+  } catch {
+    /* no DOM — keep the fallback */
+  }
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
+}
+
 const MINIMAP_HEIGHT = 10
 // Time ruler — fine-grained scrub surface that maps to the visible
 // window. The full-song progress slider lives in the transport
 // overlay (SeekBar.tsx) and is no longer part of this row stack.
-const RULER_HEIGHT = 18
+const RULER_HEIGHT = 20
 // All lanes start the same height. Per-lane ratios (stored in
 // settings) skew this for the user — divider handles between adjacent
 // lane headers drag the ratio without changing the running total.
@@ -79,7 +93,7 @@ const ROW_GAP = 4
 // controls live here, mirroring DAW track layout. Lane clips and the
 // ruler / minimap sit to the right of this column so headers line up
 // vertically with their lane.
-const HEADER_WIDTH = 112
+const HEADER_WIDTH = 120
 
 /**
  * Pre-computed peaks → canvas. Repaints whenever peaks, dimensions,
@@ -361,20 +375,20 @@ function RulerCanvas({
     }
 
     // Minor ticks first (drawn under majors).
-    ctx.fillStyle = 'rgba(255,255,255,0.18)'
+    ctx.fillStyle = inkRgba(0.2)
     const firstMinor = Math.ceil(visStartAudio / minor) * minor
     for (let t = firstMinor; t <= visEndAudio + 1e-6; t += minor) {
       ctx.fillRect(audioToX(t), height - 4, 1, 4)
     }
     // Major ticks + labels.
-    ctx.fillStyle = 'rgba(255,255,255,0.55)'
-    ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace'
+    ctx.fillStyle = inkRgba(0.6)
+    ctx.font = '12px Geist, system-ui, sans-serif'
     ctx.textBaseline = 'top'
     const firstMajor = Math.ceil(visStartAudio / major) * major
     for (let t = firstMajor; t <= visEndAudio + 1e-6; t += major) {
       const x = audioToX(t)
       ctx.fillRect(x, height - 8, 1, 8)
-      ctx.fillText(formatRulerLabel(t, major), x + 3, 1)
+      ctx.fillText(formatRulerLabel(t, major), x + 4, 2)
     }
   }, [width, height, startTimeSec, pxPerSec, speedMap, midiOffsetSec])
   return (
@@ -506,7 +520,7 @@ function LaneContextMenu({
     <div
       ref={ref}
       role="menu"
-      className="fixed z-50 w-60 rounded-md border border-white/10 bg-neutral-900/95 p-1.5 text-xs text-neutral-200 shadow-xl backdrop-blur-md"
+      className="nf-glass-strong fixed z-50 w-60 rounded-panel p-1.5 text-body text-ink"
       style={{ left: pos.x, top: pos.y }}
       // Stop the surrounding lane / seek bar from receiving the
       // pointerdown that targets the menu (would otherwise start a
@@ -515,7 +529,7 @@ function LaneContextMenu({
       onContextMenu={(e) => e.preventDefault()}
     >
       <div
-        className="mb-1 truncate px-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-500"
+        className="mb-1 truncate px-2 pt-1 text-heading text-ink"
         title={titleText}
       >
         {titleText}
@@ -523,7 +537,7 @@ function LaneContextMenu({
       <button
         type="button"
         onClick={onToggleMute}
-        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-neutral-700/60"
+        className="flex w-full items-center gap-2 rounded-field px-2 py-1.5 text-left hover:bg-fill-hover"
       >
         {enabled ? (
           volume <= 0.4 ? (
@@ -538,8 +552,8 @@ function LaneContextMenu({
       </button>
       <div className="px-2 py-1.5">
         <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-neutral-400">{t('context.volume')}</span>
-          <span className="font-mono text-[11px] text-neutral-300">
+          <span className="text-ink-muted">{t('context.volume')}</span>
+          <span className="text-caption text-ink-muted">
             {formatDb(volume)}
           </span>
         </div>
@@ -555,12 +569,12 @@ function LaneContextMenu({
           <SliderTrack className="relative flex h-3 w-full cursor-pointer items-center">
             {({ state }) => (
               <>
-                <div className="relative h-1 w-full overflow-visible rounded-full bg-neutral-700">
+                <div className="relative h-1 w-full overflow-visible rounded-full bg-fill-track">
                   <div
                     className={
                       enabled
-                        ? 'h-full rounded-full bg-sky-500/80'
-                        : 'h-full rounded-full bg-neutral-500/60'
+                        ? 'h-full rounded-full bg-ink'
+                        : 'h-full rounded-full bg-ink-faint'
                     }
                     style={{ width: `${state.getThumbPercent(0) * 100}%` }}
                   />
@@ -568,7 +582,7 @@ function LaneContextMenu({
                       most often wants to land back at. */}
                   <div
                     aria-hidden
-                    className="absolute -top-0.5 h-2 w-px bg-white/50"
+                    className="absolute -top-0.5 h-2 w-px bg-ink-faint"
                     style={{ left: `${(1 / 1.5) * 100}%` }}
                   />
                 </div>
@@ -581,7 +595,7 @@ function LaneContextMenu({
       <button
         type="button"
         onClick={onReset}
-        className="flex w-full items-center rounded px-2 py-1.5 text-left text-neutral-300 hover:bg-neutral-700/60"
+        className="flex w-full items-center rounded-field px-2 py-1.5 text-left hover:bg-fill-hover"
       >
         {t('context.resetToUnity')}
       </button>
@@ -592,7 +606,7 @@ function LaneContextMenu({
             clearAudio()
             onClose()
           }}
-          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-rose-300 hover:bg-rose-900/30"
+          className="flex w-full items-center gap-2 rounded-field px-2 py-1.5 text-left text-danger hover:bg-fill-hover"
         >
           <CloseIcon className="h-2.5 w-2.5" /> {t('context.removeAudio')}
         </button>
@@ -629,11 +643,11 @@ function LaneHeader({
   return (
     <div
       style={{ height }}
-      className="relative flex flex-col justify-between rounded bg-neutral-900/60 px-2 py-1.5 ring-1 ring-white/5"
+      className="relative flex flex-col justify-between py-0.5 pr-1"
     >
       <div className="flex items-center overflow-hidden">
         <span
-          className={`truncate text-[11px] font-medium ${dimmed ? 'text-neutral-500' : 'text-neutral-200'}`}
+          className={`truncate text-body ${dimmed ? 'text-ink-faint' : 'text-ink-muted'}`}
           title={title}
         >
           {title}
@@ -651,12 +665,12 @@ function LaneHeader({
               onPointerDown={(e) => e.stopPropagation()}
               aria-label={muted ? t('lane.unmute') : t('lane.mute')}
               title={muted ? t('lane.unmute') : t('lane.mute')}
-              className={`flex h-4 w-4 items-center justify-center rounded ring-1 ring-white/10 hover:bg-neutral-700 ${muted ? 'bg-neutral-800 text-neutral-500' : 'bg-neutral-800 text-neutral-200'}`}
+              className={`nf-focus flex h-5 w-5 items-center justify-center rounded-field outline-none hover:bg-fill-hover ${muted ? 'text-ink-faint' : 'text-ink-muted'}`}
             >
               {muted ? (
-                <VolumeMuteIcon className="h-2.5 w-2.5" />
+                <VolumeMuteIcon className="h-3.5 w-3.5" />
               ) : (
-                <VolumeHighIcon className="h-2.5 w-2.5" />
+                <VolumeHighIcon className="h-3.5 w-3.5" />
               )}
             </button>
           ) : (
@@ -673,9 +687,9 @@ function LaneHeader({
               onContextMenu={onOpenMenu}
               aria-label={t('lane.options')}
               title={t('lane.options')}
-              className="flex h-4 w-4 items-center justify-center rounded text-neutral-400 hover:bg-neutral-700 hover:text-neutral-100"
+              className="nf-focus flex h-5 w-5 items-center justify-center rounded-field text-ink-muted outline-none hover:bg-fill-hover hover:text-ink"
             >
-              <EllipsisVerticalIcon className="h-2.5 w-2.5" />
+              <EllipsisVerticalIcon className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -763,7 +777,7 @@ function LaneDivider({
       style={{ height: ROW_GAP, touchAction: 'none' }}
       className="group relative cursor-ns-resize"
     >
-      <div className="pointer-events-none absolute inset-x-1 top-1/2 h-px -translate-y-1/2 bg-white/0 transition-colors group-hover:bg-white/40 group-active:bg-white/70" />
+      <div className="pointer-events-none absolute inset-x-1 top-1/2 h-px -translate-y-1/2 bg-transparent transition-colors group-hover:bg-ink-faint group-active:bg-ink-muted" />
     </div>
   )
 }
@@ -866,7 +880,7 @@ function SpeedAutomationLane({
     // Unity (1.0) reference line — quickly tells the user where
     // "no change" is on the y-axis.
     const unityY = speedToY(1, laneHeight, yRangeLog2, yCenterLog2)
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)'
+    ctx.strokeStyle = inkRgba(0.14)
     ctx.lineWidth = 1
     ctx.beginPath()
     ctx.moveTo(0, unityY + 0.5)
@@ -877,7 +891,7 @@ function SpeedAutomationLane({
     // points.length===0, `speedAt` returns 1 everywhere, so the
     // canvas just shows the unity line above and a flat curve at
     // the same height — fine.
-    ctx.strokeStyle = 'rgba(125,211,252,0.85)'
+    ctx.strokeStyle = inkRgba(0.85)
     ctx.lineWidth = 1.5
     ctx.beginPath()
     for (let x = 0; x < areaWidth; x++) {
@@ -1119,7 +1133,7 @@ function SpeedAutomationLane({
       onPointerUp={onDotPointerUp}
       onPointerCancel={onDotPointerUp}
       style={{ height: laneHeight, touchAction: 'none' }}
-      className="relative overflow-hidden rounded bg-neutral-900/40"
+      className="relative overflow-hidden rounded-field bg-white/5"
       aria-label={t('speed.automationAria')}
       title={t('speed.automationTitle')}
     >
@@ -1164,13 +1178,13 @@ function SpeedAutomationLane({
                 value: p.value.toFixed(2),
                 time: p.time.toFixed(2),
               })}
-              className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full bg-sky-300 ring-2 ring-sky-300/30 hover:bg-white active:cursor-grabbing"
+              className="absolute -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full bg-ink ring-2 ring-fill-selected hover:bg-ink active:cursor-grabbing"
               style={{ width: 8, height: 8, touchAction: 'none' }}
             />
             <div
               aria-hidden
-              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded bg-neutral-950/80 px-1 font-mono text-[9px] text-sky-200"
-              style={{ top: labelBelow ? 8 : -16 }}
+              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-field bg-canvas/80 px-1 text-caption text-ink"
+              style={{ top: labelBelow ? 8 : -18 }}
             >
               {p.value.toFixed(2)}×
             </div>
@@ -1277,7 +1291,7 @@ function SpeedAutomationLane({
             title={t('speed.curveTitle', {
               curvature: `${h.curvature >= 0 ? '+' : ''}${h.curvature.toFixed(2)}`,
             })}
-            className="absolute -translate-x-1/2 -translate-y-1/2 cursor-ns-resize rounded-full bg-white/35 ring-1 ring-white/20 hover:bg-white/70 active:bg-white"
+            className="absolute -translate-x-1/2 -translate-y-1/2 cursor-ns-resize rounded-full bg-ink-muted ring-1 ring-glass-edge hover:bg-ink active:bg-ink"
             style={{
               left: h.x,
               top: h.y,
@@ -1288,27 +1302,18 @@ function SpeedAutomationLane({
           />
         )
       })}
-      {/* Static "speed" label on the left so the lane is identifiable
-          even before the user adds any points. Click-through so the
-          underlying "add a point" gesture still fires. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1.5 top-0.5 font-mono text-[9px] text-neutral-500"
-      >
-        {t('lane.speedLabel')}
-      </div>
       {/* Y-axis bounds — show the current visible range so the user
           knows what wheel-zoom has set. Right-aligned so it doesn't
           fight with the "speed" label. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute right-1.5 top-0.5 font-mono text-[9px] text-neutral-500"
+        className="pointer-events-none absolute right-1.5 top-0.5 text-caption text-ink-faint"
       >
         {topSpeed.toFixed(2)}×
       </div>
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-0.5 right-1.5 font-mono text-[9px] text-neutral-500"
+        className="pointer-events-none absolute bottom-0.5 right-1.5 text-caption text-ink-faint"
       >
         {botSpeed.toFixed(2)}×
       </div>
@@ -1360,7 +1365,7 @@ function TrimHandle({
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/25 transition-colors group-hover:bg-white/60"
+        className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink-muted transition-colors group-hover:bg-ink"
         style={{ width: 3, height: pillHeight }}
       />
     </div>
@@ -1510,13 +1515,6 @@ export function Timeline() {
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [song, settingsKeyframes, baseNoteColor, baseTrackColors, noteColoring, speedMap, midiOffsetSec])
-  // Drop a pin at the live playhead (TL_audio = currentSongTime — the
-  // same axis a pin's `time` lives on). addKeyframe captures the
-  // resolved look there + selects the new pin (one undo entry).
-  const addPinAtPlayhead = () => {
-    if (!song) return
-    useStore.getState().addKeyframe(audioEngine.currentSongTime())
-  }
   // Visible window endpoints — collapse to the trimmed range so the
   // timeline reflects what will actually play / be exported. The
   // x-axis stays in NATURAL-MIDI-time (no speed-curve stretching);
@@ -2190,7 +2188,7 @@ export function Timeline() {
   }
 
   return (
-    <div className="relative flex w-full select-none" style={{ gap: ROW_GAP }}>
+    <div className="relative flex w-full select-none" style={{ gap: 10 }}>
       {/* Left track-header column — track names + mute controls per
           lane, FL-Studio-style. Heights mirror the right-column row
           stack 1:1 so each header aligns with its lane. Inter-header
@@ -2207,22 +2205,12 @@ export function Timeline() {
           <>
             <div style={{ height: ROW_GAP }} />
             <div
-              className="flex items-center justify-between gap-1 rounded bg-neutral-900/40 px-2"
+              className="flex items-center"
               style={{ height: PIN_LANE_HEIGHT }}
             >
-              <span className="font-mono text-[9px] text-neutral-400">
-                {t('lane.pins')}
+              <span className="truncate text-body text-ink-muted">
+                {t('lane.keyframes')}
               </span>
-              <button
-                type="button"
-                onClick={addPinAtPlayhead}
-                disabled={!song}
-                aria-label={t('pin.addAtPlayheadAria')}
-                title={t('pin.addAtPlayheadTitle')}
-                className="flex h-3.5 w-3.5 items-center justify-center rounded bg-sky-500/20 text-[11px] leading-none text-sky-200 outline-none hover:bg-sky-500/35 hover:text-sky-100 disabled:opacity-40"
-              >
-                +
-              </button>
             </div>
           </>
         )}
@@ -2311,8 +2299,8 @@ export function Timeline() {
             style={{ height: RULER_HEIGHT, touchAction: 'none' }}
             className={
               song
-                ? 'relative cursor-pointer overflow-hidden rounded bg-neutral-950'
-                : 'relative overflow-hidden rounded bg-neutral-950'
+                ? 'relative cursor-pointer overflow-hidden rounded-field bg-white/5'
+                : 'relative overflow-hidden rounded-field bg-white/5'
             }
             aria-label={t('ruler.seekAria')}
             title={song ? t('ruler.seekTitle') : undefined}
@@ -2343,7 +2331,7 @@ export function Timeline() {
                 onPointerDown={(e) => e.stopPropagation()}
                 aria-label={t('ruler.resetZoomAria')}
                 title={t('ruler.resetZoomTitle')}
-                className="absolute right-1 top-1/2 z-10 flex h-4 -translate-y-1/2 items-center rounded bg-neutral-800/90 px-1.5 font-mono text-[9px] font-medium text-neutral-300 outline-none hover:bg-neutral-700 hover:text-neutral-100"
+                className="absolute right-1 top-1/2 z-10 flex h-4 -translate-y-1/2 items-center nf-focus rounded-field bg-fill-field px-1.5 text-caption text-ink outline-none hover:bg-fill-selected"
               >
                 1×
               </button>
@@ -2377,7 +2365,7 @@ export function Timeline() {
           <div
             onContextMenu={(e) => openMenuAt('midi', e)}
             style={{ height: midiLaneH }}
-            className="group relative overflow-hidden rounded bg-neutral-900/40"
+            className="group relative overflow-hidden rounded-field bg-white/5"
           >
             {song && areaWidth > 0 && midiClipWidth > 0 && (
               <div
@@ -2385,16 +2373,12 @@ export function Timeline() {
                 onPointerMove={onMidiPointerMove}
                 onPointerUp={onMidiPointerUp}
                 onPointerCancel={onMidiPointerUp}
-                className="absolute top-0 cursor-grab rounded active:cursor-grabbing"
+                className="absolute top-0 cursor-grab rounded-field bg-fill-field shadow-[inset_0_0_0_1px_var(--glass-edge)] active:cursor-grabbing"
                 style={{
                   left: midiClipLeft,
                   width: midiClipWidth,
                   height: midiLaneH,
                   touchAction: 'none',
-                  background:
-                    midiOffsetSec > 0
-                      ? 'rgba(255,255,255,0.03)'
-                      : 'transparent',
                 }}
                 title={t('clip.syncTitle', { offset: midiOffsetSec.toFixed(2) })}
               >
@@ -2458,7 +2442,7 @@ export function Timeline() {
           {showAudioLane && (
             <div
               onContextMenu={(e) => openMenuAt('audio', e)}
-              className="group relative overflow-hidden rounded bg-neutral-900/40"
+              className="group relative overflow-hidden rounded-field bg-white/5"
               style={{ height: audioLaneH }}
             >
               {peaks && areaWidth > 0 && audioClipWidth > 0 && (
@@ -2467,7 +2451,7 @@ export function Timeline() {
                   onPointerMove={onAudioPointerMove}
                   onPointerUp={onAudioPointerUp}
                   onPointerCancel={onAudioPointerUp}
-                  className={`absolute top-0 cursor-grab rounded bg-sky-500/15 transition-opacity active:cursor-grabbing ${
+                  className={`absolute top-0 cursor-grab rounded-field bg-fill-field shadow-[inset_0_0_0_1px_var(--glass-edge)] transition-opacity active:cursor-grabbing ${
                     audioMuted ? 'opacity-30 grayscale' : ''
                   }`}
                   style={{
@@ -2484,7 +2468,7 @@ export function Timeline() {
                     height={audioLaneH}
                     pxPerSec={pxPerSec}
                     startInBufferSec={audioStartInBuffer}
-                    color="rgba(125, 211, 252, 0.85)"
+                    color={inkRgba(0.7)}
                   />
                   <TrimHandle
                     side="left"
@@ -2510,28 +2494,28 @@ export function Timeline() {
               {audioFileName && !audioLoading && (
                 <div
                   aria-hidden
-                  className="pointer-events-none absolute right-2 top-1 max-w-[60%] truncate text-[10px] font-medium text-sky-100/70"
+                  className="pointer-events-none absolute right-2 top-1 max-w-[60%] truncate text-caption text-ink-muted"
                   title={audioFileName}
                 >
                   {audioFileName}
                 </div>
               )}
               {audioLoading && (
-                <div className="flex h-full items-center justify-center text-[10px] text-neutral-400">
+                <div className="flex h-full items-center justify-center text-caption text-ink-muted">
                   {t('lane.decoding')}
                 </div>
               )}
               {audioEmpty && (
-                <div className="flex h-full flex-col items-center justify-center gap-1 rounded border border-dashed border-neutral-700/70 px-2 text-[10px] text-neutral-500">
-                  {audioError && <span className="text-center text-rose-300">{audioError}</span>}
+                <div className="flex h-full flex-col items-center justify-center gap-1 px-2 text-caption text-ink-faint">
+                  {audioError && <span className="text-center text-danger">{audioError}</span>}
                   <span className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void onAddAudio()}
-                      className="rounded bg-sky-500/15 px-2 py-0.5 text-[10px] font-medium text-sky-200 outline-none hover:bg-sky-500/25 hover:text-sky-100 focus-visible:ring-1 focus-visible:ring-sky-500"
+                    <Button
+                      variant="field"
+                      size="sm"
+                      onPress={() => void onAddAudio()}
                     >
                       {t('lane.addAudio')}
-                    </button>
+                    </Button>
                     <span>{t('lane.addAudioHint')}</span>
                   </span>
                 </div>
@@ -2556,8 +2540,8 @@ export function Timeline() {
             style={{ height: MINIMAP_HEIGHT, touchAction: 'none' }}
             className={
               song && maxScroll > 0
-                ? 'relative cursor-grab rounded bg-neutral-950 active:cursor-grabbing'
-                : 'relative rounded bg-neutral-950'
+                ? 'relative cursor-grab rounded-field bg-white/5 active:cursor-grabbing'
+                : 'relative rounded-field bg-white/5'
             }
             aria-label={t('minimap.panAria')}
             title={
@@ -2571,7 +2555,7 @@ export function Timeline() {
             {song && areaWidth > 0 && totalDuration > 0 && (
               <>
                 <div
-                  className="absolute inset-y-0 bg-neutral-700/70"
+                  className="absolute inset-y-0 rounded-field bg-fill-selected"
                   style={{
                     left: `${(clampedScroll / totalDuration) * 100}%`,
                     width: `${(viewDuration / totalDuration) * 100}%`,
@@ -2592,7 +2576,7 @@ export function Timeline() {
                     onPointerMove={onMinimapEdgePointerMove}
                     onPointerUp={onMinimapEdgePointerUp}
                     onPointerCancel={onMinimapEdgePointerUp}
-                    className="absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full bg-neutral-400 shadow-sm hover:bg-neutral-200"
+                    className="absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full bg-ink-muted shadow-sm hover:bg-ink"
                     style={{ left: 0, touchAction: 'none' }}
                   />
                   <div
@@ -2601,13 +2585,13 @@ export function Timeline() {
                     onPointerMove={onMinimapEdgePointerMove}
                     onPointerUp={onMinimapEdgePointerUp}
                     onPointerCancel={onMinimapEdgePointerUp}
-                    className="absolute top-1/2 z-10 h-3 w-3 -translate-y-1/2 translate-x-1/2 cursor-ew-resize rounded-full bg-neutral-400 shadow-sm hover:bg-neutral-200"
+                    className="absolute top-1/2 z-10 h-3 w-3 -translate-y-1/2 translate-x-1/2 cursor-ew-resize rounded-full bg-ink-muted shadow-sm hover:bg-ink"
                     style={{ right: 0, touchAction: 'none' }}
                   />
                 </div>
                 <div
                   aria-hidden
-                  className="pointer-events-none absolute inset-y-0 w-px bg-neutral-300"
+                  className="pointer-events-none absolute inset-y-0 w-px bg-ink"
                   style={{
                     left: `${(currentTime / totalDuration) * 100}%`,
                   }}
@@ -2625,7 +2609,7 @@ export function Timeline() {
         {song && playheadVisible && (
           <div
             aria-hidden
-            className="pointer-events-none absolute w-px bg-sky-300 shadow-[0_0_4px_rgba(125,211,252,0.7)]"
+            className="pointer-events-none absolute w-0.5 -translate-x-px bg-ink"
             style={{
               left: playheadX,
               top: 0,

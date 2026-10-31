@@ -1,19 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { UNSAFE_PortalProvider, useHover } from "react-aria";
 import { Scene } from "../scene/Scene";
-import { SeekBar } from "./SeekBar";
 import { SelectionCard } from "./SelectionCard";
-import { FastForwardIcon, PauseIcon, PlayIcon } from "./icons";
+import { Icon } from "./kit";
+import { useIdle } from "./shell/idle";
 import { useStore } from "../store";
 import { audioEngine } from "../audio/engine";
 
 const ASPECT = 16 / 9;
-// Auto-hide the seek bar / play controls after this many ms of no pointer
-// movement while the song is playing. Matches the rough cadence of video
-// players; long enough that brief pauses to read the timestamp don't dismiss.
-const IDLE_HIDE_MS = 2000;
-
 // Wheel-to-seek sensitivity. 0.005s per CSS pixel of deltaY → a typical
 // mouse wheel notch (~100px) advances the song by ~0.5s, while trackpads
 // scrub at finer increments naturally. Direction: deltaY > 0 (wheel down)
@@ -99,14 +93,14 @@ function TransportFeedback() {
             ? FEEDBACK_EASE_IN
             : FEEDBACK_EASE_OUT,
         }}
-        className={`flex h-20 w-20 items-center justify-center rounded-full bg-black/55 shadow-lg ring-1 ring-white/10 backdrop-blur-sm transition-[opacity,transform] duration-200 ${
+        className={`nf-glass-strong grid h-20 w-20 place-items-center rounded-round text-ink transition-[opacity,transform] duration-200 ${
           visible ? "scale-100 opacity-100" : "scale-50 opacity-0"
         }`}
       >
         {displayIcon === "pause" ? (
-          <PauseIcon className="h-9 w-9 text-white" />
+          <Icon.PauseIcon className="h-9 w-9" />
         ) : (
-          <PlayIcon className="ml-1 h-9 w-9 text-white" />
+          <Icon.PlayIcon className="ml-1 h-9 w-9" />
         )}
       </div>
     </div>
@@ -131,7 +125,7 @@ function RangeSelectRect({ wrapEl }: { wrapEl: HTMLElement | null }) {
   const height = Math.abs(rect.y2 - rect.y1);
   return (
     <div
-      className="pointer-events-none absolute border border-sky-400/80 bg-sky-400/10"
+      className="pointer-events-none absolute border border-ink-muted bg-fill-hover"
       style={{ left, top, width, height }}
       aria-hidden
     />
@@ -148,14 +142,14 @@ function FastForwardIndicator() {
   const fastForward = useStore((s) => s.fastForward);
   return (
     <div
-      className={`pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 transition-all duration-150 ${
+      className={`pointer-events-none absolute left-1/2 top-[84px] -translate-x-1/2 transition-all duration-150 ${
         fastForward ? "scale-100 opacity-100" : "scale-90 opacity-0"
       }`}
       aria-hidden={!fastForward}
     >
-      <div className="flex items-center gap-1.5 rounded-full bg-black/65 px-3 py-1 text-xs font-semibold text-white shadow-lg ring-1 ring-white/15 backdrop-blur-sm">
-        <FastForwardIcon className="h-3.5 w-3.5" />
-        <span className="tabular-nums">{t("fastForward.rate")}</span>
+      <div className="nf-glass-strong flex h-control items-center gap-2 rounded-round px-3.5 text-label text-ink">
+        <Icon.FastForwardIcon className="h-[17px] w-[17px]" />
+        <span>{t("fastForward.rate")}</span>
       </div>
     </div>
   );
@@ -169,35 +163,14 @@ export function Viewport() {
   // available area and is offset from the canvas by the letterbox bars.
   const innerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const transport = useStore((s) => s.transport);
   // Drives the click-eater overlay: while samples are being downloaded
   // we shouldn't let any canvas interaction (play toggle, eraser, new
-  // note, range-select, hold-to-fast-forward) fire. The Inspector and
-  // Toolbar stay live since they sit outside the Viewport.
+  // note, range-select, hold-to-fast-forward) fire. The floating chrome
+  // stays live since it sits outside the canvas.
   const isLoading =
     useStore((s) => s.loadStatus.state) === "loading";
-
-  // useHover is touch-aware: it does not fire on touch tap (unlike CSS :hover
-  // which sticks until the next interaction) and is normalised across browsers.
-  const { hoverProps, isHovered } = useHover({});
-  // YouTube-style idle auto-hide: while playing+hovered, hide the controls
-  // after a stretch of no pointer movement. Pause / stop keeps them visible
-  // (the user can always reach play/seek).
-  const [idleHidden, setIdleHidden] = useState(false);
-  // Whether any popover (volume/speed) opened from the SeekBar is currently
-  // visible. Popovers render in a portal outside the viewport, so the user's
-  // cursor leaves the hover area and the controls would otherwise auto-hide
-  // while they're still adjusting a value.
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  // Cursor follows idleHidden but lags both directions by ~100ms so the
-  // cursor and the controls appear/disappear at the same visual moment.
-  // The seek bar's 200ms opacity fade reads as "gone" / "showing" around
-  // its midpoint, which matches a 100ms delay on the cursor.
-  const [cursorHidden, setCursorHidden] = useState(false);
-  useEffect(() => {
-    const t = window.setTimeout(() => setCursorHidden(idleHidden), 100);
-    return () => clearTimeout(t);
-  }, [idleHidden]);
+  // The cursor hides with the chrome after a stretch of no movement while playing.
+  const cursorHidden = useIdle((s) => s.hidden && s.holds.size === 0);
 
   // Suppress the browser's native context menu over the 3D canvas while a
   // song is loaded — right-click is repurposed as the per-note context
@@ -213,68 +186,6 @@ export function Viewport() {
     window.addEventListener("contextmenu", onCtx);
     return () => window.removeEventListener("contextmenu", onCtx);
   }, []);
-
-  // Fullscreen tracking. We fullscreen the DropZone wrapper so the Scene,
-  // indicators and SeekBar all follow into fullscreen — the surrounding
-  // Toolbar/Inspector are naturally hidden by the browser. ResizeObserver
-  // re-fires on the dimension change, so the 16:9 letterbox recomputes
-  // automatically.
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  useEffect(() => {
-    const onChange = () =>
-      setIsFullscreen(document.fullscreenElement === wrapRef.current);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-  const toggleFullscreen = async () => {
-    const el = wrapRef.current;
-    if (!el) return;
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else if (el.requestFullscreen) {
-        await el.requestFullscreen();
-      }
-    } catch {
-      /* user-gesture or permission failure — silently ignore */
-    }
-  };
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el || transport !== "playing" || !isHovered || popoverOpen) {
-      // Only the playing+hovered branch (with no popover open) arms the
-      // timer; reset hidden flag so we start "visible" next time.
-      setIdleHidden(false);
-      return;
-    }
-    let timer: number | null = null;
-    const arm = () => {
-      if (timer !== null) clearTimeout(timer);
-      timer = window.setTimeout(() => setIdleHidden(true), IDLE_HIDE_MS);
-    };
-    const onMove = (e: PointerEvent) => {
-      setIdleHidden(false);
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      // While the cursor is parked on an interactive control (transport
-      // button, popover trigger, seek slider, etc.) keep the seek bar up —
-      // a stationary cursor produces no further pointermove events, so the
-      // idle timer would otherwise fire under the user's cursor.
-      const target = e.target as HTMLElement | null;
-      const onControl = !!target?.closest('button, [role="slider"]');
-      if (!onControl) arm();
-    };
-    arm(); // also start the countdown if entry happened with no movement (e.g. just pressed play)
-    el.addEventListener("pointermove", onMove);
-    return () => {
-      el.removeEventListener("pointermove", onMove);
-      if (timer !== null) clearTimeout(timer);
-    };
-  }, [transport, isHovered, popoverOpen]);
-  const controlsVisible =
-    (isHovered && !idleHidden) || popoverOpen || transport !== "playing";
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -342,34 +253,21 @@ export function Viewport() {
   // canvas — routes the file. The earlier Viewport-scoped `DropZone` was
   // too narrow: users routinely dropped onto the Inspector or Toolbar
   // and saw nothing happen.
-  // Fullscreen tooltips / popovers: react-aria portals these into
-  // `document.body` by default, but body sits OUTSIDE the fullscreened
-  // wrapper element — so portaled overlays disappear once the user goes
-  // fullscreen. Redirect the portal container to wrapRef while in that
-  // state. Outside fullscreen we must return document.body explicitly:
-  // once a PortalProvider is present, Overlay does NOT fall back to body
-  // on a nullish getContainer() — it bails with `return null` and renders
-  // nothing, so every tooltip/popover would silently disappear.
-  const getPortalContainer = () =>
-    isFullscreen ? wrapRef.current ?? document.body : document.body;
   return (
     <div
       ref={wrapRef}
-      className="relative flex flex-1 items-center justify-center overflow-hidden bg-black outline-none"
+      className="absolute inset-0 flex items-center justify-center overflow-hidden bg-canvas outline-none"
     >
-      <UNSAFE_PortalProvider getContainer={getPortalContainer}>
       <div
         ref={innerRef}
-        className={`relative shadow-2xl ${cursorHidden && !popoverOpen ? "cursor-none" : ""}`}
+        className={`relative ${cursorHidden ? "cursor-none" : ""}`}
         style={{ width: size.w, height: size.h, touchAction: "none" }}
-        {...hoverProps}
       >
         <Scene />
-        {/* Click-eater while the sampler is loading. Sits between
-            the Scene canvas and the SeekBar gradient, so canvas
-            interactions are blocked but SeekBar / NoteContextMenu /
-            Inspector / Toolbar stay live. cursor-wait gives the
-            visual feedback that interaction is paused. */}
+        {/* Click-eater while the sampler is loading. Sits above the Scene
+            canvas, so canvas interactions are blocked but the floating
+            chrome stays live. cursor-wait gives the visual feedback that
+            interaction is paused. */}
         {isLoading && (
           <div
             aria-hidden
@@ -380,27 +278,7 @@ export function Viewport() {
         <FastForwardIndicator />
         <RangeSelectRect wrapEl={innerRef.current} />
         <SelectionCard wrapEl={innerRef.current} />
-        {/* Gradient and SeekBar root are click-through (pointer-events-none);
-            only the buttons / slider inside SeekBar carry pointer-events-auto.
-            That lets the lower PlayToggleArea under the keyboard still
-            receive clicks in the empty space around the controls.
-            When hiding, visibility transitions to hidden after the opacity
-            fade so the (invisible) buttons stop intercepting events. */}
-        <div
-          className={`pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10 transition-[opacity,visibility] duration-200 ${
-            controlsVisible
-              ? "visible opacity-100"
-              : "invisible opacity-0 [transition-delay:0s,200ms]"
-          }`}
-        >
-          <SeekBar
-            isFullscreen={isFullscreen}
-            onToggleFullscreen={toggleFullscreen}
-            onPopoverOpenChange={setPopoverOpen}
-          />
-        </div>
       </div>
-      </UNSAFE_PortalProvider>
     </div>
   );
 }

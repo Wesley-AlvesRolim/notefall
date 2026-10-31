@@ -313,3 +313,27 @@ export function LogoMark(props: SVGProps<SVGSVGElement>) {
     </svg>
   )
 }
+
+export function CameraIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <rect x='3.5' y='7' width='17' height='12' rx='2.5' /><path d='M8.5 7l1.2-2h4.6l1.2 2' /><circle cx='12' cy='13' r='3' />
+    </svg>
+  )
+}
+
+export function FastForwardIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d='M4 6.5l7.5 5.5L4 17.5zM12.5 6.5L20 12l-7.5 5.5z' />
+    </svg>
+  )
+}
+
+export function DownloadIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d='M12 4v12'/><path d='M7 11l5 5 5-5'/><path d='M4 16v4h16v-4'/>
+    </svg>
+  )
+}

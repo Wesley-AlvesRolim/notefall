@@ -9,5 +9,44 @@
   "retry": "Retry",
   "loading": "Loading…",
   "yes": "Yes",
-  "no": "No"
+  "no": "No",
+  "transport": {
+    "label": "Transport",
+    "rewindToStart": "Back to start",
+    "rewind10": "Back 10 seconds",
+    "forward10": "Forward 10 seconds",
+    "play": "Play",
+    "pause": "Pause",
+    "enableLoop": "Loop the song",
+    "disableLoop": "Stop looping",
+    "volume": "Volume",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "speed": "Speed",
+    "playbackSpeed": "Playback speed",
+    "resetCameraView": "Reset camera view",
+    "enterFullscreen": "Enter fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "seek": "Position",
+    "look": "Look",
+    "timeline": "Timeline"
+  },
+  "loadingIsland": {
+    "title": "Loading piano sounds"
+  },
+  "startCard": {
+    "title": "Start with a song",
+    "text": "Drop a MIDI file or a notefall project anywhere, or pick one below.",
+    "open": "Open a file…",
+    "demo": "Try a demo song",
+    "demoMenu": "Demo songs",
+    "record": "Record from your keyboard",
+    "deviceConnected": "{{name}} connected",
+    "note": "Everything stays on your computer. Nothing is uploaded.",
+    "couldNotOpenTitle": "Could not open file",
+    "couldNotLoadDemoTitle": "Could not load the demo"
+  },
+  "pageLoader": {
+    "loading": "Loading notefall"
+  }
 }

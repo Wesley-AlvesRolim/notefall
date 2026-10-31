@@ -4,8 +4,10 @@ import { togglePlayback } from '../audio/playback'
 import { toggleRecord } from '../audio/recordControl'
 import { openProject, saveProject, saveProjectAs } from '../projects/actions'
 import { useStore } from '../store'
+import { notifyNotesDeleted } from './editor/deleteToast'
 import { deleteNotes, moveNotes } from '../midi/edit'
 import { showAlert } from './confirm'
+import { useShell } from './shell/uiState'
 
 /**
  * Window-level keyboard shortcuts for the app's most common actions.
@@ -28,24 +30,21 @@ import { showAlert } from './confirm'
  *   Cmd/Ctrl + Shift + S  — Save As (always opens the picker / triggers a
  *                           download depending on browser support).
  *   Cmd/Ctrl + B          — toggle the bottom Timeline editor panel.
+ *   ?                     — open the keyboard shortcut sheet.
  *
  * Edit-mode shortcuts (song loaded AND not playing):
- *   Escape                  — clear selection (or close the context menu
- *                             when one is open — that's handled inside
- *                             NoteContextMenu, and we skip clearing in
- *                             that case so a single Escape press doesn't
- *                             do two things at once)
+ *   Escape                  — clear selection (closes the selection card)
  *   Cmd/Ctrl + Z            — undo last edit
  *   Cmd/Ctrl + Shift + Z    — redo
  *   Ctrl + Y                — redo (Windows convention)
  *
  * Selection-dependent (no-op when nothing is selected):
- *   Delete / Backspace      — delete selected notes
+ *   Delete / Backspace      — delete selected notes (toast with Undo)
  *   ↑ / ↓                   — nudge pitch ±1 semitone
  *   ← / →                   — nudge time ±0.05 s
  *
- * Velocity is not on this list — it's edited via the double-click context
- * menu on a falling note (NoteContextMenu in Viewport.tsx).
+ * Velocity is not on this list — it's edited in the selection card beside
+ * the selected notes (SelectionCard.tsx).
  *
  * Why Shift+R rather than plain R: 'R' is bound in PC_KEY_NOTES to F4 for
  * playing notes via the laptop keyboard. The Shift prefix turns it into a
@@ -192,6 +191,12 @@ export function useGlobalShortcuts(): void {
         }
       }
 
+      if (!e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && e.key === '?') {
+        e.preventDefault()
+        useShell.getState().setShortcutsOpen(true)
+        return
+      }
+
       // Undo / redo run regardless of edit mode — the history mixes song
       // edits with inspector-settings edits, and the latter happen during
       // playback / before any song is loaded too. Cmd on Mac, Ctrl
@@ -214,12 +219,8 @@ export function useGlobalShortcuts(): void {
       if (!inEditMode()) return
       const state = useStore.getState()
 
-      // Escape: clear selection. When a note context menu is open, the
-      // menu's own Escape handler closes it instead and we yield so a
-      // single Escape press doesn't both close the menu AND clear the
-      // selection in one go.
+      // Escape: clear selection (which also closes the selection card).
       if (e.code === 'Escape' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        if (state.contextMenu) return
         if (state.selection.size > 0) {
           e.preventDefault()
           state.clearSelection()
@@ -233,11 +234,13 @@ export function useGlobalShortcuts(): void {
       if (e.code === 'Delete' || e.code === 'Backspace') {
         e.preventDefault()
         if (!state.song) return
+        const count = state.selection.size
         const next = deleteNotes(state.song, state.selection)
         if (next === state.song) return
         state.applySongEdit(next)
         // Drop the selection — its ids no longer exist in the song.
         state.replaceSelection([])
+        notifyNotesDeleted(count)
         return
       }
 

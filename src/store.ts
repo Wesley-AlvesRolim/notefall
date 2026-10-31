@@ -1126,18 +1126,10 @@ type AppState = {
     r: { x1: number; y1: number; x2: number; y2: number } | null,
   ) => void
 
-  // Position (in viewport client coords) of the per-note context menu, or
-  // null when no menu is open. Set by a right-click on a falling note;
-  // cleared by outside-click / Escape / selection-empty. The menu reads
-  // velocity (etc.) from the current `selection`, not from a captured
-  // note id, so dragging-into-selection-then-right-clicking still works.
-  contextMenu: { x: number; y: number } | null
-  setContextMenu: (m: { x: number; y: number } | null) => void
-
   // Defaults inherited by the next new note (left-click on empty edit
   // area). Updated whenever exactly one note is the active edit subject:
   // selecting it (replaceSelection of size 1), creating a new note, or
-  // editing it via velocity menu / drag-resize. Survives Escape and
+  // editing it via the selection card / drag-resize. Survives Escape and
   // note deletion so a user can deselect / delete and the next created
   // note still picks up the last-touched note's feel.
   // `track` carries forward so a new note inherits the track (and thus
@@ -1654,8 +1646,6 @@ export const useStore = create<AppState>((set) => ({
   rangeSelectRect: null,
   setRangeSelectRect: (rangeSelectRect) => set({ rangeSelectRect }),
 
-  contextMenu: null,
-  setContextMenu: (contextMenu) => set({ contextMenu }),
 
   // Defaults match the original NEW_NOTE_DURATION / NEW_NOTE_VELOCITY in
   // EditTools — mirror them here so the very first new note (before any
@@ -1967,7 +1957,6 @@ export const useStore = create<AppState>((set) => ({
       editFuture: [],
       selection: new Set(),
       editingKeyframeTime: null,
-      contextMenu: null,
       rangeSelectRect: null,
     })
   },
@@ -1989,7 +1978,6 @@ export const useStore = create<AppState>((set) => ({
       editFuture: [],
       selection: new Set(),
       editingKeyframeTime: null,
-      contextMenu: null,
       rangeSelectRect: null,
     })
   },

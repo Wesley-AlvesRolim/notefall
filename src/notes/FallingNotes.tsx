@@ -9,6 +9,7 @@ import { audioEngine } from '../audio/engine'
 import { now } from '../audio/clock'
 import { KEYBOARD_LAYOUT, MIDI_MIN, KEY_COUNT, NOTE_HIT_Y, WHITE_KEY_WIDTH, isBlackKey } from '../keyboard/layout'
 import { useCustomTexture } from './customTexture'
+import { notifyNotesDeleted } from '../ui/editor/deleteToast'
 import { computeDuration, deleteNotes, moveNotes, splitNote } from '../midi/edit'
 import { ensureSamplerLoaded, previewNote } from '../audio/preview'
 import {
@@ -1694,6 +1695,7 @@ export function FallingNotes() {
           trimmed.delete(noteId)
           state.replaceSelection(trimmed)
         }
+        notifyNotesDeleted(1)
       }
       return
     }
@@ -1772,10 +1774,10 @@ export function FallingNotes() {
     if (noteId === undefined || noteId < 0) return
     const state = useStore.getState()
     if (!state.song) return
+    // Double-click just selects the note; the SelectionCard appears beside it.
     if (!state.selection.has(noteId)) {
       state.replaceSelection([noteId])
     }
-    state.setContextMenu({ x: e.nativeEvent.clientX, y: e.nativeEvent.clientY })
   }
 
   return (

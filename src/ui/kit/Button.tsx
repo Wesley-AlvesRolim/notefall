@@ -11,15 +11,15 @@ import { Tooltip } from './Tooltip'
 export type ButtonVariant = 'quiet' | 'primary' | 'field' | 'danger'
 
 const VARIANT: Record<ButtonVariant, string> = {
-  quiet: 'bg-transparent text-ink data-[hovered]:bg-fill-hover',
-  primary: 'bg-ink text-on-ink data-[hovered]:brightness-[1.06]',
-  field: 'bg-fill-field text-ink data-[hovered]:bg-fill-selected',
-  danger: 'bg-transparent text-danger data-[hovered]:bg-fill-hover',
+  quiet: 'bg-transparent text-ink data-[hovered]:bg-fill-hover data-[pressed]:bg-fill-selected',
+  primary: 'bg-ink text-on-ink data-[hovered]:brightness-[1.06] data-[pressed]:brightness-95',
+  field: 'bg-fill-field text-ink data-[hovered]:bg-fill-selected data-[pressed]:bg-fill-selected',
+  danger: 'bg-transparent text-danger data-[hovered]:bg-fill-hover data-[pressed]:bg-fill-selected',
 }
 
-/** Shared state classes: pressed / open toggles, disabled, focus ring. */
+/** Shared state classes: selected / open toggles, disabled (40%, fill kept), focus ring. */
 export const CONTROL_STATES =
-  'nf-focus outline-none data-[pressed]:bg-fill-selected data-[selected]:bg-fill-selected aria-expanded:bg-fill-selected data-[disabled]:cursor-default data-[disabled]:opacity-40 data-[disabled]:bg-transparent'
+  'nf-focus outline-none data-[selected]:bg-fill-selected aria-expanded:bg-fill-selected data-[disabled]:cursor-default data-[disabled]:opacity-40'
 
 export type ButtonProps = Omit<AriaButtonProps, 'className' | 'children'> & {
   variant?: ButtonVariant
@@ -68,9 +68,9 @@ export type IconButtonProps = Omit<AriaButtonProps, 'className' | 'children'> & 
 }
 
 const ICON_SIZE = {
-  sm: 'h-control-sm w-control-sm [&>svg]:h-4 [&>svg]:w-4',
-  md: 'h-icon-btn w-icon-btn [&>svg]:h-5 [&>svg]:w-5',
-  play: 'h-play w-play bg-ink text-on-ink data-[hovered]:!bg-ink data-[hovered]:brightness-[1.06] [&>svg]:h-[22px] [&>svg]:w-[22px]',
+  sm: 'h-control-sm w-control-sm text-ink data-[hovered]:bg-fill-hover data-[pressed]:bg-fill-selected [&>svg]:h-4 [&>svg]:w-4',
+  md: 'h-icon-btn w-icon-btn text-ink data-[hovered]:bg-fill-hover data-[pressed]:bg-fill-selected [&>svg]:h-5 [&>svg]:w-5',
+  play: 'h-play w-play bg-ink text-on-ink data-[hovered]:brightness-[1.06] data-[pressed]:brightness-95 [&>svg]:h-[22px] [&>svg]:w-[22px]',
 }
 
 /** Icon-only button. Only for universal media / window controls (play, skip, volume, close, reset, undo, redo). */
@@ -84,7 +84,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       aria-label={label}
       {...rest}
       className={clsx(
-        'inline-grid flex-none cursor-pointer place-items-center rounded-round p-0 text-ink transition-[background-color,filter] duration-100 data-[hovered]:bg-fill-hover',
+        'inline-grid flex-none cursor-pointer place-items-center rounded-round p-0 transition-[background-color,filter] duration-100',
         ICON_SIZE[size],
         CONTROL_STATES,
         className,
@@ -108,7 +108,7 @@ export function ToggleButton({ icon, className, children, ...rest }: ToggleButto
     <AriaToggleButton
       {...rest}
       className={clsx(
-        'inline-flex h-control flex-none cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-round px-3.5 font-medium text-ink transition-colors duration-100 data-[hovered]:bg-fill-hover',
+        'inline-flex h-control flex-none cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-round px-3.5 font-medium text-ink transition-colors duration-100 data-[hovered]:bg-fill-hover data-[pressed]:bg-fill-selected',
         CONTROL_STATES,
         className,
       )}

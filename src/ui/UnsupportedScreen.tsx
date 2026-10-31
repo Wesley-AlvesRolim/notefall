@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 
+import { LogoMark } from './kit'
 import { MonitorIcon } from './icons'
 
 /**
@@ -10,18 +11,16 @@ import { MonitorIcon } from './icons'
 export function UnsupportedScreen() {
   const { t } = useTranslation('screens')
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-neutral-950 px-6 text-center text-neutral-200">
-      <span className="flex items-center gap-2">
-        <img src="/favicon.svg" alt="" className="h-6 w-6" draggable={false} />
-        <span className="text-lg font-semibold tracking-wide">notefall</span>
-      </span>
-
-      <MonitorIcon className="h-10 w-10 text-neutral-600" />
-
-      <h1 className="text-base font-medium">{t('unsupported.title')}</h1>
-      <p className="max-w-xs text-xs leading-relaxed text-neutral-400">
-        {t('unsupported.body')}
-      </p>
+    <div className="flex h-full w-full items-center justify-center bg-canvas px-6 text-ink">
+      <div className="nf-glass-strong grid w-full max-w-[420px] justify-items-center gap-3 rounded-panel px-6 py-8 text-center">
+        <span className="flex items-center gap-2 text-title">
+          <LogoMark className="h-6 w-6" />
+          notefall
+        </span>
+        <MonitorIcon className="mt-2 h-10 w-10 text-ink-muted" />
+        <h1 className="m-0 text-display">{t('unsupported.title')}</h1>
+        <p className="m-0 max-w-xs text-ink-muted">{t('unsupported.body')}</p>
+      </div>
     </div>
   )
 }

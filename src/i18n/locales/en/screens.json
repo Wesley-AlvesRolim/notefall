@@ -13,13 +13,12 @@
     "firefoxSetting": "Use recommended performance settings",
     "safariLabel": "Safari:",
     "safariSetting": "WebGL",
-    "reload": "Reload page"
-  },
-  "pageLoader": {
-    "loading": "Loading"
-  },
-  "loading": {
-    "title": "Loading piano samples",
-    "note": "The first load fetches ~77MB of high-quality samples; subsequent sessions are cached."
+    "reload": "Reload page",
+    "chromePath": "Settings → System → enable",
+    "chromeAfter": ", then restart the browser.",
+    "firefoxPath": "Settings → General → Performance → enable",
+    "firefoxAfter": ".",
+    "safariPath": "Develop menu → enable",
+    "safariAfter": " (if shown)."
   }
 }

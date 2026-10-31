@@ -28,6 +28,7 @@ import {
   type TimeContext,
 } from '../notes/positions'
 import { noteDeathFx } from '../notes/noteDeathFx'
+import { notifyNotesDeleted } from '../ui/editor/deleteToast'
 import {
   KEYBOARD_LAYOUT,
   KEYBOARD_Y,
@@ -205,6 +206,7 @@ export function EditTools() {
     const initialSong = useStore.getState().song
     if (!initialSong) return
     let pushedHistory = false
+    let erased = 0
     // Switch to the eraser cursor for the entire gesture so the user
     // gets immediate feedback that their right-click is in delete mode.
     gl.domElement.style.cursor = ERASER_CURSOR
@@ -224,6 +226,7 @@ export function EditTools() {
       while (true) {
         const hit = tryDeleteAt(world)
         if (!hit) break
+        erased++
         if (!deleted) {
           commitFirstHit()
           deleted = true
@@ -249,6 +252,8 @@ export function EditTools() {
       // Drop the eraser cursor — the next pointermove decides what
       // cursor the canvas should show.
       gl.domElement.style.cursor = ''
+      // One toast per sweep, after release.
+      notifyNotesDeleted(erased)
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)

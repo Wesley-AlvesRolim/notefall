@@ -1,1 +1,11 @@
-{}
+{
+  "selection": {
+    "notes_other": "{{count}} 個のノート",
+    "velocity": "ベロシティ",
+    "velocityRange": "ベロシティの範囲",
+    "delete_other": "{{count}} 個のノートを削除",
+    "groupLabel_other": "選択中のノート {{count}} 個"
+  },
+  "deleted_other": "{{count}} 個のノートを削除しました",
+  "undo": "元に戻す"
+}

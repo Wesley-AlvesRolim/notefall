@@ -1,10 +1,10 @@
 {
   "confirm": {
-    "defaultConfirm": "OK",
+    "defaultConfirm": "Continue",
     "defaultCancel": "Cancel"
   },
   "alert": {
-    "acknowledge": "OK"
+    "acknowledge": "Close"
   },
   "export": {
     "ariaLabel": "Export settings",
@@ -12,39 +12,43 @@
     "unsupported": "Video export is unavailable in this browser. Audio export still works.",
     "format": {
       "label": "Format",
-      "videoAudio": "Video + audio",
-      "videoOnly": "Video only (silent)",
-      "audioOnly": "Audio only (WAV)"
+      "videoAudio": "Video and audio",
+      "videoOnly": "Video only",
+      "audioOnly": "Audio only"
     },
     "resolution": "Resolution",
     "fps": "Frame rate",
     "fps30": "30 fps",
     "fps60": "60 fps",
     "quality": "Quality",
-    "bitrateNote": "Video bitrate {{mbps}} Mbps. High uses 1.5× the bitrate for cleaner edges and bloom; everything else is the same.",
     "estimatedSize": "Estimated size",
     "estimatedSizeValue": "~{{mb}} MB",
-    "playSoundOnComplete": "Play sound when done",
-    "test": "Test",
+    "playSoundOnComplete": "Play a sound when done",
+    "test": "Preview sound",
     "cancel": "Cancel",
     "submit": "Export",
     "codec": {
       "label": "Codec",
-      "h264": "H.264 + AAC (MP4) — most compatible",
-      "vp9": "VP9 + Opus (WebM) — open format",
-      "av1": "AV1 + Opus (WebM) — open, smallest, slow",
-      "checking": "Checking supported codecs…"
+      "h264": "H.264 + AAC (MP4), most compatible",
+      "vp9": "VP9 + Opus (WebM), open format",
+      "av1": "AV1 + Opus (WebM), smallest and slow",
+      "checking": "Checking supported codecs"
     },
     "preflight": {
-      "noWebCodecs": "Video export needs WebCodecs (Chrome / Edge / Safari 16.4+). In this browser you can still export \"Audio only\" (WAV).",
+      "noWebCodecs": "Video export needs WebCodecs (Chrome, Edge or Safari 16.4 and later). In this browser you can still export audio only (WAV).",
       "videoUnsupported": "This browser cannot encode {{codec}} video at {{width}}×{{height}} @ {{fps}} fps. Try {{alternatives}}, or lower the resolution / frame rate.",
-      "audioUnsupported": "This browser cannot encode the {{audioCodec}} audio track that {{codec}} export needs. Try {{alternatives}}, export \"Video only\", or export \"Audio only\" (WAV).",
+      "audioUnsupported": "This browser cannot encode the {{audioCodec}} audio track that {{codec}} export needs. Try {{alternatives}}, export video only, or export audio only (WAV).",
       "or": " or "
-    }
+    },
+    "advanced": "Advanced",
+    "advancedSummaryAudio": "WAV",
+    "qualityHint": "Video bitrate {{mbps}} Mbps. High uses 1.5× the bitrate for cleaner edges and glow.",
+    "fileFormat": "{{codec}} · {{res}} · {{fps}} fps",
+    "wavMeta": "WAV · 44.1 kHz"
   },
   "progress": {
-    "note": "This may take a moment. Don't close the tab.",
-    "cancel": "Cancel",
+    "note": "Keep this tab open until it finishes.",
+    "cancel": "Cancel export",
     "eta": "{{eta}} remaining",
     "etaSeconds": "{{count}} sec",
     "etaMinutes": "{{min}} min {{sec}} sec"
@@ -59,13 +63,6 @@
     "unsupportedMessage": "\"{{name}}\" is not a supported format. Drop a .nfz project, .mid / .midi, or .mp3 / .wav audio file.",
     "indicator": "Drop to load (.mid / .midi / .nfz / .mp3 / .wav)"
   },
-  "noteMenu": {
-    "close": "Close",
-    "deleteOne": "Delete note",
-    "deleteMany": "Delete {{count}} notes",
-    "notesSelected": "{{count}} notes selected",
-    "velocity": "Velocity"
-  },
   "fastForward": {
     "rate": "2x"
   },
@@ -77,9 +74,9 @@
     "discardTitle": "Discard unsaved changes?",
     "discardMessage": "{{prefix}} Unsaved edits will be lost.",
     "cancel": "Cancel",
-    "discardAndOpen": "Discard & Open",
-    "discardAndLoad": "Discard & Load",
-    "discardAndNew": "Discard & New",
+    "discardAndOpen": "Discard and open",
+    "discardAndLoad": "Discard and load",
+    "discardAndNew": "Discard and start new",
     "openReplace": "Opening a file will replace the current session.",
     "openReplaceNamed": "Opening \"{{name}}\" will replace the current session.",
     "loadDemoReplace": "Loading the \"{{label}}\" demo will replace the current session.",
@@ -101,7 +98,7 @@
   "feedback": {
     "ariaLabel": "Send feedback",
     "title": "Report a bug or request a feature",
-    "publicNotice": "Your report becomes a public GitHub issue — please don't include personal information.",
+    "publicNotice": "Your report becomes a public GitHub issue. Please do not include personal information.",
     "statusLink": "See reports and their status",
     "kind": "Report type",
     "kinds": {
@@ -133,9 +130,9 @@
         "details": "Behaviour, UI, shortcuts…"
       }
     },
-    "includeEnv": "Include device info (sent as shown)",
-    "send": "Send",
-    "sending": "Sending…",
+    "includeEnv": "Include device info",
+    "send": "Send report",
+    "sending": "Sending",
     "cancel": "Cancel",
     "close": "Close",
     "useGitHub": "Report on GitHub instead",
@@ -147,8 +144,57 @@
       "server": "The report couldn't be sent.",
       "network": "No connection — the report couldn't be sent."
     },
-    "sentTitle": "Thanks — your report was sent",
+    "sentTitle": "Report sent",
     "sentBody": "It was filed as issue #{{number}}.",
-    "sentLink": "Follow its status on GitHub (#{{number}})"
+    "sentLink": "Follow its status on GitHub (#{{number}})",
+    "envHint": "Sent exactly as shown below."
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "close": "Close",
+    "playback": "Playback",
+    "editing": "Editing",
+    "file": "File and recording",
+    "mouse": "Mouse on notes",
+    "play": "Play / pause",
+    "scrub": "Scrub (paused)",
+    "scrubKey": "Scroll",
+    "ff": "Fast-forward 2×",
+    "ffKey": "Hold",
+    "timeline": "Toggle timeline",
+    "undo": "Undo",
+    "redo": "Redo",
+    "delete": "Delete selection",
+    "clear": "Clear selection",
+    "nudgePitch": "Move ±1 semitone",
+    "nudgeTime": "Move ±0.05 s",
+    "keyframe": "Add keyframe (timeline)",
+    "open": "Open",
+    "save": "Save",
+    "saveAs": "Save as",
+    "record": "Record",
+    "piano": "Play notes",
+    "pianoKeys": "Z–M, A–J, Q–P, digits",
+    "select": "Select and move",
+    "selectKey": "Click, drag",
+    "rangeSelect": "Select a range",
+    "rangeKey": "drag",
+    "addSelect": "Add to selection",
+    "split": "Split note",
+    "menu": "Select note",
+    "menuKey": "Double-click",
+    "del": "Delete note",
+    "delKey": "Right-click",
+    "erase": "Erase",
+    "eraseKey": "Right-drag",
+    "resize": "Resize note",
+    "resizeKey": "Drag an edge",
+    "camera": "Zoom the camera",
+    "cameraKey": "scroll",
+    "click": "Click",
+    "dragWord": "drag",
+    "scroll": "scroll",
+    "add": "Add a note (empty space)",
+    "sheet": "Show these shortcuts"
   }
 }
