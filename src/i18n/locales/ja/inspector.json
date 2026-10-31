@@ -335,7 +335,9 @@
     "glow": "グロー",
     "glowRadius": "半径",
     "glowTail": "裾",
-    "glowBoost": "本体の明るさ"
+    "glowBoost": "本体の明るさ",
+    "moreLooks": "ほかのルック",
+    "fewerLooks": "少なく表示"
   },
   "coloring": {
     "modes": {
@@ -364,7 +366,10 @@
     "randomNotesHint": "ランダム配色には合わせる単一の色がないため、ラインは自身の色を使います。",
     "type": "種類",
     "solidColor": "単色",
-    "blackKeyDarkness": "黒鍵ノートの暗さ"
+    "blackKeyDarkness": "黒鍵ノートの暗さ",
+    "lowestKey": "最低音",
+    "highestKey": "最高音",
+    "stopHandle": "色{{n}}の位置"
   },
   "tab": {
     "label": "設定の区分",

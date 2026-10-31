@@ -20,6 +20,9 @@ import {
   useEffectiveSetting,
   LookAnchorContext,
 } from './controls'
+import { GradientStops } from './look/GradientStops'
+import { PresetSwatch } from './look/PresetSwatch'
+import { useBarColors, useEffectiveLook } from './look/useLookState'
 import { VelocityCurveEditor } from './VelocityCurveEditor'
 import { FileTrigger } from 'react-aria-components'
 import { Button, Icon, IconButton, Panel, GEOMETRY } from './kit'
@@ -40,10 +43,8 @@ import {
 } from '../notes/noteColor'
 import {
   NOTE_LOOK_PRESETS,
-  NOTE_LOOK_PRESET_NAMES,
   matchNoteLookPreset,
   lightsForMaterialSwitch,
-  type NoteLookPreset,
 } from '../notes/looks/noteLook'
 
 const EQ_LABELS = ['80', '250', '800', '2.5k', '6k', '12k']
@@ -287,6 +288,14 @@ function NoteColorControls() {
         <SubGroup label={t('coloring.modes.gradient')}>
           <BoundSliderRow label={t('coloring.stops')} settingKey="noteGradientStops" min={2} max={5} step={1} />
           <BoundSliderRow label={t('coloring.softness')} settingKey="noteGradientSoftness" min={0} max={1} step={0.01} />
+          <GradientStops
+            label={t('coloring.modes.gradient')}
+            colorKeys={GRADIENT_COLOR_KEYS}
+            posKeys={GRADIENT_POS_KEYS}
+            count={stops}
+            softnessKey="noteGradientSoftness"
+            angleKey="noteGradientAngle"
+          />
           <GradientStopRows colorKeys={GRADIENT_COLOR_KEYS} posKeys={GRADIENT_POS_KEYS} count={stops} />
           <BoundSliderRow label={t('coloring.angle')} settingKey="noteGradientAngle" min={0} max={360} step={1} />
         </SubGroup>
@@ -546,6 +555,8 @@ function NoteLookControls() {
       time === null ? undefined : st.settings.settingsKeyframes.find((p) => Math.abs(p.time - time) < 1e-6)
     return matchNoteLookPreset({ ...st.settings, ...kf?.settings }) ?? 'custom'
   })
+  const lookSettings = useEffectiveLook()
+  const barColors = useBarColors()
   const material = useStore((st) => st.settings.noteMaterial)
   const shape = useStore((st) => st.settings.noteShape)
   const pattern = useStore((st) => st.settings.notePattern)
@@ -553,19 +564,15 @@ function NoteLookControls() {
   const bump = useStore((st) => st.settings.noteBump)
   return (
     <>
-      <SelectRow<NoteLookPreset | 'custom'>
-        label={t('look.preset')}
-        value={preset}
-        options={[
-          ...NOTE_LOOK_PRESET_NAMES.map((name) => ({ value: name, label: t(`look.presets.${name}`) })),
-          ...(preset === 'custom' ? [{ value: 'custom' as const, label: t('look.presets.custom') }] : []),
-        ]}
-        onChange={(v) => {
-          if (v !== 'custom') atomicUpdate(NOTE_LOOK_PRESETS[v])
-        }}
-        defaultValue="plain"
-        scopeKey="noteMaterial"
-      />
+      <SearchableBlock label={t('look.preset')}>
+        <PresetSwatch
+          label={t('look.preset')}
+          value={preset}
+          look={lookSettings}
+          colors={barColors}
+          onChange={(v) => atomicUpdate(NOTE_LOOK_PRESETS[v])}
+        />
+      </SearchableBlock>
       <SelectRow
         label={t('look.material')}
         value={material}
@@ -961,6 +968,13 @@ function HitLineColorControls() {
         <SubGroup label={t('coloring.modes.gradient')}>
           <BoundSliderRow label={t('coloring.stops')} settingKey="hitLineGradientStops" min={2} max={5} step={1} />
           <BoundSliderRow label={t('coloring.softness')} settingKey="hitLineGradientSoftness" min={0} max={1} step={0.01} />
+          <GradientStops
+            label={t('coloring.modes.gradient')}
+            colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS}
+            posKeys={HIT_LINE_GRADIENT_POS_KEYS}
+            count={stops}
+            softnessKey="hitLineGradientSoftness"
+          />
           <GradientStopRows colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS} posKeys={HIT_LINE_GRADIENT_POS_KEYS} count={stops} />
         </SubGroup>
       )}

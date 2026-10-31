@@ -335,7 +335,9 @@
     "glow": "Glow",
     "glowRadius": "Radius",
     "glowTail": "Tail",
-    "glowBoost": "Body boost"
+    "glowBoost": "Body boost",
+    "moreLooks": "More looks",
+    "fewerLooks": "Fewer looks"
   },
   "coloring": {
     "modes": {
@@ -364,7 +366,10 @@
     "randomNotesHint": "Random note colors have no single color to follow, so the line uses its own color.",
     "type": "Type",
     "solidColor": "Solid color",
-    "blackKeyDarkness": "Black-key darkness"
+    "blackKeyDarkness": "Black-key darkness",
+    "lowestKey": "Lowest key",
+    "highestKey": "Highest key",
+    "stopHandle": "Stop {{n}}"
   },
   "tab": {
     "label": "Settings areas",

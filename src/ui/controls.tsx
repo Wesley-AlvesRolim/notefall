@@ -30,6 +30,7 @@ import clsx from 'clsx'
 import { useTranslation } from 'react-i18next'
 import { defaultSettings, useStore, type Settings } from '../store'
 import { isAnimatableKey, resolveSettingsAt } from '../midi/settingsKeyframes'
+import { collectSongColors } from './look/songColors'
 import { Disclosure, GEOMETRY, Icon, Menu, MenuItem, MenuSeparator, Popover, SegmentedControl, Select, Switch } from './kit'
 
 /**
@@ -189,7 +190,7 @@ function setAtKeyframe(key: keyof Settings): void {
 }
 
 /** The ◆ before a row's label: filled = set at this keyframe, hollow = carried in (press to set it here). */
-function KfMark({ settingKey }: { settingKey?: keyof Settings }) {
+export function KfMark({ settingKey }: { settingKey?: keyof Settings }) {
   const { t } = useTranslation('inspector')
   const state = useKfState(settingKey)
   if (state !== 'set' && state !== 'carried') return null
@@ -222,7 +223,7 @@ function KfMark({ settingKey }: { settingKey?: keyof Settings }) {
 }
 
 /** "Can't change over time" line under a field whose key a keyframe can't hold (only while one is targeted). */
-function ScopeNote({ settingKey }: { settingKey?: keyof Settings }) {
+export function ScopeNote({ settingKey }: { settingKey?: keyof Settings }) {
   const { t } = useTranslation('inspector')
   if (useKfState(settingKey) !== 'whole') return null
   return <p className="text-caption text-ink-faint">{t('scope.note')}</p>
@@ -709,26 +710,6 @@ function usePickerPlacement(triggerRef: RefObject<HTMLElement | null>) {
     : { measure, props: { placement: 'bottom end' as const, offset: 8, crossOffset: 0 } }
 }
 
-const HEX_RE = /^#[0-9a-f]{6}$/i
-
-/** Colours already used by the current settings (notes, tracks, stops, palette, keyboard…), most recent keys first. */
-function collectSongColors(exclude: string): string[] {
-  const seen = new Set<string>([exclude.toLowerCase()])
-  const out: string[] = []
-  const add = (v: unknown) => {
-    if (typeof v !== 'string' || !HEX_RE.test(v)) return
-    const k = v.toLowerCase()
-    if (seen.has(k)) return
-    seen.add(k)
-    out.push(k)
-  }
-  for (const v of Object.values(useStore.getState().settings)) {
-    if (typeof v === 'string') add(v)
-    else if (v && typeof v === 'object' && !Array.isArray(v)) Object.values(v).forEach(add)
-  }
-  return out.slice(0, 12)
-}
-
 function PickerBody({ label, value, onPick }: { label: string; value: string; onPick: (hex: string) => void }) {
   const { t } = useTranslation('inspector')
   const songColors = useMemo(() => collectSongColors(value), [value])
@@ -774,6 +755,59 @@ function PickerBody({ label, value, onPick }: { label: string; value: string; on
         </div>
       )}
     </Dialog>
+  )
+}
+
+/**
+ * The colour picker as a controlled popover anchored to any element (a gradient stop handle, say). The whole open
+ * session is one undo entry, like ColorRow's.
+ */
+export function ColorPickerPopover({
+  triggerRef,
+  isOpen,
+  onOpenChange,
+  label,
+  value,
+  onChange,
+}: {
+  triggerRef: RefObject<HTMLElement | null>
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+  label: string
+  value: string
+  onChange: (v: string) => void
+}) {
+  const placement = usePickerPlacement(triggerRef)
+  const session = useRef(false)
+  useEffect(() => {
+    const s = useStore.getState()
+    if (isOpen && !session.current) {
+      session.current = true
+      placement.measure()
+      s.beginSettingsEdit()
+    } else if (!isOpen && session.current) {
+      session.current = false
+      s.endSettingsEdit()
+    }
+  })
+  useEffect(
+    () => () => {
+      if (session.current) useStore.getState().endSettingsEdit()
+    },
+    [],
+  )
+  return (
+    <ColorPicker value={value} onChange={(color) => onChange(color.toString('hex'))}>
+      <Popover
+        triggerRef={triggerRef as RefObject<HTMLElement>}
+        {...placement.props}
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        className="rounded-panel"
+      >
+        <PickerBody label={label} value={value} onPick={onChange} />
+      </Popover>
+    </ColorPicker>
   )
 }
 
