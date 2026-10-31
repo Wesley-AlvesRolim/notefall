@@ -118,13 +118,6 @@ export function KeyframeIcon(props: IconProps) {
   )
 }
 
-export function LookIcon(props: IconProps) {
-  return (
-    <svg {...base} {...props}>
-      <circle cx='12' cy='12' r='8'/><path d='M12 4a8 8 0 0 0 0 16z' fill='currentColor'/>
-    </svg>
-  )
-}
 
 export function MidiIcon(props: IconProps) {
   return (
@@ -314,13 +307,6 @@ export function LogoMark(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-export function CameraIcon(props: IconProps) {
-  return (
-    <svg {...base} {...props}>
-      <rect x='3.5' y='7' width='17' height='12' rx='2.5' /><path d='M8.5 7l1.2-2h4.6l1.2 2' /><circle cx='12' cy='13' r='3' />
-    </svg>
-  )
-}
 
 export function FastForwardIcon(props: IconProps) {
   return (
