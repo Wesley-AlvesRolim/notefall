@@ -932,6 +932,9 @@ function hashSong(song: ParsedSong | null): string {
   for (const p of song.pedals) {
     acc += `${p.time.toFixed(6)},${p.value.toFixed(4)};`
   }
+  for (const c of song.controls ?? []) {
+    acc += `${c.number},${c.time.toFixed(6)},${c.value.toFixed(4)};`
+  }
   return acc
 }
 function hashSettings(settings: Settings): string {

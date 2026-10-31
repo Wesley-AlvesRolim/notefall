@@ -18,6 +18,4 @@ export type UserAudioTrack = {
   trimEndSec: number | null
 }
 
-export type PedalRange = { start: number; end: number }
-
 export type OfflinePiano = Awaited<ReturnType<typeof createPiano>>

@@ -3,7 +3,8 @@ import { midiToTimeline } from '../../midi/speedMap'
 import type { Settings } from '../../store'
 import { evaluateVelocityCurve } from '../../audio/velocityCurve'
 import { LOOKAHEAD, STOP_BUFFER } from './consts'
-import { buildPedalRanges, findRangeContaining } from './pedal'
+import { dampTc, liftAt, pedalLift, SILENT_TCS } from '../../audio/pedalDepth'
+import { holdRelease } from '../../audio/smoothRelease'
 import type { ExportTimeline } from '../timeline'
 import type { OfflinePiano, UserAudioTrack } from './types'
 
@@ -52,11 +53,11 @@ export function scheduleSongNotes(
   // Pedal handling. Mirror the engine: when settings.pedalEnabled is off,
   // ignore the song's pedal track entirely (notes release at their
   // natural offTime). Pedal events are stored in MIDI-time, so the
-  // ranges are still in MIDI-time and get shifted at the per-note
-  // comparison site below.
-  const pedalRanges = settings.pedalEnabled
-    ? buildPedalRanges(song.pedals, totalDuration - midiOffset)
-    : []
+  // pedal walk runs in MIDI-time and each step is mapped to timeline-time.
+  const pedalEnd = Math.min(totalDuration - midiOffset, midiTrimEnd)
+  const tl = (midiT: number) => midiOffset + midiToTimeline(speedMap, midiT) + STOP_BUFFER
+  const releaseTime = settings.releaseTime
+  const releaseTc = releaseTime / 5
 
   for (const n of song.notes) {
     // Trim filter — match the engine's tick semantics so a rendered
@@ -72,15 +73,40 @@ export function scheduleSongNotes(
     // automation `midiToTimeline` is the identity, so this collapses
     // to the linear `n.time + midiOffset` of before.
     const onTime = midiOffset + midiToTimeline(speedMap, n.time) + LOOKAHEAD
-    // Clamp the natural note-off to the trim end (MIDI-time), then
-    // optionally extend via pedal sustain (still MIDI-time), and
-    // finally map to timeline-time.
+    // Clamp the natural note-off to the trim end (MIDI-time). Under a
+    // lifted pedal the voice is kept and faded at the depth's rate, re-targeted
+    // at every later pedal event, like the engine's `updatePedalHeld`.
     const naturalOff = Math.min(n.time + n.duration, midiTrimEnd)
-    const range = findRangeContaining(pedalRanges, naturalOff)
-    const offMidi = Math.min(range ? range.end : naturalOff, midiTrimEnd)
-    const actualOff = midiOffset + midiToTimeline(speedMap, offMidi)
-
     const stopFn = piano.start(playedMidi, shaped, onTime, `s${n.id}`)
-    stopFn(actualOff + STOP_BUFFER)
+    const start = settings.pedalEnabled ? liftAt(song.pedals, naturalOff) : { lift: 0, next: 0 }
+    if (start.lift <= 0 || naturalOff >= pedalEnd) {
+      stopFn(tl(naturalOff))
+      continue
+    }
+    const voice = holdRelease(stopFn, tl(naturalOff))
+    let lift = start.lift
+    let at = tl(naturalOff)
+    let faded = 0
+    voice.decay(at, dampTc(lift, releaseTc))
+    for (let i = start.next; ; i++) {
+      // Next pedal event, or the end of the rendered window (a release).
+      const ev = i < song.pedals.length && song.pedals[i].time < pedalEnd ? song.pedals[i] : null
+      const nextAt = tl(ev ? ev.time : pedalEnd)
+      const tc = dampTc(lift, releaseTc)
+      if (faded + (nextAt - at) / tc >= SILENT_TCS) {
+        voice.end(at + (SILENT_TCS - faded) * tc)
+        break
+      }
+      faded += (nextAt - at) / tc
+      at = nextAt
+      const nextLift = ev ? pedalLift(ev.value) : 0
+      if (nextLift <= 0) {
+        voice.decay(at, releaseTc)
+        voice.end(at + releaseTime)
+        break
+      }
+      if (nextLift !== lift) voice.decay(at, dampTc(nextLift, releaseTc))
+      lift = nextLift
+    }
   }
 }

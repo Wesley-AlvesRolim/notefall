@@ -64,6 +64,11 @@ function install(): void {
     if (value === 0) {
       const last = lastSetValue.get(this)
       if (last && last.value > 0 && endTime > last.time) {
+        // Inside `holdRelease`: hand the envelope to the caller instead.
+        if (capture) {
+          capture.params.push(this)
+          return this
+        }
         const duration = endTime - last.time
         // tc = duration / 5 → after `duration` seconds, gain ≈ e^-5 ≈
         // 0.0067 (≈ −43 dB), which the listener perceives as silent
@@ -75,7 +80,66 @@ function install(): void {
     return origLinearRamp.call(this, value, endTime)
   }
 
+  const srcProto = AudioScheduledSourceNode.prototype
+  const origStop = srcProto.stop
+  srcProto.stop = function (this: AudioScheduledSourceNode, when?: number) {
+    // Inside `holdRelease`: keep the source alive (a later `end` call
+    // replaces this stop time; only the last stop() call applies).
+    if (capture) {
+      capture.sources.push(this)
+      return origStop.call(this, (when ?? 0) + HOLD_SAFETY_SEC)
+    }
+    return origStop.call(this, when)
+  }
+
   proto[PATCHED_FLAG] = true
 }
 
 install()
+
+/**
+ * Half-pedal support. smplr's `Voice.stop` ramps the envelope and stops the
+ * source in one go; a damper that only grazes the strings needs the decay
+ * rate to follow the pedal instead. `holdRelease` calls a smplr stop fn
+ * while capturing that voice's envelope param and source: no release ramp
+ * is scheduled, and the caller drives the fade with `decay` (re-targetable
+ * at any time; each `setTargetAtTime` starts from the value reached so far)
+ * and ends it with `end`. A voice that hadn't started yet is stopped as
+ * smplr asked. Works on realtime and offline contexts alike.
+ */
+export type HeldVoice = {
+  /** From `time`, decay exponentially with time constant `tc` seconds. */
+  decay(time: number, tc: number): void
+  /** Stop the source at `time`. */
+  end(time: number): void
+}
+
+// Upper bound on how long a captured voice can be left running if its
+// owner never ends it.
+const HOLD_SAFETY_SEC = 600
+// A time constant this long is a hold (no audible decay).
+const MAX_TC = 1e4
+
+let capture: { params: AudioParam[]; sources: AudioScheduledSourceNode[] } | null = null
+
+export function holdRelease(stop: (time?: number) => void, time: number): HeldVoice {
+  const c = { params: [] as AudioParam[], sources: [] as AudioScheduledSourceNode[] }
+  capture = c
+  try {
+    stop(time)
+  } finally {
+    capture = null
+  }
+  if (c.params.length === 0) {
+    for (const s of c.sources) s.stop(time)
+    c.sources = []
+  }
+  return {
+    decay(t, tc) {
+      for (const p of c.params) p.setTargetAtTime(0, t, Math.min(tc, MAX_TC))
+    },
+    end(t) {
+      for (const s of c.sources) s.stop(t)
+    },
+  }
+}

@@ -7,10 +7,22 @@ export type NoteEvent = {
   track: number
 }
 
+/** Sustain pedal (CC64). `value` is 0..1; partial values are a half pedal. */
 export type PedalEvent = {
   time: number
   value: number
 }
+
+/** Sostenuto (CC66) / soft (CC67) pedal CC, kept so they round-trip
+ *  through record / open / save. Playback ignores them. */
+export type ControlEvent = {
+  number: number
+  time: number
+  value: number
+}
+
+/** CC numbers kept in `ParsedSong.controls`. */
+export const KEPT_CONTROLS = [66, 67] as const
 
 /**
  * Per-track metadata pulled from the SMF. Index in `ParsedSong.tracks`
@@ -34,5 +46,7 @@ export type ParsedSong = {
   duration: number
   notes: NoteEvent[]
   pedals: PedalEvent[]
+  /** Optional: absent on songs built before it existed (= none). */
+  controls?: ControlEvent[]
   tracks: TrackInfo[]
 }
