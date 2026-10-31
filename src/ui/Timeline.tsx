@@ -20,12 +20,6 @@ import {
   type SpeedMap,
   type SpeedPoint,
 } from '../midi/speedMap'
-import {
-  CloseIcon,
-  VolumeHighIcon,
-  VolumeLowIcon,
-  VolumeMuteIcon,
-} from './icons'
 import { Button, Icon } from './kit'
 import { SettingsPinLane, PIN_LANE_HEIGHT } from './SettingsPinLane'
 import { resolveNoteTintAt } from '../midi/settingsKeyframes'
@@ -537,15 +531,7 @@ function LaneContextMenu({
         onClick={onToggleMute}
         className="flex w-full items-center gap-2 rounded-field px-2 py-1.5 text-left hover:bg-fill-hover"
       >
-        {enabled ? (
-          volume <= 0.4 ? (
-            <VolumeLowIcon className="h-3 w-3" />
-          ) : (
-            <VolumeHighIcon className="h-3 w-3" />
-          )
-        ) : (
-          <VolumeMuteIcon className="h-3 w-3" />
-        )}
+        {enabled ? <Icon.VolumeIcon className="h-4 w-4" /> : <Icon.VolumeMuteIcon className="h-4 w-4" />}
         <span>{enabled ? t('context.mute') : t('context.unmute')}</span>
       </button>
       <div className="px-2 py-1.5">
@@ -606,7 +592,7 @@ function LaneContextMenu({
           }}
           className="flex w-full items-center gap-2 rounded-field px-2 py-1.5 text-left text-danger hover:bg-fill-hover"
         >
-          <CloseIcon className="h-2.5 w-2.5" /> {t('context.removeAudio')}
+          <Icon.CloseIcon className="h-4 w-4" /> {t('context.removeAudio')}
         </button>
       )}
     </div>
@@ -662,7 +648,7 @@ function LaneHeader({
           title={muted ? t('lane.unmute') : t('lane.mute')}
           className={`nf-focus nf-press grid h-6 w-6 flex-none place-items-center rounded-round outline-none hover:bg-fill-hover ${muted ? 'text-ink-faint' : 'text-ink-muted hover:text-ink'}`}
         >
-          {muted ? <VolumeMuteIcon className="h-3.5 w-3.5" /> : <VolumeHighIcon className="h-3.5 w-3.5" />}
+          {muted ? <Icon.VolumeMuteIcon className="h-4 w-4" /> : <Icon.VolumeIcon className="h-4 w-4" />}
         </button>
       )}
       {onOpenMenu && (
