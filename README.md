@@ -25,9 +25,10 @@ opt-out usage stats only.)
 - **Record** — capture a live performance (optional 4-beat metronome count-in)
   and load it straight back as an editable song.
 - **Edit on the canvas** — move, resize, split, delete, draw, and marquee-select
-  notes directly on the visualizer. Full undo/redo.
-- **Timeline pins** — drop settings keyframes along the timeline and the scene
-  morphs between them (camera, colors, opacity, bloom, background, …).
+  notes directly on the visualizer, and mark each note's hand and finger. Full
+  undo/redo.
+- **Keyframes** — drop keyframes along the timeline and the look morphs between
+  them (camera, colors, opacity, bloom, background, …).
 - **Export** — offline render to WAV (audio), silent MP4 (video), or a full
   A/V MP4, with resolution / fps / quality options and live progress + ETA.
 - **File-based projects** — save/load `.nfz` project files to your own
@@ -43,6 +44,12 @@ opt-out usage stats only.)
 - [`@tonejs/midi`](https://github.com/Tonejs/Midi) for MIDI parse/serialize
 - `react-aria-components` + Tailwind for the UI, `zustand` for state
 - `mediabunny` + WebCodecs for offline MP4 / WebM export
+
+## Working on the UI
+
+The interface follows a small design system: tokens, a react-aria component kit
+and rules for layout, motion and copy. Read
+[`docs/design-system.md`](docs/design-system.md) before adding or changing UI.
 
 ## License
 

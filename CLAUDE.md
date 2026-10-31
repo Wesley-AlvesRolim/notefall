@@ -206,7 +206,7 @@ Zip wrapper present from day 1 even with only `manifest.json`, so audio-sync (fu
 
 `App.tsx` mounts `<Layout />` only when (a) WebGL context available (`detectWebGLAvailable()` probes webgl2 then webgl) and (b) viewport ≥ 1024 px. WebGL takes precedence over viewport-size.
 
-Full-bleed canvas with floating glass surfaces (design system: `_local/redesign/design-system/README.md`; tokens in `ui/kit/tokens.css`, exposed as Tailwind names — `text-ink-muted`, `bg-fill-field`, `rounded-panel`, …; no raw colours, nothing under 12 px, no mono, no uppercase labels, no accent hue).
+Full-bleed canvas with floating glass surfaces (design system: **`docs/design-system.md`** — read it before UI work; tokens in `ui/kit/tokens.css`, exposed as Tailwind names — `text-ink-muted`, `bg-fill-field`, `rounded-panel`, …; no raw colours, nothing under 12 px, no mono, no uppercase labels, no accent hue).
 
 ```
 ┌ song island ─────────┐                     ┌ input island ──────────┐
