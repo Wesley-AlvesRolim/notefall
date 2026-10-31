@@ -44,6 +44,7 @@
     "deviceConnected": "{{name}} connected",
     "note": "Everything stays on your computer. Nothing is uploaded.",
     "couldNotOpenTitle": "Could not open file",
+    "dontShowAgain": "Don't show again",
     "couldNotLoadDemoTitle": "Could not load the demo"
   },
   "pageLoader": {
