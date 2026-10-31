@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { UNSAFE_PortalProvider, useHover } from "react-aria";
 import { Scene } from "../scene/Scene";
 import { SeekBar } from "./SeekBar";
-import { NoteContextMenu } from "./NoteContextMenu";
+import { SelectionCard } from "./SelectionCard";
 import { FastForwardIcon, PauseIcon, PlayIcon } from "./icons";
 import { useStore } from "../store";
 import { audioEngine } from "../audio/engine";
@@ -379,7 +379,7 @@ export function Viewport() {
         <TransportFeedback />
         <FastForwardIndicator />
         <RangeSelectRect wrapEl={innerRef.current} />
-        <NoteContextMenu wrapEl={innerRef.current} />
+        <SelectionCard wrapEl={innerRef.current} />
         {/* Gradient and SeekBar root are click-through (pointer-events-none);
             only the buttons / slider inside SeekBar carry pointer-events-auto.
             That lets the lower PlayToggleArea under the keyboard still
