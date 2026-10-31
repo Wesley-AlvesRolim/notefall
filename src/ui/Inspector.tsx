@@ -28,6 +28,7 @@ import { useBarColors, useEffectiveLook } from './look/useLookState'
 import { VelocityCurveEditor } from './VelocityCurveEditor'
 import { Button, Icon, IconButton, Panel, GEOMETRY, usePresence } from './kit'
 import { useShell } from './shell/uiState'
+import { useIdle } from './shell/idle'
 import { useCustomTexture } from '../notes/customTexture'
 import { CAMERA_LIMITS } from '../scene/cameraLimits'
 import {
@@ -1196,6 +1197,8 @@ export function Inspector() {
 }
 
 function LookPanel({ leaving }: { leaving: boolean }) {
+  // Closing the panel under the pointer must not leave the chrome hidden.
+  useEffect(() => () => useIdle.getState().setOverPanel(false), [])
   const { t } = useTranslation('inspector')
   const reset = useStore((st) => st.resetSettings)
   const keyframeTargeted = useStore((st) => st.editingKeyframeTime !== null)
@@ -1226,6 +1229,8 @@ function LookPanel({ leaving }: { leaving: boolean }) {
         ref={panelRef}
         aria-label={t('panel.title')}
         className={clsx('fixed z-20 nf-enter-right', leaving && 'nf-leaving')}
+        onPointerEnter={(e) => e.pointerType === 'mouse' && useIdle.getState().setOverPanel(true)}
+        onPointerLeave={() => useIdle.getState().setOverPanel(false)}
         style={{
           right: GEOMETRY.EDGE,
           top: GEOMETRY.EDGE + GEOMETRY.BAR + GEOMETRY.GAP,

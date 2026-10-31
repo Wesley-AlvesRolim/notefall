@@ -13,6 +13,9 @@ type IdleState = {
   hidden: boolean
   /** Reasons to stay visible (an open popover, a menu). Set/clear by key. */
   holds: ReadonlySet<string>
+  /** The pointer is over the Customize panel: the chrome steps aside so the picture can be judged. */
+  overPanel: boolean
+  setOverPanel: (v: boolean) => void
   setHidden: (v: boolean) => void
   hold: (key: string, on: boolean) => void
 }
@@ -20,6 +23,10 @@ type IdleState = {
 export const useIdle = create<IdleState>((set, get) => ({
   hidden: false,
   holds: new Set(),
+  overPanel: false,
+  setOverPanel: (overPanel) => {
+    if (get().overPanel !== overPanel) set({ overPanel })
+  },
   setHidden: (hidden) => {
     if (get().hidden !== hidden) set({ hidden })
   },
@@ -31,8 +38,12 @@ export const useIdle = create<IdleState>((set, get) => ({
   },
 }))
 
-/** True while the chrome should be faded out (playing, idle, nothing holding it open). */
-export const useChromeHidden = (): boolean => useIdle((s) => s.hidden && s.holds.size === 0)
+/**
+ * True while the chrome (islands, pill) should be faded out: playing + idle with nothing holding it
+ * open, or the pointer is over the Customize panel (playing or paused; it comes back on leaving).
+ * Only the idle case hides the cursor (Viewport).
+ */
+export const useChromeHidden = (): boolean => useIdle((s) => (s.hidden && s.holds.size === 0) || s.overPanel)
 
 /** Mounted once (Layout): runs the idle timer. */
 export function IdleDriver() {

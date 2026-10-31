@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { LogoMark } from '../kit'
-import backdropUrl from '../assets/backdrop.jpg'
+import backdropWide from '../assets/backdrop-wide.jpg'
+import backdropTall from '../assets/backdrop-tall.jpg'
 
 /**
  * Full-page screens shown instead of the app (unsupported device, no WebGL): a still of the
@@ -10,12 +11,16 @@ import backdropUrl from '../assets/backdrop.jpg'
 export function ScreenFrame({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
     <div className="relative h-full w-full overflow-auto bg-canvas text-ink">
-      <img
-        src={backdropUrl}
-        alt=""
-        aria-hidden
-        className="pointer-events-none fixed inset-0 h-full w-full object-cover object-[56%_50%]"
-      />
+      {/* A real render (the OGP colourway). Portrait screens get a tall crop so a phone shows it sharp. */}
+      <picture>
+        <source media="(orientation: portrait)" srcSet={backdropTall} />
+        <img
+          src={backdropWide}
+          alt=""
+          aria-hidden
+          className="pointer-events-none fixed inset-0 h-full w-full object-cover object-[50%_45%]"
+        />
+      </picture>
       {/* darken toward the card so text reads over bright notes */}
       <div
         aria-hidden
