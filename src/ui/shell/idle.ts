@@ -57,7 +57,12 @@ export function IdleDriver() {
     let timer = 0
     const arm = () => {
       window.clearTimeout(timer)
-      timer = window.setTimeout(() => setHidden(true), IDLE_HIDE_MS)
+      timer = window.setTimeout(() => {
+        // Never fade under an open menu, popover or dialog (it may be driven by the keyboard,
+        // which produces no pointer moves); look again later.
+        if (document.querySelector('[role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"]')) arm()
+        else setHidden(true)
+      }, IDLE_HIDE_MS)
     }
     const onMove = (e: PointerEvent) => {
       setHidden(false)
@@ -78,9 +83,12 @@ export function IdleDriver() {
     }
     arm()
     window.addEventListener('pointermove', onMove)
+    // a tap on a touch screen produces no move
+    window.addEventListener('pointerdown', onMove)
     window.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerdown', onMove)
       window.removeEventListener('keydown', onKey)
       window.clearTimeout(timer)
       setHidden(false)

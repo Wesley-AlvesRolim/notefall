@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent } from 'react'
+import { useEffect, useState, type DragEvent } from 'react'
 import { Button as AriaButton, FileTrigger } from 'react-aria-components'
 import clsx from 'clsx'
 import { useTranslation } from 'react-i18next'
@@ -109,17 +109,17 @@ export function ImagePicker({
   )
 }
 
-/** Object URL for the stored image bytes, revoked when they change. */
+/** Object URL for the stored image bytes, created and revoked in an effect (never during render). */
 function usePreviewUrl(bytes: ArrayBuffer | null, mime: string | null): string | null {
-  const url = useMemo(
-    () => (bytes ? URL.createObjectURL(new Blob([bytes], { type: mime ?? '' })) : null),
-    [bytes, mime],
-  )
-  useEffect(
-    () => () => {
-      if (url) URL.revokeObjectURL(url)
-    },
-    [url],
-  )
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!bytes) {
+      setUrl(null)
+      return
+    }
+    const u = URL.createObjectURL(new Blob([bytes], { type: mime ?? '' }))
+    setUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [bytes, mime])
   return url
 }

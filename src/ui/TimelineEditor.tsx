@@ -97,6 +97,7 @@ export function TimelineEditor() {
   if (!mounted || !song) return null
   return (
     <Panel
+      data-timeline-panel
       className={`nf-enter-up fixed z-20 px-3.5 py-3 transition-[right] duration-200 ease-[var(--ease-out)] ${leaving ? 'nf-leaving' : ''}`}
       style={{
         left: GEOMETRY.EDGE,

@@ -113,17 +113,16 @@ export function StartCard() {
               </Popover>
             </MenuTrigger>
           )}
-          {midiInput.isSupported() && (
-            <Button
-              variant="field"
-              icon={<span className="h-2.5 w-2.5 rounded-full bg-record" />}
-              hint={device ? t('startCard.deviceConnected', { name: device }) : undefined}
-              className={action}
-              onPress={() => void toggleRecord()}
-            >
-              {t('startCard.record')}
-            </Button>
-          )}
+          {/* Recording works from a MIDI keyboard or the computer keyboard, so it's offered everywhere. */}
+          <Button
+            variant="field"
+            icon={<span className="h-2.5 w-2.5 rounded-full bg-record" />}
+            hint={device ? t('startCard.deviceConnected', { name: device }) : undefined}
+            className={action}
+            onPress={() => void toggleRecord()}
+          >
+            {t('startCard.record')}
+          </Button>
         </div>
         <p className="text-caption text-ink-faint">{t('startCard.note')}</p>
       </section>

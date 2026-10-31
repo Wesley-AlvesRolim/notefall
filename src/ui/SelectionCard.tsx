@@ -63,6 +63,15 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
     }
   }, [open])
 
+  // The canvas scrubs time on wheel; scrolling over the card must not.
+  useEffect(() => {
+    const card = cardRef.current
+    if (!open || !card) return
+    const stop = (e: WheelEvent) => e.stopPropagation()
+    card.addEventListener('wheel', stop)
+    return () => card.removeEventListener('wheel', stop)
+  }, [open])
+
   // Fades out instead of popping; stays in place so a quick re-show doesn't jump.
   const hideCard = (card: HTMLElement) => {
     card.style.opacity = '0'
@@ -100,7 +109,11 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
         Math.min(w.width, window.innerWidth - (useShell.getState().lookOpen ? EDGE + PANEL + SURFACE_GAP : EDGE) - w.left) -
         CARD_W
       const minY = Math.max(PAD, EDGE + BAR + SURFACE_GAP - w.top)
-      const maxY = Math.min(w.height - PAD, window.innerHeight - (PILL_BOTTOM + PILL + SURFACE_GAP) - w.top) - h
+      const timeline = document.querySelector('[data-timeline-panel]')
+      const bottomEdge = timeline
+        ? timeline.getBoundingClientRect().top - SURFACE_GAP
+        : window.innerHeight - (PILL_BOTTOM + PILL + SURFACE_GAP)
+      const maxY = Math.min(w.height - PAD, bottomEdge - w.top) - h
       const roomRight = maxX - (r + GAP)
       const roomLeft = l - GAP - CARD_W - minX
       let x: number
@@ -337,8 +350,12 @@ function VelocityField({ lo, hi, onCommit }: { lo: number; hi: number; onCommit:
   const { t } = useTranslation('editor')
   const display = lo === hi ? String(lo) : `${lo}–${hi}`
   const [draft, setDraft] = useState<string | null>(null)
+  // Esc blurs too; this keeps that blur from committing the abandoned text.
+  const cancelled = useRef(false)
   const commit = () => {
-    if (draft !== null) {
+    if (cancelled.current) {
+      cancelled.current = false
+    } else if (draft !== null) {
       const n = Number(draft)
       if (draft.trim() !== '' && Number.isFinite(n)) onCommit(n)
     }
@@ -358,6 +375,7 @@ function VelocityField({ lo, hi, onCommit }: { lo: number; hi: number; onCommit:
       onKeyDown={(e) => {
         if (e.key === 'Enter') e.currentTarget.blur()
         else if (e.key === 'Escape') {
+          cancelled.current = true
           setDraft(null)
           e.currentTarget.blur()
         }

@@ -1743,9 +1743,24 @@ export function Timeline() {
     seekToTime(clampedScroll + seekFraction(clientX, el) * viewDuration)
   }
   const seekDraggingRef = useRef<boolean>(false)
-  // Display-time under the pointer while it is over the ruler: a ghost playhead + time chip
-  // show where a click will seek (the ruler has no other "this is a seek bar" cue).
-  const [rulerHover, setRulerHover] = useState<number | null>(null)
+  // Ghost playhead + time chip under the pointer while it is over the ruler, showing where a
+  // click will seek (the ruler has no other "this is a seek bar" cue). Updated imperatively:
+  // this component is large and must not re-render on every pointer move.
+  const hoverChipRef = useRef<HTMLSpanElement>(null)
+  const hoverLineRef = useRef<HTMLDivElement>(null)
+  const showRulerHover = (displayTime: number | null) => {
+    const chip = hoverChipRef.current
+    const line = hoverLineRef.current
+    if (!chip || !line) return
+    if (displayTime === null) {
+      chip.style.display = line.style.display = 'none'
+      return
+    }
+    const x = `${(displayTime - clampedScroll) * pxPerSec}px`
+    chip.style.left = line.style.left = x
+    chip.style.display = line.style.display = 'block'
+    chip.textContent = formatClock(midiOffsetSec + midiToTimeline(speedMap, displayTime - midiOffsetSec))
+  }
   const rulerHandlers = {
     onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
       if (!song) return
@@ -1757,11 +1772,11 @@ export function Timeline() {
       seekVisibleWindow(e.clientX, e.currentTarget)
     },
     onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
-      if (song) setRulerHover(clampedScroll + Math.max(0, Math.min(1, seekFraction(e.clientX, e.currentTarget))) * viewDuration)
+      if (song) showRulerHover(clampedScroll + Math.max(0, Math.min(1, seekFraction(e.clientX, e.currentTarget))) * viewDuration)
       if (!seekDraggingRef.current) return
       seekVisibleWindow(e.clientX, e.currentTarget)
     },
-    onPointerLeave: () => setRulerHover(null),
+    onPointerLeave: () => showRulerHover(null),
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       if (!seekDraggingRef.current) return
       seekDraggingRef.current = false
@@ -2306,14 +2321,13 @@ export function Timeline() {
                 midiOffsetSec={midiOffsetSec}
               />
             )}
-            {song && rulerHover !== null && (
+            {song && (
               <span
+                ref={hoverChipRef}
                 aria-hidden
                 className="nf-glass-strong pointer-events-none absolute top-px z-10 -translate-x-1/2 rounded-field px-1.5 text-caption tabular-nums text-ink"
-                style={{ left: (rulerHover - clampedScroll) * pxPerSec }}
-              >
-                {formatClock(midiOffsetSec + midiToTimeline(speedMap, rulerHover - midiOffsetSec))}
-              </span>
+                style={{ display: 'none' }}
+              />
             )}
             {/* Fit / reset-zoom affordance — visible when zoomed in
                 so the user has a one-click way back to the overview.
@@ -2606,12 +2620,13 @@ export function Timeline() {
             visually break. Hidden when the playhead is outside the
             visible window so it doesn't pin to an edge while the user
             has scrolled away. */}
-        {song && rulerHover !== null && (
+        {song && (
           <div
+            ref={hoverLineRef}
             aria-hidden
             className="pointer-events-none absolute w-px"
             style={{
-              left: (rulerHover - clampedScroll) * pxPerSec,
+              display: 'none',
               top: RULER_HEIGHT,
               height: totalRowHeight - (MINIMAP_HEIGHT + ROW_GAP) - RULER_HEIGHT,
               background: 'var(--ink-faint)',

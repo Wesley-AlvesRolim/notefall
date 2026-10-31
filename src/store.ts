@@ -793,7 +793,9 @@ export const defaultSettings: Settings = {
   midiSpeedAutomation: [],
   midiSpeedAutomationYRangeLog2: 1,
   midiSpeedAutomationYCenterLog2: 0,
-  timelineEditorOpen: true,
+  // Closed by default: the floating panel sits over the keyboard. A view preference, so opening a
+  // project keeps the current state (see loadProject).
+  timelineEditorOpen: false,
   timelineLaneScale: 1,
   timelineMidiLaneRatio: 1,
   timelineSpeedLaneRatio: 1,
@@ -933,7 +935,7 @@ function hashSong(song: ParsedSong | null): string {
   if (!song) return ''
   let acc = ''
   for (const n of song.notes) {
-    acc += `${n.id},${n.midi},${n.time.toFixed(6)},${n.duration.toFixed(6)},${n.velocity.toFixed(4)};`
+    acc += `${n.id},${n.midi},${n.time.toFixed(6)},${n.duration.toFixed(6)},${n.velocity.toFixed(4)},${n.hand ?? ''},${n.finger ?? ''};`
   }
   acc += '|'
   for (const p of song.pedals) {
@@ -1944,8 +1946,10 @@ export const useStore = create<AppState>((set) => ({
       return { projectName: name, editHistory: history, editFuture: [] }
     }),
 
-  loadProject: (nextSettings, nextSong, ref, projectName) => {
+  loadProject: (loadedSettings, nextSong, ref, projectName) => {
     dropSettingsBaseline()
+    // Whether the timeline panel is open is how this window is laid out, not part of the song.
+    const nextSettings = { ...loadedSettings, timelineEditorOpen: useStore.getState().settings.timelineEditorOpen }
     set({
       settings: nextSettings,
       song: nextSong,
