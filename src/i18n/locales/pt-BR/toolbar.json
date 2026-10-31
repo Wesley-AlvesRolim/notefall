@@ -13,7 +13,8 @@
     "saveSongAsMidi": "Salvar música como MIDI…",
     "export": "Exportar…",
     "demoSongs": "Músicas de demonstração",
-    "demoSongsLabel": "Músicas de demonstração"
+    "demoSongsLabel": "Músicas de demonstração",
+    "exportButton": "Exportar"
   },
   "midi": {
     "button": "Entrada MIDI",
@@ -24,15 +25,15 @@
   },
   "record": {
     "stop": "Parar gravação",
-    "cancelCountIn": "Cancelar contagem",
+    "cancelCountIn": "Cancelar pré-contagem",
     "start": "Iniciar gravação",
     "label": "Gravar",
-    "disableCountIn": "Desativar contagem",
-    "enableCountIn": "Ativar contagem"
+    "stopLabel": "Parar",
+    "countIn": "Pré-contagem",
+    "disableCountIn": "Desativar pré-contagem",
+    "enableCountIn": "Ativar pré-contagem"
   },
   "recordings": {
-    "showWithNew": "Mostrar gravações ({{count}} novas)",
-    "show": "Mostrar gravações",
     "unread": "Não lida",
     "heading": "Gravações",
     "clearAll": "Limpar tudo",
@@ -42,25 +43,29 @@
     "loadAndPlay": "Carregar e tocar",
     "saveAsMid": "Salvar como .mid",
     "confirmDelete": "Confirmar exclusão da gravação",
-    "delete": "Excluir gravação"
+    "delete": "Excluir gravação",
+    "trigger": "Gravações e pré-contagem",
+    "triggerWithNew": "Gravações e pré-contagem ({{count}} novas)",
+    "showWithNew": "Mostrar gravações ({{count}} novas)",
+    "show": "Mostrar gravações"
   },
   "toast": {
     "emptyRecording": "Nenhuma nota capturada — a gravação ficou vazia"
   },
   "help": {
-    "aria": "Ajuda e feedback",
     "reportBug": "Relatar um bug…",
     "requestFeature": "Sugerir uma funcionalidade…",
-    "viewOnGitHub": "Ver no GitHub",
-    "build": "Build {{commit}}"
+    "viewOnGitHub": "Código-fonte no GitHub",
+    "build": "Build {{commit}}",
+    "aria": "Ajuda e feedback"
   },
   "analytics": {
     "label": "Ajude a melhorar o notefall",
     "caption": "Apenas uso anônimo — nunca suas músicas ou arquivos."
   },
   "badge": {
-    "unsaved": "Não salvo",
-    "unsavedAria": "Alterações não salvas"
+    "unsavedAria": "Alterações não salvas",
+    "unsaved": "Não salvo"
   },
   "projectName": {
     "aria": "Nome do projeto",
@@ -88,6 +93,15 @@
     "videoNotSupportedTitle": "Exportação de vídeo não suportada",
     "videoNotSupportedMessage": "Seu navegador não tem a API WebCodecs. Use Chrome, Edge ou Safari 16.4+ para exportar vídeo.",
     "videoNotSupportedShort": "Seu navegador não tem a API WebCodecs."
+  },
+  "app": {
+    "menuLabel": "Menu do notefall",
+    "shortcuts": "Atalhos de teclado",
+    "language": "Idioma"
+  },
+  "history": {
+    "undo": "Desfazer",
+    "redo": "Refazer"
   },
   "language": {
     "label": "Idioma",
