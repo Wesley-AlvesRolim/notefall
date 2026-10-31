@@ -4,7 +4,6 @@ import { togglePlayback } from '../audio/playback'
 import { toggleRecord } from '../audio/recordControl'
 import { openProject, saveProject, saveProjectAs } from '../projects/actions'
 import { useStore } from '../store'
-import { notifyNotesDeleted } from './editor/deleteToast'
 import { deleteNotes, moveNotes } from '../midi/edit'
 import { showAlert } from './confirm'
 import { useShell } from './shell/uiState'
@@ -39,7 +38,7 @@ import { useShell } from './shell/uiState'
  *   Ctrl + Y                — redo (Windows convention)
  *
  * Selection-dependent (no-op when nothing is selected):
- *   Delete / Backspace      — delete selected notes (toast with Undo)
+ *   Delete / Backspace      — delete selected notes
  *   ↑ / ↓                   — nudge pitch ±1 semitone
  *   ← / →                   — nudge time ±0.05 s
  *
@@ -234,13 +233,11 @@ export function useGlobalShortcuts(): void {
       if (e.code === 'Delete' || e.code === 'Backspace') {
         e.preventDefault()
         if (!state.song) return
-        const count = state.selection.size
         const next = deleteNotes(state.song, state.selection)
         if (next === state.song) return
         state.applySongEdit(next)
         // Drop the selection — its ids no longer exist in the song.
         state.replaceSelection([])
-        notifyNotesDeleted(count)
         return
       }
 

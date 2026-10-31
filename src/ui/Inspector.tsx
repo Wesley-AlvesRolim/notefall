@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode, useLayoutEffect } from 'react'
+import { useEffect, useRef, useState, type ReactNode, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
 import { useStore, defaultSettings, type Settings } from '../store'
@@ -23,9 +23,9 @@ import {
 } from './controls'
 import { GradientStops } from './look/GradientStops'
 import { PresetSwatch } from './look/PresetSwatch'
+import { ImagePicker } from './look/ImagePicker'
 import { useBarColors, useEffectiveLook } from './look/useLookState'
 import { VelocityCurveEditor } from './VelocityCurveEditor'
-import { FileTrigger } from 'react-aria-components'
 import { Button, Icon, IconButton, Panel, GEOMETRY, usePresence } from './kit'
 import { useShell } from './shell/uiState'
 import { useCustomTexture } from '../notes/customTexture'
@@ -297,9 +297,7 @@ function NoteColorControls() {
             softnessKey="noteGradientSoftness"
             angleKey="noteGradientAngle"
           />
-          <Detail id="noteGradientStopValues" label={t('coloring.stopValues')}>
-            <GradientStopRows colorKeys={GRADIENT_COLOR_KEYS} posKeys={GRADIENT_POS_KEYS} count={stops} />
-          </Detail>
+          <GradientStopRows colorKeys={GRADIENT_COLOR_KEYS} count={stops} />
           <BoundSliderRow label={t('coloring.angle')} settingKey="noteGradientAngle" min={0} max={360} step={1} />
         </SubGroup>
       )}
@@ -408,6 +406,8 @@ function TextureControls() {
   // Older projects may still carry the removed 'liquid' / 'gem' values.
   const noteTexture = useStore((st) => (st.settings.noteTexture === 'custom' ? 'custom' : 'solid'))
   const customFileName = useCustomTexture((st) => st.fileName)
+  const customBytes = useCustomTexture((st) => st.fileBytes)
+  const customMime = useCustomTexture((st) => st.fileMime)
   const setCustomFile = useCustomTexture((st) => st.setFromFile)
   return (
     <>
@@ -423,28 +423,15 @@ function TextureControls() {
       />
       <SubGroup label={t('texture.texture')}>
         {noteTexture === 'custom' && (
-          <div className="flex items-center gap-2">
-            <FileTrigger
-              acceptedFileTypes={['image/*']}
-              onSelect={async (e) => {
-                if (!e) return
-                const file = Array.from(e)[0]
-                if (file) await setCustomFile(file)
-              }}
-            >
-              <Button variant="field" size="sm" className="flex-none">
-                {t('texture.chooseImage')}
-              </Button>
-            </FileTrigger>
-            <span className="min-w-0 flex-1 truncate text-ink-faint">
-              {customFileName ?? t('texture.noImage')}
-            </span>
-            {customFileName && (
-              <Button variant="quiet" size="sm" onPress={() => setCustomFile(null)} className="flex-none">
-                {t('texture.clear')}
-              </Button>
-            )}
-          </div>
+          <ImagePicker
+            label={t('texture.customImage')}
+            fileName={customFileName}
+            bytes={customBytes}
+            mime={customMime}
+            accept={['image/*']}
+            onPick={(file) => setCustomFile(file)}
+            onClear={() => void setCustomFile(null)}
+          />
         )}
         {noteTexture === 'custom' && (
           <>
@@ -777,6 +764,8 @@ function NoteLookControls() {
 function BackgroundImageControls() {
   const { t } = useTranslation('inspector')
   const fileName = useStageBackground((state) => state.fileName)
+  const bgBytes = useStageBackground((state) => state.fileBytes)
+  const bgMime = useStageBackground((state) => state.fileMime)
   const setBackgroundFile = useStageBackground((state) => state.setFromFile)
   const fit = useStore((state) => state.settings.backgroundImageFit)
 
@@ -797,52 +786,17 @@ function BackgroundImageControls() {
 
   return (
     <>
-      {/* Heading, then everything that belongs to the image indented
-          under a hairline rule. Without it the framing rows sat at the
-          same level as the background colour and the preview switch, so
-          nothing said they only apply to the image.
-
-          The rule lives on a wrapper whose children all return null when
-          the Inspector's search filter excludes them — the wrapper then
-          collapses to zero height and the rule goes with it, instead of
-          being left behind over empty space. */}
-      <SearchableBlock label={t('backgroundImage.title')}>
-        {/* The label is on its own line: label + button + filename +
-            Clear do not fit across the ~260px row without the filename
-            crowding Clear. Same shape as the EQ block. */}
-        <div className="select-none text-ink-muted">{t('backgroundImage.title')}</div>
-      </SearchableBlock>
-      <SubGroup label={t('backgroundImage.title')}>
-        <SearchableBlock
-          label={`${t('backgroundImage.title')} ${t('backgroundImage.chooseImage')}`}
-        >
-          <div className="flex items-center gap-2">
-            <FileTrigger
-              acceptedFileTypes={[...STAGE_BACKGROUND_ACCEPTED_TYPES]}
-              onSelect={async (event) => {
-                if (!event) return
-                const file = Array.from(event)[0]
-                if (file) await chooseImage(file)
-              }}
-            >
-              <Button variant="field" size="sm">
-                {t('backgroundImage.chooseImage')}
-              </Button>
-            </FileTrigger>
-            {/* A long filename still truncates; the title attribute keeps
-                the whole of it reachable on hover. */}
-            <span
-              className="min-w-0 flex-1 truncate text-ink-faint"
-              title={fileName ?? undefined}
-            >
-              {fileName ?? t('backgroundImage.noImage')}
-            </span>
-            {fileName && (
-              <Button variant="quiet" size="sm" onPress={() => void setBackgroundFile(null)}>
-                {t('backgroundImage.clear')}
-              </Button>
-            )}
-          </div>
+      <SubGroup heading label={t('backgroundImage.title')}>
+        <SearchableBlock label={`${t('backgroundImage.title')} ${t('backgroundImage.chooseImage')}`}>
+          <ImagePicker
+            label={t('backgroundImage.title')}
+            fileName={fileName}
+            bytes={bgBytes}
+            mime={bgMime}
+            accept={STAGE_BACKGROUND_ACCEPTED_TYPES}
+            onPick={chooseImage}
+            onClear={() => void setBackgroundFile(null)}
+          />
         </SearchableBlock>
         {fileName && (
           <>
@@ -978,9 +932,7 @@ function HitLineColorControls() {
             count={stops}
             softnessKey="hitLineGradientSoftness"
           />
-          <Detail id="hitLineGradientStopValues" label={t('coloring.stopValues')}>
-            <GradientStopRows colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS} posKeys={HIT_LINE_GRADIENT_POS_KEYS} count={stops} />
-          </Detail>
+          <GradientStopRows colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS} count={stops} />
         </SubGroup>
       )}
     </>
@@ -988,29 +940,19 @@ function HitLineColorControls() {
 }
 
 /** Colour + position rows of the first `count` gradient stops. */
+/** One colour row per active stop. Positions are set by dragging the stops on the gradient bar. */
 function GradientStopRows({
   colorKeys,
-  posKeys,
   count,
 }: {
   colorKeys: readonly (typeof GRADIENT_COLOR_KEYS | typeof HIT_LINE_GRADIENT_COLOR_KEYS)[number][]
-  posKeys: readonly (typeof GRADIENT_POS_KEYS | typeof HIT_LINE_GRADIENT_POS_KEYS)[number][]
   count: number
 }) {
   const { t } = useTranslation('inspector')
   return (
     <>
       {colorKeys.slice(0, count).map((k, i) => (
-        <Fragment key={k}>
-          <BoundColorRow label={t('coloring.stopColor', { n: i + 1 })} settingKey={k} />
-          <BoundSliderRow
-            label={t('coloring.stopPosition', { n: i + 1 })}
-            settingKey={posKeys[i]}
-            min={0}
-            max={1}
-            step={0.01}
-          />
-        </Fragment>
+        <BoundColorRow key={k} label={t('coloring.stopColor', { n: i + 1 })} settingKey={k} />
       ))}
     </>
   )

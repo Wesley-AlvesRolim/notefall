@@ -1097,7 +1097,7 @@ export function Section({
       >
         {/* Clip box widened to the section's padding so knobs and focus rings at the edges aren't cut. */}
         <div className="-mx-4 min-h-0 overflow-hidden px-4 pb-1">
-          <div ref={contentRef} className="grid gap-3 pt-3">
+          <div ref={contentRef} className="grid grid-cols-[minmax(0,1fr)] gap-3 pt-3">
             <SearchContext.Provider value={childQuery}>
               {children}
             </SearchContext.Provider>

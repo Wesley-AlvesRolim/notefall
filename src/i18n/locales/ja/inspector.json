@@ -137,9 +137,6 @@
     "texture": "テクスチャ",
     "solid": "ソリッド",
     "customImage": "カスタム画像",
-    "chooseImage": "画像を選択",
-    "noImage": "画像なし",
-    "clear": "クリア",
     "scale": "スケール",
     "offsetX": "オフセット X",
     "offsetY": "オフセット Y",
@@ -153,8 +150,6 @@
     "title": "背景画像",
     "selectColor": "背景色",
     "chooseImage": "画像を選択",
-    "noImage": "画像なし",
-    "clear": "クリア",
     "fit": "フィットモード",
     "cover": "カバー",
     "contain": "全体を表示",
@@ -348,7 +343,6 @@
     },
     "stops": "色数",
     "stopColor": "色 {{n}}",
-    "stopPosition": "位置 {{n}}",
     "angle": "角度",
     "randomBy": "割り当て",
     "randomBys": {
@@ -369,8 +363,7 @@
     "blackKeyDarkness": "黒鍵ノートの暗さ",
     "lowestKey": "最低音",
     "highestKey": "最高音",
-    "stopHandle": "色{{n}}の位置",
-    "stopValues": "各色の値と位置"
+    "stopHandle": "色{{n}}の位置"
   },
   "tab": {
     "label": "設定の区分",
@@ -448,5 +441,11 @@
   },
   "panel": {
     "title": "見た目"
+  },
+  "image": {
+    "choose": "画像を選ぶ…",
+    "dropHint": "またはここに画像をドロップ",
+    "replace": "差し替える",
+    "remove": "外す"
   }
 }

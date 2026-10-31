@@ -137,9 +137,6 @@
     "texture": "Texture",
     "solid": "Solid",
     "customImage": "Custom image",
-    "chooseImage": "Choose image",
-    "noImage": "No image",
-    "clear": "Clear",
     "scale": "Scale",
     "offsetX": "Offset X",
     "offsetY": "Offset Y",
@@ -153,8 +150,6 @@
     "title": "Background image",
     "selectColor": "Background color",
     "chooseImage": "Choose image",
-    "noImage": "No image",
-    "clear": "Clear",
     "fit": "Fit mode",
     "cover": "Cover",
     "contain": "Contain",
@@ -348,7 +343,6 @@
     },
     "stops": "Colors",
     "stopColor": "Color {{n}}",
-    "stopPosition": "Position {{n}}",
     "angle": "Angle",
     "randomBy": "Per",
     "randomBys": {
@@ -369,8 +363,7 @@
     "blackKeyDarkness": "Black-key darkness",
     "lowestKey": "Lowest key",
     "highestKey": "Highest key",
-    "stopHandle": "Stop {{n}}",
-    "stopValues": "Stop colors and positions"
+    "stopHandle": "Stop {{n}}"
   },
   "tab": {
     "label": "Settings areas",
@@ -448,5 +441,11 @@
   },
   "panel": {
     "title": "Look"
+  },
+  "image": {
+    "choose": "Choose image…",
+    "dropHint": "or drop an image here",
+    "replace": "Replace",
+    "remove": "Remove"
   }
 }

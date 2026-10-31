@@ -103,7 +103,7 @@ Active when `transport !== 'playing' && song !== null` — `Scene.tsx` mounts `<
 | Target | Input | Action |
 |---|---|---|
 | Note body | LClick | Select + arm move-drag |
-| Note body | Cmd+L / Alt+L / RClick / DblClick | Toggle selection / split / delete that note (+ undo toast) / select that note |
+| Note body | Cmd+L / Alt+L / RClick / DblClick | Toggle selection / split / delete that note / select that note |
 | Note edge | LDrag | Edge-resize (head moves time+duration; tail duration only); on a selected note, the same edge of every selected note by one delta |
 | Empty above hit | LClick | Create note + arm position-drag (1 undo entry) |
 | Empty | Cmd+LDrag / RDrag | Marquee range-select (additive) / eraser sweep |
@@ -116,7 +116,7 @@ Active when `transport !== 'playing' && song !== null` — `Scene.tsx` mounts `<
 
 **Loading guard.** Transparent click-eater div mounts over the Canvas while `loadStatus.state === 'loading'`. The triggering click itself isn't covered (status was still `'idle'` at pointerdown), so editor handlers also early-return when `!audioEngine.isReady()` and kick off `ensureSamplerLoaded` — first cold-session click downloads but doesn't drag. Pairs with `previewNote`'s sync-drop so no audio queues during load.
 
-**Selection card** (`ui/SelectionCard.tsx`) replaces the old velocity context menu (right-click deletes, double-click only selects). A kit `Panel` shown while paused with a non-empty selection, hidden while a pointer gesture / marquee is in flight; each rAF it is placed beside the selection's projected screen box (`scene/selectionBounds.ts`, via `exportBridge`'s R3F state), right side first, never covering the notes. Header = count (+ pitch for one note); Velocity = value field + slider (mixed: `lo–hi` and a band on the track; dragging shifts all by one delta keeping differences, clamped 1..127; typing sets all) with one `pushUndoSnapshot` per gesture + `setSongPreview` and a 500 ms preview ticker; footer Delete (⌫). Hand / Finger rows are not there yet (no data model). Every delete (right-click, eraser sweep = one toast after release, Delete key, card) calls `notifyNotesDeleted(count)` (`ui/editor/deleteToast.ts`) → "N notes deleted · Undo" toast.
+**Selection card** (`ui/SelectionCard.tsx`) replaces the old velocity context menu (right-click deletes, double-click only selects). A kit `Panel` shown while paused with a non-empty selection, hidden while a pointer gesture / marquee is in flight; each rAF it is placed beside the selection's projected screen box (`scene/selectionBounds.ts`, via `exportBridge`'s R3F state), right side first, never covering the notes. Header = count (+ pitch for one note); Velocity = value field + slider (mixed: `lo–hi` and a band on the track; dragging shifts all by one delta keeping differences, clamped 1..127; typing sets all) with one `pushUndoSnapshot` per gesture + `setSongPreview` and a 500 ms preview ticker; footer Delete (⌫). Hand / Finger rows are not there yet (no data model). Deletes show no toast (the owner dropped the undo toast); ⌘Z undoes them.
 
 ## Timeline pins (settings keyframes)
 

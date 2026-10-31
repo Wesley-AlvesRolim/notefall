@@ -6,7 +6,6 @@ import { previewNote } from '../audio/preview'
 import { deleteNotes, setNotesVelocity } from '../midi/edit'
 import { midiToName } from '../midi/noteName'
 import { selectionScreenRect } from '../scene/selectionBounds'
-import { notifyNotesDeleted } from './editor/deleteToast'
 import { Button, GEOMETRY, Icon, KnobThumb, Panel } from './kit'
 import { useShell } from './shell/uiState'
 
@@ -193,12 +192,10 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
   const doDelete = () => {
     const st = useStore.getState()
     if (!st.song || st.selection.size === 0) return
-    const count = st.selection.size
     const next = deleteNotes(st.song, st.selection)
     if (next === st.song) return
     st.applySongEdit(next)
     st.replaceSelection([])
-    notifyNotesDeleted(count)
   }
 
   if (!open) return null
