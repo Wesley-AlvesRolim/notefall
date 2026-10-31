@@ -28,6 +28,8 @@ const COLOR_KEYS = [
   'noteRandomColor3',
   'noteRandomColor4',
   'noteRandomColor5',
+  'noteHandColorL',
+  'noteHandColorR',
 ] as const
 
 /** The settings as shown: the targeted keyframe's snapshot over the base look, picked to `keys`. */
@@ -57,5 +59,6 @@ export function useBarColors(): string[] {
     const n = Math.max(1, Math.min(5, Math.round(c.noteRandomCount)))
     return [pal[0], pal[1 % n], pal[2 % n]]
   }
+  if (c.noteColorMode === 'hand') return [c.noteHandColorL, c.noteHandColorR, c.noteHandColorR]
   return [c.noteColor, c.noteColor, c.noteColor]
 }

@@ -39,6 +39,10 @@ export function collectSongColors(exclude: string): string[] {
     ;[s.noteGradientColor1, s.noteGradientColor2, s.noteGradientColor3, s.noteGradientColor4, s.noteGradientColor5]
       .slice(0, n)
       .forEach(add)
+  } else if (s.noteColorMode === 'hand') {
+    add(s.noteHandColorL)
+    add(s.noteHandColorR)
+    add(s.noteColor)
   } else {
     const n = Math.round(s.noteRandomCount)
     ;[s.noteRandomColor1, s.noteRandomColor2, s.noteRandomColor3, s.noteRandomColor4, s.noteRandomColor5]
@@ -47,7 +51,10 @@ export function collectSongColors(exclude: string): string[] {
   }
 
   if (s.hitLineEnabled) {
-    if (s.hitLineColorMode === 'solid' || (s.hitLineColorMode === 'note' && s.noteColorMode === 'random')) {
+    if (
+      s.hitLineColorMode === 'solid' ||
+      (s.hitLineColorMode === 'note' && (s.noteColorMode === 'random' || s.noteColorMode === 'hand'))
+    ) {
       add(s.hitLineColor)
     } else if (s.hitLineColorMode === 'gradient') {
       const n = Math.round(s.hitLineGradientStops)

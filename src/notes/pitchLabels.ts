@@ -14,7 +14,12 @@ import { pitchLabel, type Accidental, type PitchLabelFormat } from '../midi/note
 // so the shader can cut an outline of any width up to the maximum.
 
 const COLS = 8
-const ROWS = Math.ceil(KEY_COUNT / COLS)
+/** Cells after the 88 key names: finger numbers 1–5 (see `fingerGlyph`). */
+const FINGER_CELLS = 5
+const ROWS = Math.ceil((KEY_COUNT + FINGER_CELLS) / COLS)
+
+/** Atlas cell of a finger number (1–5). */
+export const fingerGlyph = (finger: number) => KEY_COUNT + finger - 1
 const CELL_W = 160
 const CELL_H = 64
 const FONT_PX = 46
@@ -50,9 +55,9 @@ export function labelAtlas(format: PitchLabelFormat, accidental: Accidental): La
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.lineJoin = 'round'
-  const textAspect = new Float32Array(KEY_COUNT)
-  for (let i = 0; i < KEY_COUNT; i++) {
-    const text = pitchLabel(MIDI_MIN + i, format, accidental)
+  const textAspect = new Float32Array(KEY_COUNT + FINGER_CELLS)
+  for (let i = 0; i < KEY_COUNT + FINGER_CELLS; i++) {
+    const text = i < KEY_COUNT ? pitchLabel(MIDI_MIN + i, format, accidental) : String(i - KEY_COUNT + 1)
     const cx = (i % COLS) * CELL_W + CELL_W / 2
     const cy = Math.floor(i / COLS) * CELL_H + CELL_H / 2
     ctx.save()
@@ -89,14 +94,18 @@ export function noteLabelHeight(atlas: LabelAtlas, key: number, noteWidth: numbe
   )
 }
 
-/** Shortest note that still carries its label. With labels on, notes are
- *  drawn at least this long (display only; the sound is untouched). */
-export function noteLabelMinLength(labelHeight: number) {
-  return labelHeight * 1.15
+/** Shortest note that still carries its label(s): `lines` labels stacked (pitch + finger = 2). With
+ *  labels on, notes are drawn at least this long (display only; the sound is untouched). */
+export function noteLabelMinLength(labelHeight: number, lines = 1) {
+  return labelHeight * 1.15 * lines
 }
+
+/** What a note label shows: its pitch, its finger number (notes with one), or both stacked. */
+export type NoteLabelContent = 'pitch' | 'finger' | 'both'
 
 interface NoteLabelSettings {
   noteLabelsEnabled: boolean
+  noteLabelContent: NoteLabelContent
   noteLabelFormat: PitchLabelFormat
   noteLabelAccidental: Accidental
   noteLabelSize: number
@@ -108,7 +117,10 @@ export function noteLabelMinLengthAt(s: NoteLabelSettings, widthScale: number, k
   if (!s.noteLabelsEnabled) return 0
   const atlas = labelAtlas(s.noteLabelFormat, s.noteLabelAccidental)
   const w = KEYBOARD_LAYOUT.keys[key].width * widthScale
-  return noteLabelMinLength(noteLabelHeight(atlas, key, w, s.noteLabelSize, s.noteLabelOutlineWidth))
+  return noteLabelMinLength(
+    noteLabelHeight(atlas, key, w, s.noteLabelSize, s.noteLabelOutlineWidth),
+    s.noteLabelContent === 'both' ? 2 : 1,
+  )
 }
 
 /** `noteLabelMinLengthAt` for every key, into `out`. */

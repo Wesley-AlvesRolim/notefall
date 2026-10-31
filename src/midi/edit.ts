@@ -1,4 +1,4 @@
-import type { NoteEvent, ParsedSong } from './types'
+import type { Finger, Hand, NoteEvent, ParsedSong } from './types'
 
 /**
  * Pure mutation helpers for the in-app MIDI editor. Each function returns a
@@ -277,6 +277,30 @@ export function moveNotes(
   }
   const sorted = sortByTime(next)
   return { ...song, notes: sorted, duration: computeDuration(song.duration, sorted) }
+}
+
+/** Assign every selected note to one hand. Returns `song` unchanged when nothing would change. */
+export function setNotesHand(song: ParsedSong, ids: Iterable<number>, hand: Hand): ParsedSong {
+  const idSet = ids instanceof Set ? ids : new Set(ids)
+  let changed = false
+  const next = song.notes.map((n) => {
+    if (!idSet.has(n.id) || n.hand === hand) return n
+    changed = true
+    return { ...n, hand }
+  })
+  return changed ? { ...song, notes: next } : song
+}
+
+/** Give every selected note one finger number. Returns `song` unchanged when nothing would change. */
+export function setNotesFinger(song: ParsedSong, ids: Iterable<number>, finger: Finger): ParsedSong {
+  const idSet = ids instanceof Set ? ids : new Set(ids)
+  let changed = false
+  const next = song.notes.map((n) => {
+    if (!idSet.has(n.id) || n.finger === finger) return n
+    changed = true
+    return { ...n, finger }
+  })
+  return changed ? { ...song, notes: next } : song
 }
 
 /**

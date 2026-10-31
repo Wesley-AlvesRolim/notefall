@@ -7,6 +7,13 @@
     "delete_one": "Delete note",
     "delete_other": "Delete {{count}} notes",
     "groupLabel_one": "{{count}} selected note",
-    "groupLabel_other": "{{count}} selected notes"
+    "groupLabel_other": "{{count}} selected notes",
+    "hand": "Hand",
+    "finger": "Finger",
+    "mixed": "Mixed",
+    "hands": {
+      "L": "Left",
+      "R": "Right"
+    }
   }
 }

@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { setHandSongSource } from './midi/noteHands'
+import type { NoteLabelContent } from './notes/pitchLabels'
 import {
   NOTE_LOOK_PRESETS,
   type NoteBump,
@@ -96,6 +98,9 @@ export type Settings = {
   noteRandomColor3: string
   noteRandomColor4: string
   noteRandomColor5: string
+  /** `noteColorMode: 'hand'`: notes assigned to the left / right hand (others keep `noteColor`). */
+  noteHandColorL: string
+  noteHandColorR: string
   noteEmissive: number
   noteOpacity: number
   noteCornerRadius: number
@@ -398,6 +403,7 @@ export type Settings = {
   octaveLinesEnabled: boolean   // vertical B→C guide lines above the keyboard
   // Pitch names on the falling notes (at the keyboard end) and on the keys.
   noteLabelsEnabled: boolean
+  noteLabelContent: NoteLabelContent   // pitch name, finger number, or both
   noteLabelFormat: PitchLabelFormat
   noteLabelAccidental: Accidental
   noteLabelSize: number
@@ -716,6 +722,7 @@ export const defaultSettings: Settings = {
   backgroundColor: '#05060a',
   octaveLinesEnabled: true,
   noteLabelsEnabled: false,
+  noteLabelContent: 'pitch',
   noteLabelFormat: 'letter',
   noteLabelAccidental: 'sharp',
   noteLabelSize: 1,
@@ -2005,3 +2012,6 @@ export function useSettingsSlice<K extends readonly (keyof Settings)[]>(
     }),
   )
 }
+
+// Lets the note colouring look up a note's hand without importing the store.
+setHandSongSource(() => useStore.getState().song)

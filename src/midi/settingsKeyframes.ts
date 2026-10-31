@@ -256,6 +256,8 @@ export const ANIMATABLE_COLOR_KEYS = [
   'noteColor',
   ...GRADIENT_COLOR_KEYS,
   ...RANDOM_COLOR_KEYS,
+  'noteHandColorL',
+  'noteHandColorR',
   ...HIT_LINE_GRADIENT_COLOR_KEYS,
   'noteEdgeColor',
   'noteOutlineColor',
@@ -544,11 +546,13 @@ export function resolveNoteTintAt(
     noteRandomColor3: base.noteRandomColor3,
     noteRandomColor4: base.noteRandomColor4,
     noteRandomColor5: base.noteRandomColor5,
+    noteHandColorL: base.noteHandColorL,
+    noteHandColorR: base.noteHandColorR,
   }
   if (!keyframes || keyframes.length === 0) return out
   const kfs = sortByTime(keyframes)
   const { from, to, u } = pickBlend(base, kfs, t)
-  for (const k of ['noteColor', ...GRADIENT_COLOR_KEYS, ...RANDOM_COLOR_KEYS] as const) {
+  for (const k of ['noteColor', ...GRADIENT_COLOR_KEYS, ...RANDOM_COLOR_KEYS, 'noteHandColorL', 'noteHandColorR'] as const) {
     const a = (from[k] as string | undefined) ?? base[k]
     const b = (to[k] as string | undefined) ?? base[k]
     out[k] = a === b ? a : lerpColor(a, b, u)

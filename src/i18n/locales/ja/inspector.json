@@ -16,7 +16,7 @@
     "view": "表示",
     "falling": "落下",
     "style": "スタイル",
-    "noteLabels": "音名（ノート）",
+    "noteLabels": "ノートのラベル",
     "keyLabels": "音名（鍵盤）",
     "hands": "手（アルファ版）"
   },
@@ -339,7 +339,8 @@
       "solid": "単色",
       "gradient": "グラデーション",
       "random": "ランダム",
-      "note": "ノートに合わせる"
+      "note": "ノートに合わせる",
+      "hand": "手ごと"
     },
     "stops": "色数",
     "stopColor": "色 {{n}}",
@@ -363,7 +364,10 @@
     "blackKeyDarkness": "黒鍵ノートの暗さ",
     "lowestKey": "最低音",
     "highestKey": "最高音",
-    "stopHandle": "色{{n}}の位置"
+    "stopHandle": "色{{n}}の位置",
+    "leftHand": "左手",
+    "rightHand": "右手",
+    "noHand": "手が未設定のノート"
   },
   "tab": {
     "label": "設定の区分",
@@ -416,7 +420,13 @@
     "outlineColor": "縁取りの色",
     "whiteKeyColor": "白鍵上の色",
     "blackKeyColor": "黒鍵上の色",
-    "keyOffset": "手前からの距離"
+    "keyOffset": "手前からの距離",
+    "show": "表示",
+    "shows": {
+      "pitch": "音名",
+      "finger": "指番号",
+      "both": "両方"
+    }
   },
   "hands": {
     "hint": "試験機能：読み込んだ曲を仮想の手が鍵盤で弾きます。位置や指使いは音符から推定するため、不自然な動きが出ることがあります。速い曲や音の多い曲では、鍵に届かない、ありえない動きになるなどの破綻が起きやすくなります。"

@@ -1,3 +1,8 @@
+/** Which hand plays a note. */
+export type Hand = 'L' | 'R'
+/** Finger number, thumb = 1 … little finger = 5. */
+export type Finger = 1 | 2 | 3 | 4 | 5
+
 export type NoteEvent = {
   id: number
   midi: number
@@ -5,6 +10,9 @@ export type NoteEvent = {
   duration: number
   velocity: number
   track: number
+  /** Set by the user in the selection card; absent = not assigned. Not part of the SMF — saved in the project. */
+  hand?: Hand
+  finger?: Finger
 }
 
 /** Sustain pedal (CC64). `value` is 0..1; partial values are a half pedal. */

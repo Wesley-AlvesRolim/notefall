@@ -3,10 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { Slider, SliderTrack } from 'react-aria-components'
 import { useStore } from '../store'
 import { previewNote } from '../audio/preview'
-import { deleteNotes, setNotesVelocity } from '../midi/edit'
+import { deleteNotes, setNotesFinger, setNotesHand, setNotesVelocity } from '../midi/edit'
+import type { Finger, Hand, ParsedSong } from '../midi/types'
 import { midiToName } from '../midi/noteName'
 import { selectionScreenRect } from '../scene/selectionBounds'
-import { Button, GEOMETRY, Icon, KnobThumb, Panel } from './kit'
+import { Button, GEOMETRY, Icon, KnobThumb, Panel, SegmentedControl } from './kit'
 import { useShell } from './shell/uiState'
 
 const CARD_W = 252
@@ -189,6 +190,13 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
     firePreview()
   }
 
+  const applyToSelection = (edit: (song: ParsedSong, ids: Set<number>) => ParsedSong) => {
+    const st = useStore.getState()
+    if (!st.song || st.selection.size === 0) return
+    const next = edit(st.song, st.selection)
+    if (next !== st.song) st.applySongEdit(next)
+  }
+
   const doDelete = () => {
     const st = useStore.getState()
     if (!st.song || st.selection.size === 0) return
@@ -218,7 +226,6 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
         )}
       </div>
       <div className="grid gap-[14px] px-4 pb-[14px] pt-2">
-        {/* Hand / Finger rows go here once notes carry hand + finger data (not in the data model yet). */}
         <div className="grid gap-1.5">
           <div className="flex items-center justify-between gap-2">
             <span className="text-ink-muted">{t('selection.velocity')}</span>
@@ -257,6 +264,18 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
             </SliderTrack>
           </Slider>
         </div>
+        <ChoiceRow
+          label={t('selection.hand')}
+          values={selected.map((n) => n.hand)}
+          options={HANDS.map((h) => ({ value: h, label: t(`selection.hands.${h}`) }))}
+          onChange={(h) => applyToSelection((song, ids) => setNotesHand(song, ids, h))}
+        />
+        <ChoiceRow
+          label={t('selection.finger')}
+          values={selected.map((n) => (n.finger === undefined ? undefined : (String(n.finger) as FingerKey)))}
+          options={FINGERS.map((f) => ({ value: f, label: f }))}
+          onChange={(f) => applyToSelection((song, ids) => setNotesFinger(song, ids, Number(f) as Finger))}
+        />
       </div>
       <div className="border-t border-glass-edge p-1.5">
         <Button
@@ -270,6 +289,46 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
         </Button>
       </div>
     </Panel>
+  )
+}
+
+const HANDS = ['L', 'R'] as const satisfies readonly Hand[]
+type FingerKey = '1' | '2' | '3' | '4' | '5'
+const FINGERS: FingerKey[] = ['1', '2', '3', '4', '5']
+
+/**
+ * Hand / finger: segments for the choices. All selected notes agree → that value is selected; they differ → nothing
+ * is selected, the values in use are ringed and the row says "Mixed"; none set → nothing selected. Choosing sets all.
+ */
+function ChoiceRow<T extends string>({
+  label,
+  values,
+  options,
+  onChange,
+}: {
+  label: string
+  values: (T | undefined)[]
+  options: { value: T; label: string }[]
+  onChange: (v: T) => void
+}) {
+  const { t } = useTranslation('editor')
+  const present = new Set(values.filter((v): v is T => v !== undefined))
+  const uniform = present.size === 1 && values.every((v) => v !== undefined)
+  const mixed = present.size > 1 || (present.size === 1 && !uniform)
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-ink-muted">{label}</span>
+        {mixed && <span className="text-caption text-ink-faint">{t('selection.mixed')}</span>}
+      </div>
+      <SegmentedControl
+        aria-label={label}
+        value={uniform ? [...present][0] : null}
+        present={mixed ? present : undefined}
+        options={options}
+        onChange={onChange}
+      />
+    </div>
   )
 }
 

@@ -16,7 +16,7 @@
     "view": "View",
     "falling": "Falling notes",
     "style": "Style",
-    "noteLabels": "Note names",
+    "noteLabels": "Note labels",
     "keyLabels": "Key names",
     "hands": "Hands (alpha)"
   },
@@ -339,7 +339,8 @@
       "solid": "Solid",
       "gradient": "Gradient",
       "random": "Random",
-      "note": "Follow notes"
+      "note": "Follow notes",
+      "hand": "By hand"
     },
     "stops": "Colors",
     "stopColor": "Color {{n}}",
@@ -363,7 +364,10 @@
     "blackKeyDarkness": "Black-key darkness",
     "lowestKey": "Lowest key",
     "highestKey": "Highest key",
-    "stopHandle": "Stop {{n}}"
+    "stopHandle": "Stop {{n}}",
+    "leftHand": "Left hand",
+    "rightHand": "Right hand",
+    "noHand": "No hand set"
   },
   "tab": {
     "label": "Settings areas",
@@ -416,7 +420,13 @@
     "outlineColor": "Outline color",
     "whiteKeyColor": "Color on white keys",
     "blackKeyColor": "Color on black keys",
-    "keyOffset": "Distance from front"
+    "keyOffset": "Distance from front",
+    "show": "Show",
+    "shows": {
+      "pitch": "Pitch",
+      "finger": "Finger",
+      "both": "Both"
+    }
   },
   "hands": {
     "hint": "Experimental: virtual hands play the loaded song on the keyboard. Positions and fingering are estimated from the notes, so expect mistakes. Fast or dense pieces are likely to show missed keys and impossible movements."

@@ -279,12 +279,20 @@ function NoteColorControls() {
           { value: 'solid', label: t('coloring.modes.solid') },
           { value: 'gradient', label: t('coloring.modes.gradient') },
           { value: 'random', label: t('coloring.modes.random') },
+          { value: 'hand', label: t('coloring.modes.hand') },
         ]}
         onChange={(v) => atomicUpdate({ noteColorMode: v })}
         defaultValue={def.noteColorMode}
         scopeKey="noteColorMode"
       />
       {mode === 'solid' && <TrackColorRows />}
+      {mode === 'hand' && (
+        <SubGroup label={t('coloring.modes.hand')}>
+          <BoundColorRow label={t('coloring.leftHand')} settingKey="noteHandColorL" />
+          <BoundColorRow label={t('coloring.rightHand')} settingKey="noteHandColorR" />
+          <BoundColorRow label={t('coloring.noHand')} settingKey="noteColor" />
+        </SubGroup>
+      )}
       {mode === 'gradient' && (
         <SubGroup label={t('coloring.modes.gradient')}>
           <BoundCountRow label={t('coloring.stops')} settingKey="noteGradientStops" min={2} max={5} />
@@ -359,6 +367,26 @@ function PitchLabelRows({ target }: { target: 'note' | 'key' }) {
         scopeKey={accidentalKey}
       />
     </>
+  )
+}
+
+/** What note labels show: pitch, finger number (set in the selection card), or both. */
+function NoteLabelContentRow() {
+  const { t } = useTranslation('inspector')
+  const content = useStore((st) => st.settings.noteLabelContent)
+  return (
+    <SelectRow
+      label={t('labels.show')}
+      value={content}
+      options={[
+        { value: 'pitch', label: t('labels.shows.pitch') },
+        { value: 'finger', label: t('labels.shows.finger') },
+        { value: 'both', label: t('labels.shows.both') },
+      ]}
+      onChange={(v) => atomicUpdate({ noteLabelContent: v })}
+      defaultValue={def.noteLabelContent}
+      scopeKey="noteLabelContent"
+    />
   )
 }
 
@@ -895,9 +923,11 @@ function HitLineColorControls() {
   const { t } = useTranslation('inspector')
   const mode = useStore((st) => st.settings.hitLineColorMode)
   const stops = useStore((st) => Math.round(st.settings.hitLineGradientStops))
-  // random note colours have no single colour to follow: the line keeps its own
+  // random / by-hand note colours have no single colour to follow: the line keeps its own
   const ownColor = useStore(
-    (st) => st.settings.hitLineColorMode === 'solid' || (st.settings.hitLineColorMode === 'note' && st.settings.noteColorMode === 'random'),
+    (st) =>
+      st.settings.hitLineColorMode === 'solid' ||
+      (st.settings.hitLineColorMode === 'note' && (st.settings.noteColorMode === 'random' || st.settings.noteColorMode === 'hand')),
   )
   return (
     <>
@@ -1258,6 +1288,7 @@ function LookPanel({ leaving }: { leaving: boolean }) {
                 <FallDirectionRow />
               </Section>
               <Section title={t('section.noteLabels')} enabledKey="noteLabelsEnabled">
+                <NoteLabelContentRow />
                 <PitchLabelRows target="note" />
                 <NoteLabelPositionRow />
                 <BoundSliderRow label={t('labels.size')} settingKey="noteLabelSize" min={0.3} max={2} step={0.01} />

@@ -1,3 +1,4 @@
+import type { NoteHandEntry } from '../midi/noteHands'
 import type { Settings } from '../store'
 
 /**
@@ -78,6 +79,8 @@ export type ProjectManifest = {
    * normal settings persistence path.
    */
   userAudio?: AssetRef | null
+  /** Hand / finger assignments of the song's notes (see `midi/noteHands.ts`). Absent = none. */
+  noteHands?: NoteHandEntry[]
 }
 
 /**
@@ -98,6 +101,7 @@ export type Project = {
   stageBackground: { bytes: ArrayBuffer; mime: string; fileName: string } | null
   /** Bytes of the user-provided accompaniment audio. null when not in use. */
   userAudio: { bytes: ArrayBuffer; mime: string; fileName: string } | null
+  noteHands: NoteHandEntry[] | null
 }
 
 /**
