@@ -44,6 +44,7 @@
     "deviceConnected": "{{name}} conectado",
     "note": "Tudo fica no seu computador. Nada é enviado.",
     "couldNotOpenTitle": "Não foi possível abrir o arquivo",
+    "dontShowAgain": "Não mostrar novamente",
     "couldNotLoadDemoTitle": "Não foi possível carregar a demonstração"
   },
   "pageLoader": {
