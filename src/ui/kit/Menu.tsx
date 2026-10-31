@@ -30,7 +30,8 @@ export function Menu<T extends object>({ className, ...props }: Omit<AriaMenuPro
   return (
     <AriaMenu
       {...props}
-      className={clsx('box-border min-w-[240px] max-h-[inherit] overflow-auto p-1.5 outline-none', className)}
+      // Width: 240px minimum unless the caller sets its own (short submenus, fixed-width menus).
+      className={clsx('box-border max-h-[inherit] overflow-auto p-1.5 outline-none', className ?? 'min-w-[240px]')}
     />
   )
 }

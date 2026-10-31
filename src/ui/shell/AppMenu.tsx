@@ -32,8 +32,9 @@ export function AppMenu({ onFeedback }: { onFeedback: (kind: ReportKind) => void
         <LogoMark className="h-[22px] w-[22px] flex-none" />
         notefall
       </AriaButton>
-      <Popover placement="bottom start" className="rounded-[14px]">
-        <Menu aria-label={t('app.menuLabel')} className="w-[280px]">
+      {/* Fixed width: the caption below wraps to the menu instead of widening the popover. */}
+      <Popover placement="bottom start" className="w-[300px] rounded-[14px]">
+        <Menu aria-label={t('app.menuLabel')} className="w-full">
           <MenuItem hint="?" onAction={() => useShell.getState().setShortcutsOpen(true)}>
             {t('app.shortcuts')}
           </MenuItem>
