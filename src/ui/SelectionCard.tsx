@@ -29,6 +29,7 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
   const { t } = useTranslation('editor')
   const song = useStore((s) => s.song)
   const selection = useStore((s) => s.selection)
+  const cardFor = useStore((s) => s.selectionCardFor)
   const transport = useStore((s) => s.transport)
   const transpose = useStore((s) => s.settings.transpose)
 
@@ -36,22 +37,20 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
     () => (song ? song.notes.filter((n) => selection.has(n.id)) : []),
     [song, selection],
   )
-  const open = !!wrapEl && !!song && transport !== 'playing' && selected.length > 0
+  const open = !!wrapEl && !!song && transport !== 'playing' && selected.length > 0 && cardFor === selection
 
   const cardRef = useRef<HTMLDivElement>(null)
   const pointerDownRef = useRef(false)
 
-  // Pointer gestures on the canvas (new note, move, marquee, eraser) hide the card; presses on the
-  // card itself (slider drag) must not. A press anywhere off the canvas (islands, timeline, Customize)
-  // closes it by clearing the selection; on the canvas the editor decides (a note click keeps or
-  // changes the selection, an empty spot below the hit line or a key clears it).
+  // The card opens on a double-click on a note (`openSelectionCard`) and closes on any press outside it;
+  // the selection itself stays (a selection change closes it too). Presses on the card (slider drag)
+  // must not close it.
   useEffect(() => {
     if (!open) return
     const down = (e: PointerEvent) => {
-      const target = e.target as Element | null
-      if (cardRef.current?.contains(target)) return
+      if (cardRef.current?.contains(e.target as Node)) return
       pointerDownRef.current = true
-      if (e.button === 0 && !(target instanceof HTMLCanvasElement)) useStore.getState().clearSelection()
+      useStore.getState().closeSelectionCard()
     }
     const up = () => {
       pointerDownRef.current = false

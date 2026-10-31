@@ -427,8 +427,6 @@ export function Keyboard() {
       // (see scene/CameraControls.tsx) — don't trigger the key.
       if (e.nativeEvent.button === 1) return;
       e.stopPropagation();
-      // A key press is a click off the selected notes: it closes the selection card.
-      useStore.getState().clearSelection();
       const id = e.pointerId;
       markLivePlay(e.nativeEvent.pointerType === "touch" ? "touch" : "mouse");
 

@@ -32,8 +32,16 @@ export function ImagePicker({
   const accepts = (file: File) =>
     accept.some((a) => (a.endsWith('/*') ? file.type.startsWith(a.slice(0, -1)) : file.type === a))
 
-  // Drops land here instead of the app-wide drop zone (which would open the file as a song).
+  // Drops land here instead of the app-wide drop zone (which would open the file as a song). The app-wide zone counts
+  // the elements a drag has entered; keeping this picker's dragenter from it lets that count reach zero, so its
+  // "Drop to open" overlay goes away over the picker (and isn't left on screen after a drop it never sees).
   const dropProps = {
+    onDragEnter: (e: DragEvent) => {
+      if (!e.dataTransfer.types.includes('Files')) return
+      e.preventDefault()
+      e.stopPropagation()
+      setDragOver(true)
+    },
     onDragOver: (e: DragEvent) => {
       if (!e.dataTransfer.types.includes('Files')) return
       e.preventDefault()

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Button as AriaButton } from 'react-aria-components'
 import { useStore } from '../../store'
 import { DEMOS } from '../../demos'
 import { recorder } from '../../audio/recorder'
@@ -9,6 +10,23 @@ import { loadDemoProject, openProject } from '../../projects/actions'
 import { Button, Icon, Menu, MenuItem, MenuTrigger, Popover, usePresence } from '../kit'
 import { showAlert } from '../confirm'
 import { MOD } from './platform'
+
+// "Don't show again" on the card; kept per browser.
+const HIDE_KEY = 'nf:ui:startCardHidden'
+function readHidden(): boolean {
+  try {
+    return window.localStorage.getItem(HIDE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+function writeHidden(): void {
+  try {
+    window.localStorage.setItem(HIDE_KEY, '1')
+  } catch {
+    /* storage unavailable: hidden for this session only */
+  }
+}
 
 const subscribeRecorder = (cb: () => void) => recorder.addListener(cb)
 const recording = () => recorder.getState() === 'recording'
@@ -30,7 +48,7 @@ function useMidiDeviceName(): string | null {
 /**
  * What an empty notefall shows in the middle of the canvas: three ways to get a song in.
  * Gone the moment a song loads (and while a take is being recorded). Pressing anywhere outside
- * it (or Esc) puts it away until the next time the song is cleared.
+ * it (or Esc) puts it away until the next time the song is cleared; "Don't show again" for good.
  */
 export function StartCard() {
   const { t } = useTranslation('common')
@@ -39,12 +57,13 @@ export function StartCard() {
   const isRecording = useSyncExternalStore(subscribeRecorder, recording)
   const device = useMidiDeviceName()
   const [dismissed, setDismissed] = useState(false)
+  const [hidden, setHidden] = useState(readHidden)
   const cardRef = useRef<HTMLElement>(null)
   // A loaded song resets it, so clearing the song later brings the card back.
   useEffect(() => {
     if (song) setDismissed(false)
   }, [song])
-  const shown = !song && !isRecording && !countingIn && !dismissed
+  const shown = !song && !isRecording && !countingIn && !dismissed && !hidden
   const { mounted, leaving } = usePresence(shown)
   useEffect(() => {
     if (!shown) return
@@ -124,7 +143,18 @@ export function StartCard() {
             {t('startCard.record')}
           </Button>
         </div>
-        <p className="text-caption text-ink-faint">{t('startCard.note')}</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-caption text-ink-faint">{t('startCard.note')}</p>
+          <AriaButton
+            onPress={() => {
+              writeHidden()
+              setHidden(true)
+            }}
+            className="nf-focus flex-none cursor-pointer rounded-field text-caption text-ink-faint underline decoration-ink-faint underline-offset-2 outline-none data-[hovered]:text-ink-muted"
+          >
+            {t('startCard.dontShowAgain')}
+          </AriaButton>
+        </div>
       </section>
     </div>
   )
