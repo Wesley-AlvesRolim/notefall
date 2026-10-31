@@ -16,7 +16,7 @@ in the app menu, and bug reports or feature requests only when you submit them.
 </p>
 
 <p align="center">
-  <a href="https://notefall.app">notefall.app</a>
+  <strong><a href="https://notefall.app">▶ Try it live — notefall.app</a></strong>
 </p>
 
 ## Features
