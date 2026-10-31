@@ -187,6 +187,7 @@
   },
   "color": {
     "editAria": "{{label}} のカラーを編集",
+    "remove": "{{label}} を削除",
     "inSong": "この曲の色",
     "hex": "Hex"
   },
@@ -359,7 +360,6 @@
     "randomNotesHint": "ランダム配色には合わせる単一の色がないため、ラインは自身の色を使います。",
     "type": "種類",
     "solidColor": "単色",
-    "blackKeyDarkness": "黒鍵ノートの暗さ",
     "lowestKey": "最低音",
     "highestKey": "最高音",
     "stopHandle": "色{{n}}の位置",

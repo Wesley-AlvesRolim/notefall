@@ -21,7 +21,7 @@ import {
   LookAnchorContext,
   BoundCountRow,
 } from './controls'
-import { GradientStops } from './look/GradientStops'
+import { GradientStops, removeGradientStop } from './look/GradientStops'
 import { PresetSwatch } from './look/PresetSwatch'
 import { ImagePicker } from './look/ImagePicker'
 import { useBarColors, useEffectiveLook } from './look/useLookState'
@@ -303,10 +303,11 @@ function NoteColorControls() {
             colorKeys={GRADIENT_COLOR_KEYS}
             posKeys={GRADIENT_POS_KEYS}
             count={stops}
+            countKey="noteGradientStops"
             softnessKey="noteGradientSoftness"
             angleKey="noteGradientAngle"
           />
-          <GradientStopRows colorKeys={GRADIENT_COLOR_KEYS} count={stops} />
+          <GradientStopRows colorKeys={GRADIENT_COLOR_KEYS} posKeys={GRADIENT_POS_KEYS} countKey="noteGradientStops" count={stops} />
           <BoundSliderRow label={t('coloring.angle')} settingKey="noteGradientAngle" min={0} max={360} step={1} />
         </SubGroup>
       )}
@@ -331,7 +332,6 @@ function NoteColorControls() {
           ))}
         </SubGroup>
       )}
-      <BoundSliderRow label={t('coloring.blackKeyDarkness')} settingKey="noteBlackKeyDarkness" min={0} max={1} step={0.01} />
     </>
   )
 }
@@ -961,29 +961,46 @@ function HitLineColorControls() {
             colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS}
             posKeys={HIT_LINE_GRADIENT_POS_KEYS}
             count={stops}
+            countKey="hitLineGradientStops"
             softnessKey="hitLineGradientSoftness"
           />
-          <GradientStopRows colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS} count={stops} />
+          <GradientStopRows
+            colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS}
+            posKeys={HIT_LINE_GRADIENT_POS_KEYS}
+            countKey="hitLineGradientStops"
+            count={stops}
+          />
         </SubGroup>
       )}
     </>
   )
 }
 
-/** Colour + position rows of the first `count` gradient stops. */
-/** One colour row per active stop. Positions are set by dragging the stops on the gradient bar. */
+/**
+ * One colour row per active stop (positions are set by dragging the stops on the gradient bar). Above two
+ * stops each row can remove its stop, the first one included; the later stops move up.
+ */
 function GradientStopRows({
   colorKeys,
+  posKeys,
+  countKey,
   count,
 }: {
   colorKeys: readonly (typeof GRADIENT_COLOR_KEYS | typeof HIT_LINE_GRADIENT_COLOR_KEYS)[number][]
+  posKeys: readonly (typeof GRADIENT_POS_KEYS | typeof HIT_LINE_GRADIENT_POS_KEYS)[number][]
+  countKey: 'noteGradientStops' | 'hitLineGradientStops'
   count: number
 }) {
   const { t } = useTranslation('inspector')
   return (
     <>
       {colorKeys.slice(0, count).map((k, i) => (
-        <BoundColorRow key={k} label={t('coloring.stopColor', { n: i + 1 })} settingKey={k} />
+        <BoundColorRow
+          key={k}
+          label={t('coloring.stopColor', { n: i + 1 })}
+          settingKey={k}
+          onRemove={count > 2 ? () => removeGradientStop(colorKeys, posKeys, countKey, i) : undefined}
+        />
       ))}
     </>
   )
@@ -1218,10 +1235,23 @@ function LookPanel({ leaving }: { leaving: boolean }) {
       /* storage unavailable — the tab is just not remembered */
     }
   }
+  const searchButtonRef = useRef<HTMLButtonElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const tabsRowRef = useRef<HTMLDivElement>(null)
   const closeSearch = () => {
+    const hadFocus = searchInputRef.current?.parentElement?.contains(document.activeElement)
     setQuery('')
     setSearchOpen(false)
+    // keyboard users land back on the search button (after it leaves `inert`)
+    if (hadFocus) requestAnimationFrame(() => searchButtonRef.current?.focus())
   }
+  // The field stays mounted so it can grow out of / fold back into the search button; the hidden half is inert.
+  useEffect(() => {
+    if (tabsRowRef.current) tabsRowRef.current.inert = searchOpen
+    const field = searchInputRef.current?.parentElement
+    if (field) field.inert = !searchOpen
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
 
   return (
     <LookAnchorContext.Provider value={panelRef}>
@@ -1238,42 +1268,46 @@ function LookPanel({ leaving }: { leaving: boolean }) {
           width: GEOMETRY.PANEL,
         }}
       >
-        <div className="flex flex-none items-center gap-1 border-b border-glass-edge p-2">
-          {searchOpen ? (
-            <div className="relative flex-1">
-              <Icon.SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-              <input
-                type="text"
-                autoFocus
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                  if (e.key === 'Escape') closeSearch()
-                }}
-                aria-label={t('search.open')}
-                placeholder={t('search.placeholder')}
-                spellCheck={false}
-                className="nf-focus h-8 w-full rounded-tab bg-fill-field pl-9 pr-9 text-body text-ink outline-none placeholder:text-ink-faint"
-              />
-              <IconButton
-                size="sm"
-                label={t('search.clear')}
-                tooltip={false}
-                onPress={closeSearch}
-                className="absolute right-0.5 top-1/2 -translate-y-1/2 text-ink-muted"
-              >
-                <Icon.CloseIcon />
-              </IconButton>
-            </div>
-          ) : (
-            <>
-              <SegmentedTabs tab={tab} onChange={setTab} />
-              <IconButton size="sm" label={t('search.open')} onPress={() => setSearchOpen(true)}>
-                <Icon.SearchIcon />
-              </IconButton>
-            </>
-          )}
+        <div className="relative flex flex-none items-center border-b border-glass-edge p-2">
+          <div
+            ref={tabsRowRef}
+            className={clsx(
+              'flex flex-1 items-center gap-1 transition-opacity duration-150 ease-[var(--ease-out)]',
+              searchOpen && 'opacity-0',
+            )}
+          >
+            <SegmentedTabs tab={tab} onChange={setTab} />
+            <IconButton ref={searchButtonRef} size="sm" label={t('search.open')} onPress={() => setSearchOpen(true)}>
+              <Icon.SearchIcon />
+            </IconButton>
+          </div>
+          {/* Grows leftward out of the search button (`nf-reveal-left`). */}
+          <div data-open={searchOpen || undefined} className="nf-reveal-left absolute inset-x-2 top-1/2 -translate-y-1/2">
+            <Icon.SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Escape') closeSearch()
+              }}
+              aria-label={t('search.open')}
+              placeholder={t('search.placeholder')}
+              spellCheck={false}
+              className="nf-focus h-8 w-full rounded-tab bg-fill-field pl-9 pr-9 text-body text-ink outline-none placeholder:text-ink-faint"
+            />
+            <IconButton
+              size="sm"
+              label={t('search.clear')}
+              tooltip={false}
+              onPress={closeSearch}
+              className="absolute right-0.5 top-1/2 -translate-y-1/2 text-ink-muted"
+            >
+              <Icon.CloseIcon />
+            </IconButton>
+          </div>
         </div>
         <KeyframesHeader />
         <SearchProvider query={query}>

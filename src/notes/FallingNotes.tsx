@@ -306,7 +306,7 @@ export function FallingNotes() {
     a.setUsage(THREE.DynamicDrawUsage)
     return a
   }, [tints])
-  // Per-instance black-key flag (black-key darkness, the 2D look's key split).
+  // Per-instance black-key flag (the 2D look's key split).
   const blacks = useMemo(() => new Float32Array(MAX_INSTANCES), [])
   const blackAttr = useMemo(() => {
     const a = new THREE.InstancedBufferAttribute(blacks, 1)
@@ -438,7 +438,6 @@ export function FallingNotes() {
         u2dWhiten: { value: 0 },
         u2dWhitenStart: { value: 1 },
         u2dKeySplit: { value: 0 },
-        uBlackDark: { value: 0 },
         u2dShimmer: { value: 0 },
         u2dShimmerGain: { value: 1 },
         u2dShimmerCell: { value: 1 },
@@ -780,7 +779,6 @@ export function FallingNotes() {
     mesh.scale.x = NOTE_PARALLAX_SCALE
     mesh.position.x = parallaxX(0)
     material.uniforms.uHitY.value = hitY
-    material.uniforms.uBlackDark.value = Math.min(Math.max(rs.noteBlackKeyDarkness, 0), 1)
     // Texture phase = ∫ animSpeed dt. `noteAnimSpeed{X,Y}` is a global
     // (non-animatable) value, so this is normally a steady ramp; we
     // still integrate rather than use the old `now() * animSpeed` form

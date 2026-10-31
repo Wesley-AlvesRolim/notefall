@@ -183,7 +183,6 @@ export const NOTE_FRAGMENT_SHADER = /* glsl */ `
   uniform vec3 uBandColor;       // sRGB-encoded
   // ---- 2D (sprite) look ----
   uniform float u2dRimW, u2dRimTilt, u2dHollow, u2dGloss, u2dGlossPow, u2dExposure, u2dWhiten, u2dWhitenStart, u2dKeySplit;
-  uniform float uBlackDark;
   uniform vec3 u2dFill;          // fill light direction (its intensity is uFillI)
   uniform float u2dShimmer, u2dShimmerGain, u2dShimmerCell, u2dShimmerSpeed, u2dShimmerLock;
   uniform float u2dTex, u2dTexCell, u2dTexStretch, u2dTexContrast, u2dTexGain, u2dTexRelief, u2dTexSpeed, u2dTexLock;
@@ -591,8 +590,6 @@ export const NOTE_FRAGMENT_SHADER = /* glsl */ `
     vec3 tint0 = vTint;
   #endif
     if (uGradient > 0.5) tint0 = gradientAt(vWorld);
-    // black-key notes darkened toward black, whatever the material
-    if (vBlack > 0.5) tint0 *= 1.0 - uBlackDark;
     vec3 base = uTextureMode == ${TEXTURE_CUSTOM} ? textureCustom(tint0) : tint0;
 
     // ---- outline ring OUTSIDE the body (0 < d < uOutlineW), sRGB-encoded,

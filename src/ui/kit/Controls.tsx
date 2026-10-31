@@ -57,13 +57,15 @@ export type SegmentOption<T extends string> = { value: T; label: ReactNode; isDi
 
 /**
  * Side-by-side choices (2–4). `present` rings values held by part of a mixed selection;
- * pass `value = null` with `present` for "Mixed".
+ * pass `value = null` with `present` for "Mixed". `onClear` makes the choice optional: pressing the
+ * selected segment again clears it.
  */
 export function SegmentedControl<T extends string>({
   value,
   onChange,
   options,
   present,
+  onClear,
   'aria-label': ariaLabel,
   className,
 }: {
@@ -71,6 +73,7 @@ export function SegmentedControl<T extends string>({
   onChange: (v: T) => void
   options: SegmentOption<T>[]
   present?: ReadonlySet<T>
+  onClear?: () => void
   'aria-label': string
   className?: string
 }) {
@@ -88,6 +91,8 @@ export function SegmentedControl<T extends string>({
             key={o.value}
             value={o.value}
             isDisabled={o.isDisabled}
+            // a radio group never deselects on its own; a press on the selected segment does it here
+            onPress={onClear && o.value === value ? onClear : undefined}
             data-present={present?.has(o.value) || undefined}
             className={clsx(
               'nf-press relative grid h-[30px] cursor-pointer place-items-center whitespace-nowrap rounded-field px-2 font-medium text-ink-muted outline-none',

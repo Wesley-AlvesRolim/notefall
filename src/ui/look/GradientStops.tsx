@@ -36,6 +36,38 @@ function useEffectiveValues(keys: Keys): unknown[] {
 const write = (patch: Partial<Settings>) => useStore.getState().updateSettings(patch)
 
 /**
+ * Removes stop `i` of a gradient (one undo entry): the stops after it move down one slot and the count
+ * drops by one, in the default look and in every keyframe alike, so the remaining colours keep their
+ * positions everywhere. Never below 2 stops.
+ */
+export function removeGradientStop(colorKeys: Keys, posKeys: Keys, countKey: keyof Settings, i: number): void {
+  const st = useStore.getState()
+  const n = Math.max(2, Math.min(5, Math.round(st.settings[countKey] as number)))
+  if (n <= 2 || i < 0 || i >= n) return
+  const shift = <T extends Partial<Settings>>(src: T, partial: boolean): T => {
+    const out: Record<string, unknown> = { ...src }
+    for (const keys of [colorKeys, posKeys]) {
+      for (let j = i; j < n - 1; j++) {
+        if (keys[j + 1] in src) out[keys[j]] = src[keys[j + 1]]
+        else if (partial) delete out[keys[j]]
+      }
+      // a keyframe stops holding the freed last slot
+      if (partial) delete out[keys[n - 1]]
+    }
+    return out as T
+  }
+  st.beginSettingsEdit()
+  useStore.setState((s) => ({
+    settings: {
+      ...shift(s.settings, false),
+      [countKey]: n - 1,
+      settingsKeyframes: s.settings.settingsKeyframes.map((k) => ({ ...k, settings: shift(k.settings, true) })),
+    },
+  }))
+  st.endSettingsEdit()
+}
+
+/**
  * Direct editor for a 2-5 stop gradient: the bar shows the result, each stop is a handle dragged sideways (one undo
  * entry per drag or key press); a click opens that stop's colour picker. The per-stop rows below keep exact values.
  */
@@ -43,6 +75,7 @@ export function GradientStops({
   colorKeys,
   posKeys,
   count,
+  countKey,
   softnessKey,
   angleKey,
   label,
@@ -50,6 +83,8 @@ export function GradientStops({
   colorKeys: Keys
   posKeys: Keys
   count: number
+  /** The stop count's key: Delete on a focused stop removes it (down to 2). */
+  countKey?: keyof Settings
   softnessKey: keyof Settings
   /** The note gradient's angle; the end labels only show while the gradient runs left to right. */
   angleKey?: keyof Settings
@@ -99,6 +134,12 @@ export function GradientStops({
   const onKey = (i: number, e: KeyboardEvent<HTMLDivElement>) => {
     const step = e.shiftKey ? 0.1 : 0.01
     let next: number | null = null
+    if ((e.key === 'Delete' || e.key === 'Backspace') && countKey && n > 2) {
+      e.preventDefault()
+      e.stopPropagation()
+      removeGradientStop(colorKeys, posKeys, countKey, i)
+      return
+    }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = positions[i] - step
     else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = positions[i] + step
     else if (e.key === 'Home') next = 0

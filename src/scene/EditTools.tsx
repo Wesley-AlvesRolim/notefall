@@ -345,7 +345,11 @@ export function EditTools() {
     const cur = useStore.getState()
     const settings = cur.settings
     const hitY = NOTE_HIT_Y
-    if (startWorld.y <= hitY) return // below hit line: no-op
+    // below hit line: no note (a note placed in the audible past isn't useful), just deselect
+    if (startWorld.y <= hitY) {
+      cur.clearSelection()
+      return
+    }
 
     // Bootstrap an empty song on first add when nothing is loaded so
     // the user can compose from scratch. setSong wipes editHistory, so

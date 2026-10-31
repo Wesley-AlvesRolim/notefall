@@ -128,6 +128,20 @@
 .nf-enter-fade { animation: nf-fade-in 160ms var(--ease-out); }
 .nf-leaving { opacity: 0 !important; transition: opacity 140ms var(--ease-out); pointer-events: none; }
 
+/* Inspector search: the field grows leftward out of the round search button and folds back into it. */
+.nf-reveal-left {
+  clip-path: inset(2px 0 2px calc(100% - 28px) round 14px);
+  opacity: 0;
+  visibility: hidden;
+  transition: clip-path 160ms var(--ease-out), opacity 100ms var(--ease-out) 60ms, visibility 0s 160ms;
+}
+.nf-reveal-left[data-open] {
+  clip-path: inset(0 round 9px);
+  opacity: 1;
+  visibility: visible;
+  transition: clip-path 240ms var(--ease-out), opacity 80ms var(--ease-out), visibility 0s;
+}
+
 /* Press feedback for every pressable control. */
 .nf-press {
   transition: scale 160ms var(--ease-out), background-color 120ms ease, color 120ms ease, filter 120ms ease,
@@ -141,4 +155,5 @@
   .nf-tip[data-entering] { animation-name: nf-fade-in; }
   .nf-enter-right, .nf-enter-up { animation-name: nf-fade-in; }
   .nf-press[data-pressed] { scale: none; }
+  .nf-reveal-left, .nf-reveal-left[data-open] { clip-path: none; }
 }

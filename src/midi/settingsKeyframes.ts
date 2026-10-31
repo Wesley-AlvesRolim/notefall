@@ -249,7 +249,6 @@ export const ANIMATABLE_NUMBER_KEYS = [
   'noteLabelOutlineWidth',
   'noteLabelOffset',
   'keyLabelOffset',
-  'noteBlackKeyDarkness',
 ] as const satisfies readonly (keyof Settings)[]
 
 export const ANIMATABLE_COLOR_KEYS = [
