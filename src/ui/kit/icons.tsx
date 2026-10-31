@@ -348,12 +348,12 @@ export function CustomizeIcon(props: IconProps) {
   )
 }
 
-/** Reset the camera: a viewfinder with a "go back" arrow inside. */
+/** Reset the camera: a camera whose lens is a "go back" arrow. */
 export function ResetViewIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
-      <path d='M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16' />
-      <path d='M8.6 12a3.4 3.4 0 1 0 1-2.4' /><path d='M9.4 7.6v2.2h2.2' />
+      <path d='M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1.5-2h6l1.5 2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z' />
+      <path d='M9.2 13a2.8 2.8 0 1 0 .9-2.05' /><path d='M9.9 9.3v1.75h1.75' />
     </svg>
   )
 }

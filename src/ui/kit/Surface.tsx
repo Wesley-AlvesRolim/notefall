@@ -8,7 +8,7 @@ import clsx from 'clsx'
 export const GEOMETRY = {
   EDGE: 16,
   BAR: 52,
-  PILL: 68,
+  PILL: 60,
   PILL_BOTTOM: 20,
   PANEL: 344,
   /** Gap between stacked surfaces (island → panel, panel → pill). */

@@ -63,8 +63,10 @@
   }
 }
 
-/* Focus: a 2px ink ring offset by 2px on every control. */
-.nf-focus:focus-visible,
+/* Focus: a 2px ink ring offset by 2px on every control. react-aria controls (data-rac) show it
+   only when react-aria says the focus came from the keyboard; the browser's :focus-visible also
+   fires when focus is restored by script (e.g. a menu closing onto its trigger). */
+.nf-focus:not([data-rac]):focus-visible,
 .nf-focus[data-focus-visible] {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
