@@ -101,14 +101,14 @@ Active when `transport !== 'playing' && song !== null` — `Scene.tsx` mounts `<
 |---|---|---|
 | Note body | LClick | Select + arm move-drag |
 | Note body | Cmd+L / Alt+L / RClick / DblClick | Toggle selection / split / delete that note / velocity menu |
-| Note edge | LDrag | Edge-resize (head moves time+duration; tail duration only) |
+| Note edge | LDrag | Edge-resize (head moves time+duration; tail duration only); on a selected note, the same edge of every selected note by one delta |
 | Empty above hit | LClick | Create note + arm position-drag (1 undo entry) |
 | Empty | Cmd+LDrag / RDrag | Marquee range-select (additive) / eraser sweep |
 | (any) | Del / Esc / Arrows / Cmd+Z / Shift+Z\|Y | Delete selection / clear / nudge ±1 semitone or ±0.05 s / undo / redo |
 
 **Collision rules** ("notes are solid", same-pitch overlap forbidden):
 - `moveNotes` clamps time delta uniformly across the moved set. Pitch-shift collision uses **time-overlap**, not pitch-only — strict pitch-only would freeze most drags since same-pitch notes are scattered across time. Touching boundaries allowed.
-- Edge-resize clamps to nearest same-pitch obstacle.
+- Edge-resize clamps to nearest same-pitch obstacle; a multi-note resize clamps the delta uniformly (the most constrained note limits all).
 - `addNote` uses `resolveOverlaps` with new id as priority; existing overlapping notes get clipped.
 
 **Loading guard.** Transparent click-eater div mounts between Canvas and SeekBar gradient while `loadStatus.state === 'loading'`. The triggering click itself isn't covered (status was still `'idle'` at pointerdown), so editor handlers also early-return when `!audioEngine.isReady()` and kick off `ensureSamplerLoaded` — first cold-session click downloads but doesn't drag. Pairs with `previewNote`'s sync-drop so no audio queues during load.

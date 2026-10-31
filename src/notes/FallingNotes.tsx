@@ -9,7 +9,7 @@ import { audioEngine } from '../audio/engine'
 import { now } from '../audio/clock'
 import { KEYBOARD_LAYOUT, MIDI_MIN, KEY_COUNT, NOTE_HIT_Y, WHITE_KEY_WIDTH, isBlackKey } from '../keyboard/layout'
 import { useCustomTexture } from './customTexture'
-import { deleteNotes, moveNotes, splitNote } from '../midi/edit'
+import { computeDuration, deleteNotes, moveNotes, splitNote } from '../midi/edit'
 import { ensureSamplerLoaded, previewNote } from '../audio/preview'
 import {
   clickXToMidi,
@@ -1445,26 +1445,50 @@ export function FallingNotes() {
   ) => {
     const cur = useStore.getState()
     if (!cur.song) return
-    const note = cur.song.notes.find((n) => n.id === noteId)
-    if (!note) return
-    const initialTime = note.time
-    const initialDuration = note.duration
-    const initialEnd = initialTime + initialDuration
     const snapshot = cur.song
-
-    // Pre-compute the nearest same-pitch obstacles. They don't change
-    // during the drag because nothing else moves and overlap is
-    // forbidden anyway, so caching here is safe and avoids per-frame
-    // re-scanning of the whole song.
-    let prevObstacleEnd = 0
-    let nextObstacleStart = Number.POSITIVE_INFINITY
-    for (const o of snapshot.notes) {
-      if (o.id === noteId || o.midi !== note.midi) continue
-      const oEnd = o.time + o.duration
-      if (oEnd <= initialTime && oEnd > prevObstacleEnd) prevObstacleEnd = oEnd
-      if (o.time >= initialEnd && o.time < nextObstacleStart) nextObstacleStart = o.time
-    }
+    if (!snapshot.notes.some((n) => n.id === noteId)) return
+    // Grabbing the edge of a note that's part of a multi-selection resizes
+    // the same edge of every selected note by the same time delta (mirrors
+    // the body drag, which moves the whole selection).
+    const ids = cur.selection.has(noteId) && cur.selection.size > 1 ? cur.selection : new Set([noteId])
     const MIN_DUR = 0.02
+
+    // The delta is clamped uniformly: the most constrained note sets the
+    // limit for all, so every selected note changes by exactly the same
+    // amount (same "solid blocks" rule as moveNotes). Obstacles are the
+    // nearest same-pitch neighbours of each note; they don't change during
+    // the drag (only the dragged edge moves, the other edge of every note
+    // — selected or not — stays put), so they're computed once here.
+    let minDelta = Number.NEGATIVE_INFINITY
+    let maxDelta = Number.POSITIVE_INFINITY
+    for (const note of snapshot.notes) {
+      if (!ids.has(note.id)) continue
+      const start = note.time
+      const end = note.time + note.duration
+      let prevObstacleEnd = 0
+      let nextObstacleStart = Number.POSITIVE_INFINITY
+      for (const o of snapshot.notes) {
+        if (o.id === note.id || o.midi !== note.midi) continue
+        const oEnd = o.time + o.duration
+        if (oEnd <= start && oEnd > prevObstacleEnd) prevObstacleEnd = oEnd
+        if (o.time >= end && o.time < nextObstacleStart) nextObstacleStart = o.time
+      }
+      if (edge === 'head') {
+        // Head moves; tail stays. Not before the previous obstacle (or 0),
+        // and the duration stays at least MIN_DUR.
+        minDelta = Math.max(minDelta, Math.max(0, prevObstacleEnd) - start)
+        maxDelta = Math.min(maxDelta, end - MIN_DUR - start)
+      } else {
+        // Tail moves; head stays. Not into the next obstacle, and the
+        // duration stays at least MIN_DUR.
+        minDelta = Math.max(minDelta, MIN_DUR - note.duration)
+        maxDelta = Math.min(maxDelta, nextObstacleStart - end)
+      }
+    }
+    // A note already below MIN_DUR could make the window empty; never
+    // push anything the "wrong" way in that case.
+    minDelta = Math.min(minDelta, 0)
+    maxDelta = Math.max(maxDelta, 0)
 
     let pushedHistory = false
     let started = false
@@ -1485,39 +1509,30 @@ export function FallingNotes() {
       const dirSign = settings.fallDirection === 'down' ? 1 : -1
       const deltaTimeOnAxis = dirSign * (dy / fd) * settings.fallDurationSec
 
-      let newTime = initialTime
-      let newDuration = initialDuration
-      if (edge === 'head') {
-        // Head moves; tail stays at initialEnd.
-        // Lower bound: prevObstacleEnd (and >= 0).
-        // Upper bound: initialEnd - MIN_DUR (so duration stays positive).
-        const requested = initialTime + deltaTimeOnAxis
-        const lower = Math.max(0, prevObstacleEnd)
-        const upper = initialEnd - MIN_DUR
-        newTime = Math.max(lower, Math.min(upper, requested))
-        newDuration = initialEnd - newTime
-      } else {
-        // Tail moves; head stays at initialTime.
-        // Upper bound: nextObstacleStart - initialTime (so the new end
-        // doesn't cross into the next neighbour).
-        const requested = initialDuration + deltaTimeOnAxis
-        const maxDur = nextObstacleStart - initialTime
-        newDuration = Math.max(MIN_DUR, Math.min(maxDur, requested))
-      }
-
-      if (newTime === initialTime && newDuration === initialDuration) return
+      const delta = Math.max(minDelta, Math.min(maxDelta, deltaTimeOnAxis))
+      if (delta === 0 && !pushedHistory) return
 
       if (!pushedHistory) {
         useStore.getState().pushUndoSnapshot(snapshot)
         pushedHistory = true
       }
 
-      const updated = snapshot.notes.map((n) =>
-        n.id === noteId ? { ...n, time: newTime, duration: newDuration } : n,
-      )
-      // No resolveOverlaps — the clamp above keeps the resized note
+      const updated = snapshot.notes.map((n) => {
+        if (!ids.has(n.id)) return n
+        return edge === 'head'
+          ? { ...n, time: n.time + delta, duration: n.duration - delta }
+          : { ...n, duration: n.duration + delta }
+      })
+      // No resolveOverlaps — the clamp above keeps every resized note
       // inside its allowed window, so neighbour notes are never touched.
-      useStore.getState().setSongPreview({ ...snapshot, notes: updated })
+      // The song duration must follow a tail dragged past the old end:
+      // the canvas and engine clamp notes to `midiTrimEndSec ?? duration`,
+      // so a stale duration hid the extension until the next edit.
+      useStore.getState().setSongPreview({
+        ...snapshot,
+        notes: updated,
+        duration: computeDuration(snapshot.duration, updated),
+      })
     }
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
@@ -1711,8 +1726,8 @@ export function FallingNotes() {
     // Edge hover takes precedence over move-drag for plain clicks. The
     // hover state was set in onPointerMoveNote; we read it here so the
     // pointerdown that converts the hover into a gesture starts a
-    // resize instead of a move. Only single-note resize for now —
-    // multi-note resize is a power feature we can add later.
+    // resize instead of a move. If the note is part of a multi-selection,
+    // the selection is kept and every selected note is resized together.
     const hovered = hoveredEdgeRef.current
     if (hovered && hovered.noteId === noteId) {
       if (!state.selection.has(noteId)) {
