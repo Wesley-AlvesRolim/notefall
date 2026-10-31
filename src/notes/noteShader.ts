@@ -36,20 +36,24 @@ export const SHAPE_GEM = 1
 export const SHAPE_ANGLED = 2
 
 export const NOTE_VERTEX_SHADER = /* glsl */ `
-  attribute vec2 instanceSize;
-  attribute vec2 instanceSeed;
-  attribute float instanceSelected;
-  // Per-instance opacity multiplier. 1.0 for normal notes; ramped down
-  // 1 → 0 over FADE_DURATION for the dying-note ghosts the renderer
-  // appends after the live-note pass.
-  attribute float instanceAlpha;
-  // Per-instance RGB tint (linear). Resolved from settings.trackColors[note.track]
-  // with fallback to settings.noteColor — populated each frame on the
-  // CPU side. The fragment shader uses this in place of a uColor uniform
-  // so different tracks can show different colours simultaneously.
-  attribute vec3 instanceTint;
-  // 1 for notes on a black key (the 2D look's key split).
-  attribute float instanceBlack;
+  // Per-instance data packed into three vec4s, and the quad placed from
+  // iRect instead of instanceMatrix, so the shader needs only 4 attribute
+  // locations (6 with MERGE). WebGL guarantees just 8 (MAX_VERTEX_ATTRIBS),
+  // and some contexts really give 8 (Firefox sometimes hands out a
+  // minimal-capability context); the old layout (instanceMatrix = 4 + uv +
+  // six loose attributes) needed 12, so the notes silently never drew there.
+  // instanceMatrix still carries the same transform for raycast picking.
+  // Note quad, instance space (before modelMatrix): centre.xy, size (width, length).
+  attribute vec4 iRect;
+  // Noise seed.xy, selection flag (0 / 1), black-key flag (the 2D look's
+  // key split).
+  attribute vec4 iSeedSel;
+  // Linear RGB tint (track colour / noteColor / palette pick, resolved on
+  // the CPU each frame) + opacity multiplier (1 for normal notes, ramped
+  // 1 → 0 for the dying-note ghosts).
+  attribute vec4 iTintAlpha;
+  // Note plane z (NOTE_PLANE_Z), instance space.
+  uniform float uNoteZ;
   // Extra quad margin (world units) around the note: AA edge + outline ring.
   uniform float uMargin;
   varying vec2 vLocal;
@@ -65,12 +69,13 @@ export const NOTE_VERTEX_SHADER = /* glsl */ `
   ${MERGE_VERT_GLSL}
   #endif
   void main() {
-    vBlack = instanceBlack;
-    vSeed = instanceSeed;
-    vSelected = instanceSelected;
-    vAlpha = instanceAlpha;
-    vTint = instanceTint;
-    mat4 m = modelMatrix * instanceMatrix;
+    vec2 size = iRect.zw;
+    vSeed = iSeedSel.xy;
+    vSelected = iSeedSel.z;
+    vBlack = iSeedSel.w;
+    vTint = iTintAlpha.rgb;
+    vAlpha = iTintAlpha.a;
+    vec4 center = modelMatrix * vec4(iRect.xy, uNoteZ, 1.0);
   #ifdef MERGE
     // liquid merge (looks/merge.ts): the quad is placed / enlarged from the
     // merge data in WORLD units; centre = the note's ORIGINAL centre
@@ -78,22 +83,20 @@ export const NOTE_VERTEX_SHADER = /* glsl */ `
     vWorld = w;
     vCenter = mergeNoteCarry(gl_InstanceID).zw;
     vLocal = w - vCenter;
-    // world size: the mesh's parallax x-scale only (instanceMatrix already
-    // carries the note width, so m[0] would count it twice)
-    vSize = instanceSize * vec2(length(modelMatrix[0].xyz), 1.0);
-    gl_Position = projectionMatrix * viewMatrix * vec4(w, m[3].z, 1.0);
+    // world size: the mesh's parallax x-scale only
+    vSize = size * vec2(length(modelMatrix[0].xyz), 1.0);
+    gl_Position = projectionMatrix * viewMatrix * vec4(w, center.z, 1.0);
     return;
   #endif
-    vSize = instanceSize;
-    // The unit quad is scaled to the note by instanceMatrix; widen it so the
-    // fragment shader can draw past the body. Picking raycasts the unwidened
-    // geometry, so it still resolves to the note's own box.
-    vec2 grow = (instanceSize + 2.0 * uMargin) / max(instanceSize, vec2(1e-5));
-    vec3 pos = vec3(position.xy * grow, position.z);
-    vLocal = (uv - 0.5) * (instanceSize + 2.0 * uMargin);
-    vec4 worldPos = m * vec4(pos, 1.0);
+    vSize = size;
+    // The unit quad (position.xy in [-0.5, 0.5]) is scaled to the note and
+    // widened by uMargin so the fragment shader can draw past the body.
+    // Picking raycasts the unwidened instanceMatrix quad, so it still
+    // resolves to the note's own box.
+    vLocal = position.xy * (size + 2.0 * uMargin);
+    vec4 worldPos = modelMatrix * vec4(iRect.xy + vLocal, uNoteZ, 1.0);
     vWorld = worldPos.xy;
-    vCenter = (m * vec4(0.0, 0.0, 0.0, 1.0)).xy;
+    vCenter = center.xy;
     gl_Position = projectionMatrix * viewMatrix * worldPos;
   }
 `
