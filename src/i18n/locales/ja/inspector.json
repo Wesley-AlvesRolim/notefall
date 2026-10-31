@@ -369,7 +369,8 @@
     "blackKeyDarkness": "黒鍵ノートの暗さ",
     "lowestKey": "最低音",
     "highestKey": "最高音",
-    "stopHandle": "色{{n}}の位置"
+    "stopHandle": "色{{n}}の位置",
+    "stopValues": "各色の値と位置"
   },
   "tab": {
     "label": "設定の区分",

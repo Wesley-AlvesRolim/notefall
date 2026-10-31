@@ -19,6 +19,7 @@ import {
   VerticalSliderBands,
   useEffectiveSetting,
   LookAnchorContext,
+  BoundCountRow,
 } from './controls'
 import { GradientStops } from './look/GradientStops'
 import { PresetSwatch } from './look/PresetSwatch'
@@ -92,8 +93,8 @@ function atomicUpdate(patch: Partial<Settings>): void {
 function SubGroup({ label, heading, children }: { label: string; heading?: boolean; children: ReactNode }) {
   const query = useSearchQuery()
   return (
-    <div className="ml-1 grid gap-3 border-l border-glass-edge pl-3 empty:hidden">
-      {heading && !query && <div className="text-label text-ink">{label}</div>}
+    <div className="grid gap-3 empty:hidden">
+      {heading && !query && <div className="pt-1 text-label text-ink">{label}</div>}
       <SearchGroup label={label}>{children}</SearchGroup>
     </div>
   )
@@ -286,7 +287,7 @@ function NoteColorControls() {
       {mode === 'solid' && <TrackColorRows />}
       {mode === 'gradient' && (
         <SubGroup label={t('coloring.modes.gradient')}>
-          <BoundSliderRow label={t('coloring.stops')} settingKey="noteGradientStops" min={2} max={5} step={1} />
+          <BoundCountRow label={t('coloring.stops')} settingKey="noteGradientStops" min={2} max={5} />
           <BoundSliderRow label={t('coloring.softness')} settingKey="noteGradientSoftness" min={0} max={1} step={0.01} />
           <GradientStops
             label={t('coloring.modes.gradient')}
@@ -296,7 +297,9 @@ function NoteColorControls() {
             softnessKey="noteGradientSoftness"
             angleKey="noteGradientAngle"
           />
-          <GradientStopRows colorKeys={GRADIENT_COLOR_KEYS} posKeys={GRADIENT_POS_KEYS} count={stops} />
+          <Detail id="noteGradientStopValues" label={t('coloring.stopValues')}>
+            <GradientStopRows colorKeys={GRADIENT_COLOR_KEYS} posKeys={GRADIENT_POS_KEYS} count={stops} />
+          </Detail>
           <BoundSliderRow label={t('coloring.angle')} settingKey="noteGradientAngle" min={0} max={360} step={1} />
         </SubGroup>
       )}
@@ -315,7 +318,7 @@ function NoteColorControls() {
             scopeKey="noteRandomBy"
           />
           <BoundSliderRow label={t('coloring.seed')} settingKey="noteRandomSeed" min={0} max={99} step={1} />
-          <BoundSliderRow label={t('coloring.paletteSize')} settingKey="noteRandomCount" min={1} max={5} step={1} />
+          <BoundCountRow label={t('coloring.paletteSize')} settingKey="noteRandomCount" min={1} max={5} />
           {RANDOM_COLOR_KEYS.slice(0, count).map((k, i) => (
             <BoundColorRow key={k} label={t('coloring.paletteColor', { n: i + 1 })} settingKey={k} />
           ))}
@@ -966,7 +969,7 @@ function HitLineColorControls() {
       )}
       {mode === 'gradient' && (
         <SubGroup label={t('coloring.modes.gradient')}>
-          <BoundSliderRow label={t('coloring.stops')} settingKey="hitLineGradientStops" min={2} max={5} step={1} />
+          <BoundCountRow label={t('coloring.stops')} settingKey="hitLineGradientStops" min={2} max={5} />
           <BoundSliderRow label={t('coloring.softness')} settingKey="hitLineGradientSoftness" min={0} max={1} step={0.01} />
           <GradientStops
             label={t('coloring.modes.gradient')}
@@ -975,7 +978,9 @@ function HitLineColorControls() {
             count={stops}
             softnessKey="hitLineGradientSoftness"
           />
-          <GradientStopRows colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS} posKeys={HIT_LINE_GRADIENT_POS_KEYS} count={stops} />
+          <Detail id="hitLineGradientStopValues" label={t('coloring.stopValues')}>
+            <GradientStopRows colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS} posKeys={HIT_LINE_GRADIENT_POS_KEYS} count={stops} />
+          </Detail>
         </SubGroup>
       )}
     </>

@@ -369,7 +369,8 @@
     "blackKeyDarkness": "Black-key darkness",
     "lowestKey": "Lowest key",
     "highestKey": "Highest key",
-    "stopHandle": "Stop {{n}}"
+    "stopHandle": "Stop {{n}}",
+    "stopValues": "Stop colors and positions"
   },
   "tab": {
     "label": "Settings areas",

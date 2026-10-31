@@ -939,7 +939,8 @@ const textUnits = (s: string) => [...s].reduce((n, c) => n + (c.charCodeAt(0) > 
 /** 2–3 short options read side by side; anything longer is a dropdown. */
 const fitsSegmented = (options: { label: string }[]) =>
   options.length >= 2 &&
-  options.length <= 3 &&
+  // Up to three words, or up to five very short ones (counts like 2 3 4 5).
+  options.length <= (options.every((o) => textUnits(o.label) <= 2) ? 5 : 3) &&
   options.every((o) => textUnits(o.label) <= 12) &&
   options.reduce((n, o) => n + textUnits(o.label), 0) <= 28
 
@@ -1050,7 +1051,7 @@ export function Section({
   // row renders (no per-row filter applied inside this section).
   const childQuery = titleMatches && q ? '' : q
   return (
-    <section data-search-label={title} className="border-b border-glass-edge px-4 py-3 last:border-b-0">
+    <section data-search-label={title} className="group/section border-b border-glass-edge px-4 py-3 last:border-b-0">
       <div className="flex min-h-6 items-center justify-between gap-2">
         <button
           type="button"
@@ -1063,11 +1064,12 @@ export function Section({
           )}
         >
           <span className="truncate">{title}</span>
+          {/* The fold chevron shows only when it says something: on hover, or while folded. */}
           <Icon.ChevronRightIcon
             className={clsx(
-              'h-4 w-4 flex-none text-ink-faint transition-transform duration-150 motion-reduce:transition-none',
-              open && 'rotate-90',
-              !q && isOn ? '' : 'opacity-0',
+              'h-4 w-4 flex-none text-ink-faint transition-[transform,opacity] duration-150 motion-reduce:transition-none',
+              open ? 'rotate-90 opacity-0 group-hover/section:opacity-100' : 'opacity-100',
+              (q || !isOn) && '!opacity-0',
             )}
           />
         </button>
@@ -1085,10 +1087,22 @@ export function Section({
           )}
         </div>
       </div>
-      <div ref={contentRef} className={open ? 'grid gap-3 pt-3' : 'hidden'}>
-        <SearchContext.Provider value={childQuery}>
-          {children}
-        </SearchContext.Provider>
+      {/* Folds by animating the row track (0fr ↔ 1fr), so the content keeps its natural height. */}
+      <div
+        className={clsx(
+          'grid transition-[grid-template-rows,opacity] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none',
+          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+        )}
+        {...((!open ? { inert: '' } : {}) as Record<string, string>)}
+      >
+        {/* Clip box widened to the section's padding so knobs and focus rings at the edges aren't cut. */}
+        <div className="-mx-4 min-h-0 overflow-hidden px-4 pb-1">
+          <div ref={contentRef} className="grid gap-3 pt-3">
+            <SearchContext.Provider value={childQuery}>
+              {children}
+            </SearchContext.Provider>
+          </div>
+        </div>
       </div>
     </section>
   )
@@ -1098,14 +1112,14 @@ export function Section({
  * "More" disclosure inside a section: the section shows its everyday rows, the rest waits behind this toggle (open
  * state persisted per `id`; always open while searching so matches inside are visible).
  */
-export function Detail({ id, children }: { id: string; children: ReactNode }) {
+export function Detail({ id, label, children }: { id: string; label?: string; children: ReactNode }) {
   const { t } = useTranslation('inspector')
   const q = useSearchQuery()
   const [storedOpen, setStoredOpen] = useStoredBool(`inspector.detail.${id}`, false)
   if (q) return <div className="grid gap-3">{children}</div>
   return (
     <Disclosure
-      label={storedOpen ? t('detail.hide') : t('detail.show')}
+      label={label ?? (storedOpen ? t('detail.hide') : t('detail.show'))}
       isExpanded={storedOpen}
       onExpandedChange={setStoredOpen}
     >
@@ -1275,6 +1289,22 @@ export type StringKeys = {
 
 const writeSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => {
   useStore.getState().updateSettings({ [key]: value } as Partial<Settings>)
+}
+
+/** A small whole-number setting (a count of colours, stops…) as segments rather than a slider. */
+export function BoundCountRow({ label, settingKey, min, max }: { label: string; settingKey: NumericKeys; min: number; max: number }) {
+  const value = String(Math.round(useEffectiveSetting(settingKey) as number))
+  const options = Array.from({ length: max - min + 1 }, (_, i) => ({ value: String(min + i), label: String(min + i) }))
+  return (
+    <SelectRow
+      label={label}
+      value={value}
+      options={options}
+      onChange={(v) => writeSetting(settingKey, Number(v) as Settings[NumericKeys])}
+      defaultValue={String(defaultSettings[settingKey])}
+      scopeKey={settingKey}
+    />
+  )
 }
 
 export function BoundSliderRow({
