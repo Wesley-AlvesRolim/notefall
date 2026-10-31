@@ -330,9 +330,7 @@
     "glow": "Glow",
     "glowRadius": "Radius",
     "glowTail": "Tail",
-    "glowBoost": "Body boost",
-    "moreLooks": "More looks",
-    "fewerLooks": "Fewer looks"
+    "glowBoost": "Body boost"
   },
   "coloring": {
     "modes": {

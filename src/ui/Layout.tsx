@@ -7,7 +7,7 @@ import { Inspector } from './Inspector'
 import { Viewport } from './Viewport'
 import { TimelineEditor } from './TimelineEditor'
 import { ConfirmModal } from './ConfirmModal'
-import { ToastHost, GEOMETRY } from './kit'
+import { ToastHost, GEOMETRY, useReleaseFocusAfterPointer } from './kit'
 import { ShortcutSheet } from './shell/ShortcutSheet'
 import { TransportPill } from './shell/TransportPill'
 import { LoadingIsland } from './shell/LoadingIsland'
@@ -74,6 +74,7 @@ export function Layout() {
   const { t } = useTranslation('dialogs')
   const transport = useStore((s) => s.transport)
   useGlobalShortcuts()
+  useReleaseFocusAfterPointer()
   // Fullscreen takes the whole app root so the floating chrome comes along. react-aria
   // portals into document.body by default, which sits outside the fullscreen element, so
   // redirect them to the root while fullscreen (and return body explicitly otherwise: once

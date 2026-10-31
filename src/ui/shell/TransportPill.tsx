@@ -374,7 +374,7 @@ export function TransportPill() {
         <Icon.LoopIcon />
       </IconButton>
       <IconButton label={t('transport.resetCameraView')} onPress={resetCamera}>
-        <Icon.CameraIcon />
+        <Icon.ResetViewIcon />
       </IconButton>
       <IconButton
         label={isFullscreen ? t('transport.exitFullscreen') : t('transport.enterFullscreen')}

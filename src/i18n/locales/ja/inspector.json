@@ -330,9 +330,7 @@
     "glow": "グロー",
     "glowRadius": "半径",
     "glowTail": "裾",
-    "glowBoost": "本体の明るさ",
-    "moreLooks": "ほかのルック",
-    "fewerLooks": "少なく表示"
+    "glowBoost": "本体の明るさ"
   },
   "coloring": {
     "modes": {

@@ -24,7 +24,7 @@
     "unmute": "ミュート解除",
     "speed": "速度",
     "playbackSpeed": "再生速度",
-    "resetCameraView": "カメラをリセット",
+    "resetCameraView": "カメラの位置を元に戻す",
     "enterFullscreen": "全画面にする",
     "exitFullscreen": "全画面を終了",
     "seek": "再生位置",
