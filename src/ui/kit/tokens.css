@@ -1,0 +1,71 @@
+/* notefall design tokens (design system v2, _local/redesign/design-system/tokens.json).
+   Tailwind exposes these as theme names (bg-glass, text-ink-muted, rounded-panel, h-bar, …);
+   use the names, never raw values. */
+
+:root {
+  /* Colour */
+  --canvas: #05060a;
+  --glass-fill: rgba(16, 17, 20, 0.42);
+  --glass-fill-strong: rgba(16, 17, 20, 0.72);
+  --glass-fill-solid: #15161a;
+  --glass-edge: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.07);
+  --ink: #f3f2ee;
+  --ink-muted: rgba(243, 242, 238, 0.66);
+  --ink-faint: rgba(243, 242, 238, 0.44);
+  --on-ink: #0e0f11;
+  --fill-hover: rgba(255, 255, 255, 0.07);
+  --fill-selected: rgba(255, 255, 255, 0.13);
+  --fill-field: rgba(255, 255, 255, 0.07);
+  --fill-track: rgba(255, 255, 255, 0.16);
+  --fill-well: rgba(0, 0, 0, 0.32);
+  --record: #ff5a4f;
+  --danger: #ff8b80;
+  --scrim: rgba(5, 6, 10, 0.45);
+  --logo-note: #5ad7ff;
+  --focus: var(--ink);
+
+  /* Type */
+  --font-sans: 'Geist Variable', 'Geist', 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif;
+
+  /* Shadow + blur */
+  --shadow-glass: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 10px 40px rgba(0, 0, 0, 0.35);
+  --shadow-knob: 0 1px 4px rgba(0, 0, 0, 0.4);
+  --glass-blur: 24px;
+
+  color-scheme: dark;
+}
+
+/* The one UI material. `nf-glass-strong` for surfaces that are read (menus, dialogs, pickers, toasts, tooltips). */
+.nf-glass,
+.nf-glass-strong {
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.5);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--shadow-glass);
+}
+.nf-glass-strong {
+  background: var(--glass-fill-strong);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .nf-glass,
+  .nf-glass-strong {
+    background: var(--glass-fill-solid);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .nf-glass,
+  .nf-glass-strong {
+    background: var(--glass-fill-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Focus: a 2px ink ring offset by 2px on every control. */
+.nf-focus:focus-visible,
+.nf-focus[data-focus-visible] {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
