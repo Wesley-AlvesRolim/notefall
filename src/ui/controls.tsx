@@ -834,6 +834,8 @@ type ColorRowProps = {
    */
   isModified?: boolean
   scopeKey?: keyof Settings
+  /** Shows a remove button after the swatch (a gradient stop, a palette colour). */
+  onRemove?: () => void
 }
 
 export function ColorRow({
@@ -844,6 +846,7 @@ export function ColorRow({
   onReset,
   isModified: isModifiedOverride,
   scopeKey,
+  onRemove,
 }: ColorRowProps) {
   const { t } = useTranslation('inspector')
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -916,6 +919,15 @@ export function ColorRow({
               </Popover>
             </DialogTrigger>
           </ColorPicker>
+          {onRemove && (
+            <Button
+              onPress={onRemove}
+              aria-label={t('color.remove', { label })}
+              className="nf-focus grid h-6 w-6 cursor-pointer place-items-center rounded-field text-ink-muted outline-none data-[hovered]:bg-fill-hover data-[hovered]:text-ink"
+            >
+              <Icon.CloseIcon className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
       <ScopeNote settingKey={scopeKey} />
@@ -1360,9 +1372,11 @@ export function BoundSwitchRow({
 export function BoundColorRow({
   label,
   settingKey,
+  onRemove,
 }: {
   label: string
   settingKey: StringKeys
+  onRemove?: () => void
 }) {
   const value = useEffectiveSetting(settingKey) as string
   return (
@@ -1372,6 +1386,7 @@ export function BoundColorRow({
       onChange={(v) => writeSetting(settingKey, v as Settings[StringKeys])}
       defaultValue={defaultSettings[settingKey] as string}
       scopeKey={settingKey}
+      onRemove={onRemove}
     />
   )
 }

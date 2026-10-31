@@ -431,8 +431,6 @@ export type Settings = {
   keyLabelOffset: number   // world units from the key's front edge (black: its flat top)
   keyLabelWhiteColor: string
   keyLabelBlackColor: string
-  // Darkens black-key notes (0 = off, 1 = black), every material.
-  noteBlackKeyDarkness: number
   // Project-level image displayed behind the 3D scene. The source bytes
   // live in the standalone stage-background asset store; these settings
   // only describe how that asset is presented. They are deliberately not
@@ -746,7 +744,6 @@ export const defaultSettings: Settings = {
   keyLabelOffset: 0.06,
   keyLabelWhiteColor: '#2b2b2b',
   keyLabelBlackColor: '#d1d1d1',
-  noteBlackKeyDarkness: 0,
   backgroundImageFit: 'cover',
   backgroundImageOpacity: 1,
   backgroundImageScale: 1,

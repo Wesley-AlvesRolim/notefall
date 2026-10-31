@@ -260,29 +260,14 @@ export function FallingNotes() {
 
   // per-instance world size attribute (width, length)
   const sizes = useMemo(() => new Float32Array(MAX_INSTANCES * 2), [])
-  const sizeAttr = useMemo(() => {
-    const a = new THREE.InstancedBufferAttribute(sizes, 2)
-    a.setUsage(THREE.DynamicDrawUsage)
-    return a
-  }, [sizes])
   // per-instance noise seed (vec2). Derived from the note's stable id each
   // frame so a given note keeps the same texture pattern even if its slot
   // in the instance buffer shifts as earlier notes scroll past.
   const seeds = useMemo(() => new Float32Array(MAX_INSTANCES * 2), [])
-  const seedAttr = useMemo(() => {
-    const a = new THREE.InstancedBufferAttribute(seeds, 2)
-    a.setUsage(THREE.DynamicDrawUsage)
-    return a
-  }, [seeds])
   // per-instance selection flag (0 / 1). Drives the bright white outline in
   // the fragment shader. Filled in the same useFrame pass that builds size
   // and seed, since the per-frame instance ↔ note mapping is built there.
   const selectedAttrData = useMemo(() => new Float32Array(MAX_INSTANCES), [])
-  const selectedAttr = useMemo(() => {
-    const a = new THREE.InstancedBufferAttribute(selectedAttrData, 1)
-    a.setUsage(THREE.DynamicDrawUsage)
-    return a
-  }, [selectedAttrData])
   // per-instance opacity multiplier. 1.0 for normal notes; ramps 1 → 0
   // over DEATH_FADE_DURATION for dying-note ghosts that the renderer
   // appends after the live-note pass.
@@ -291,28 +276,24 @@ export function FallingNotes() {
     a.fill(1)
     return a
   }, [])
-  const alphaAttr = useMemo(() => {
-    const a = new THREE.InstancedBufferAttribute(alphaAttrData, 1)
-    a.setUsage(THREE.DynamicDrawUsage)
-    return a
-  }, [alphaAttrData])
   // Per-instance RGB tint. Resolved each frame from the note's track →
   // settings.trackColors[trackIdx], with fallback to settings.noteColor.
   // Live notes / dying ghosts (which have no track index) use the
   // global noteColor as well.
   const tints = useMemo(() => new Float32Array(MAX_INSTANCES * 3), [])
-  const tintAttr = useMemo(() => {
-    const a = new THREE.InstancedBufferAttribute(tints, 3)
-    a.setUsage(THREE.DynamicDrawUsage)
-    return a
-  }, [tints])
-  // Per-instance black-key flag (black-key darkness, the 2D look's key split).
+  // Per-instance black-key flag (the 2D look's key split).
   const blacks = useMemo(() => new Float32Array(MAX_INSTANCES), [])
-  const blackAttr = useMemo(() => {
-    const a = new THREE.InstancedBufferAttribute(blacks, 1)
-    a.setUsage(THREE.DynamicDrawUsage)
-    return a
-  }, [blacks])
+  // GPU-side copies of the arrays above, packed into three vec4s (see
+  // NOTE_VERTEX_SHADER: fits WebGL's 8-attribute minimum). Filled from the
+  // per-field arrays at the end of each frame.
+  const packed = useMemo(() => {
+    const make = () => {
+      const a = new THREE.InstancedBufferAttribute(new Float32Array(MAX_INSTANCES * 4), 4)
+      a.setUsage(THREE.DynamicDrawUsage)
+      return a
+    }
+    return { rect: make(), seedSel: make(), tintAlpha: make() }
+  }, [])
   // Per-instance key index (0..87, transpose applied), for the pitch labels.
   const labelKeys = useMemo(() => new Int16Array(MAX_INSTANCES), [])
   // Finger number (1–5) per instance for finger labels; 0 = none (live notes, ghosts, unassigned).
@@ -338,6 +319,7 @@ export function FallingNotes() {
         uOpacity: { value: settings.noteOpacity },
         uRadius: { value: settings.noteCornerRadius },
         uHitY: { value: 0 },
+        uNoteZ: { value: NOTE_PLANE_Z },
         uTextureMode: { value: TEXTURE_MODE[settings.noteTexture] ?? TEXTURE_SOLID },
         ...createGradientUniforms(NOTE_HIT_Y),
         uTextureScale: { value: settings.noteTextureScale },
@@ -438,7 +420,6 @@ export function FallingNotes() {
         u2dWhiten: { value: 0 },
         u2dWhitenStart: { value: 1 },
         u2dKeySplit: { value: 0 },
-        uBlackDark: { value: 0 },
         u2dShimmer: { value: 0 },
         u2dShimmerGain: { value: 1 },
         u2dShimmerCell: { value: 1 },
@@ -490,12 +471,9 @@ export function FallingNotes() {
   useEffect(() => {
     const mesh = meshRef.current
     if (!mesh) return
-    mesh.geometry.setAttribute('instanceSize', sizeAttr)
-    mesh.geometry.setAttribute('instanceSeed', seedAttr)
-    mesh.geometry.setAttribute('instanceSelected', selectedAttr)
-    mesh.geometry.setAttribute('instanceAlpha', alphaAttr)
-    mesh.geometry.setAttribute('instanceTint', tintAttr)
-    mesh.geometry.setAttribute('instanceBlack', blackAttr)
+    mesh.geometry.setAttribute('iRect', packed.rect)
+    mesh.geometry.setAttribute('iSeedSel', packed.seedSel)
+    mesh.geometry.setAttribute('iTintAlpha', packed.tintAlpha)
     mesh.geometry.setAttribute('iMergeNbrA', mergeData.nbrA)
     mesh.geometry.setAttribute('iMergeNbrB', mergeData.nbrB)
     // Pin a large bounding sphere so raycasting never short-circuits.
@@ -517,16 +495,13 @@ export function FallingNotes() {
       if (material.defines.MERGE !== undefined) mergeData.updateCamera(cam, target, renderer, NOTE_PLANE_Z)
     }
     return () => {
-      mesh.geometry.deleteAttribute('instanceSize')
-      mesh.geometry.deleteAttribute('instanceSeed')
-      mesh.geometry.deleteAttribute('instanceSelected')
-      mesh.geometry.deleteAttribute('instanceAlpha')
-      mesh.geometry.deleteAttribute('instanceTint')
-      mesh.geometry.deleteAttribute('instanceBlack')
+      mesh.geometry.deleteAttribute('iRect')
+      mesh.geometry.deleteAttribute('iSeedSel')
+      mesh.geometry.deleteAttribute('iTintAlpha')
       mesh.geometry.deleteAttribute('iMergeNbrA')
       mesh.geometry.deleteAttribute('iMergeNbrB')
     }
-  }, [sizeAttr, seedAttr, selectedAttr, alphaAttr, tintAttr, blackAttr, material, mergeData])
+  }, [packed, material, mergeData])
 
   // The 2D look's glow halo: a second instanced mesh over the SAME geometry,
   // instance matrices and uniforms (shader variant GLOW_PASS), drawn just
@@ -780,7 +755,6 @@ export function FallingNotes() {
     mesh.scale.x = NOTE_PARALLAX_SCALE
     mesh.position.x = parallaxX(0)
     material.uniforms.uHitY.value = hitY
-    material.uniforms.uBlackDark.value = Math.min(Math.max(rs.noteBlackKeyDarkness, 0), 1)
     // Texture phase = ∫ animSpeed dt. `noteAnimSpeed{X,Y}` is a global
     // (non-animatable) value, so this is normally a steady ramp; we
     // still integrate rather than use the old `now() * animSpeed` form
@@ -1272,12 +1246,32 @@ export function FallingNotes() {
 
     mesh.count = count
     mesh.instanceMatrix.needsUpdate = true
-    sizeAttr.needsUpdate = true
-    seedAttr.needsUpdate = true
-    selectedAttr.needsUpdate = true
-    alphaAttr.needsUpdate = true
-    tintAttr.needsUpdate = true
-    blackAttr.needsUpdate = true
+    {
+      const mi = mesh.instanceMatrix.array
+      const r = packed.rect.array as Float32Array
+      const ss = packed.seedSel.array as Float32Array
+      const ta = packed.tintAlpha.array as Float32Array
+      for (let i = 0; i < count; i++) {
+        const j = i * 4
+        r[j] = mi[i * 16 + 12]
+        r[j + 1] = mi[i * 16 + 13]
+        r[j + 2] = sizes[i * 2]
+        r[j + 3] = sizes[i * 2 + 1]
+        ss[j] = seeds[i * 2]
+        ss[j + 1] = seeds[i * 2 + 1]
+        ss[j + 2] = selectedAttrData[i]
+        ss[j + 3] = blacks[i]
+        ta[j] = tints[i * 3]
+        ta[j + 1] = tints[i * 3 + 1]
+        ta[j + 2] = tints[i * 3 + 2]
+        ta[j + 3] = alphaAttrData[i]
+      }
+      for (const a of [packed.rect, packed.seedSel, packed.tintAlpha]) {
+        a.clearUpdateRanges()
+        a.addUpdateRange(0, count * 4)
+        a.needsUpdate = true
+      }
+    }
     const labels = labelMeshRef.current
     if (labels) {
       labels.mesh.visible = settings.noteLabelsEnabled

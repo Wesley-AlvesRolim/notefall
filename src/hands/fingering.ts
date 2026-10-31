@@ -157,8 +157,11 @@ for (let k = 1; k <= 5; k++) {
   COMBOS.push(res)
 }
 
-type Item = { id: number; mp: number; kp: number; black: boolean }
+type Item = { id: number; mp: number; kp: number; black: boolean; user?: Finger }
 type Cluster = { time: number; items: Item[]; sel: number[]; near: Int8Array | null; fast: number }
+
+/** A finger set on the note (selection card) is all but fixed: the search plans the rest around it. */
+const USER_FINGER_COST = 1e4
 
 export function assignFingers(
   notes: NoteEvent[],
@@ -228,7 +231,7 @@ function fingerHand(mine: NoteEvent[], hand: Hand, o: FingeringOptions, plan: Ha
   const sorted = mine.slice().sort((a, b) => a.time - b.time || sign * (a.midi - b.midi))
   const clusters: Cluster[] = []
   for (const cur of groupChords(sorted, o.clusterSec, o.wideSec)) {
-    const items = cur.map((n) => ({ id: n.id, mp: sign * n.midi, kp: sign * keyPos(n.midi), black: isBlackKey(n.midi) }))
+    const items: Item[] = cur.map((n) => ({ id: n.id, mp: sign * n.midi, kp: sign * keyPos(n.midi), black: isBlackKey(n.midi), user: n.finger }))
     items.sort((a, b) => a.mp - b.mp)
     const n = items.length
     // More than 5 notes: finger an evenly spread subset (always incl. both extremes); the rest copy
@@ -264,6 +267,7 @@ function fingerHand(mine: NoteEvent[], hand: Hand, o: FingeringOptions, plan: Ha
     for (let k = 0; k < fs.length; k++) {
       const it = cl.items[cl.sel[k]]
       const f = fs[k]
+      if (it.user !== undefined && it.user !== f) c += USER_FINGER_COST
       const tf = 1 + o.wFastWeak * cl.fast
       if (f === 4) c += o.wWeak4 * tf
       else if (f === 5) c += (o.wWeak5 + cl.fast * Math.max(0, o.wWeak4 - o.wWeak5)) * tf
@@ -353,7 +357,7 @@ function fingerHand(mine: NoteEvent[], hand: Hand, o: FingeringOptions, plan: Ha
         cl.sel.forEach((sj, kk) => { if (Math.abs(sj - idx) < bd) { bd = Math.abs(sj - idx); k = kk } })
       }
       // mirrored order is ascending in finger for both hands, so the finger number is fs[k] directly
-      plan.set(it.id, { hand, finger: fs[k] })
+      plan.set(it.id, { hand, finger: it.user ?? fs[k] })
     })
     s = backs[ci][s]
   }

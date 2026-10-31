@@ -279,26 +279,28 @@ export function moveNotes(
   return { ...song, notes: sorted, duration: computeDuration(song.duration, sorted) }
 }
 
-/** Assign every selected note to one hand. Returns `song` unchanged when nothing would change. */
-export function setNotesHand(song: ParsedSong, ids: Iterable<number>, hand: Hand): ParsedSong {
+/** Assign every selected note to one hand (`undefined` clears it). Returns `song` unchanged when nothing would change. */
+export function setNotesHand(song: ParsedSong, ids: Iterable<number>, hand: Hand | undefined): ParsedSong {
   const idSet = ids instanceof Set ? ids : new Set(ids)
   let changed = false
   const next = song.notes.map((n) => {
     if (!idSet.has(n.id) || n.hand === hand) return n
     changed = true
-    return { ...n, hand }
+    const { hand: _, ...rest } = n
+    return hand === undefined ? rest : { ...rest, hand }
   })
   return changed ? { ...song, notes: next } : song
 }
 
-/** Give every selected note one finger number. Returns `song` unchanged when nothing would change. */
-export function setNotesFinger(song: ParsedSong, ids: Iterable<number>, finger: Finger): ParsedSong {
+/** Give every selected note one finger number (`undefined` clears it). Returns `song` unchanged when nothing would change. */
+export function setNotesFinger(song: ParsedSong, ids: Iterable<number>, finger: Finger | undefined): ParsedSong {
   const idSet = ids instanceof Set ? ids : new Set(ids)
   let changed = false
   const next = song.notes.map((n) => {
     if (!idSet.has(n.id) || n.finger === finger) return n
     changed = true
-    return { ...n, finger }
+    const { finger: _, ...rest } = n
+    return finger === undefined ? rest : { ...rest, finger }
   })
   return changed ? { ...song, notes: next } : song
 }

@@ -136,6 +136,7 @@ Crisp and short. Things that open come in from where they were triggered with a 
 | `nf-pop` | Popovers, menus, selects: grow from the trigger (`--trigger-anchor-point`), leave faster than they came. Built into the kit `Popover`. |
 | `nf-tip` | Tooltips, quicker still. Built into `Tooltip`. |
 | `nf-modal`, `nf-scrim-anim` | Dialogs stay centred and scale in; the scrim fades. Built into `Dialog`. |
+| `nf-reveal-left` + `data-open` | A field that grows leftward out of the button that opens it and folds back into it (Customize search). |
 | `nf-enter-right`, `nf-enter-up`, `nf-enter-fade` + `nf-leaving` with `usePresence(open)` | Enter / exit of panels, toasts, cards. `usePresence` keeps the element mounted while it fades out. |
 | Easing tokens | `--ease-out` (default for UI), `--ease-in-out` (things moving on screen), `--ease-drawer`. |
 
@@ -165,7 +166,7 @@ All interactive pieces are react-aria components styled with the tokens. Import 
 | `ToggleButton` | Labelled toggle (Customize, Timeline, Follow playhead). Selected = `fill-selected`. |
 | `Tooltip`, `Kbd` | Hover / focus label with optional key caps. |
 | `Switch` | On/off. |
-| `SegmentedControl` | 2–5 short choices side by side. `present` rings values used by part of a mixed selection; `value={null}` selects nothing. |
+| `SegmentedControl` | 2–5 short choices side by side. `present` rings values used by part of a mixed selection; `value={null}` selects nothing; `onClear` makes the choice optional (pressing the selected segment clears it). |
 | `Select` | One of many (long option lists). |
 | `Disclosure` | A row that folds content away ("More settings", "Advanced"). |
 | `Progress` | Determinate bar. |
@@ -189,7 +190,7 @@ A settings tab is a stack of `Section`s (heading, optional feature switch via `e
 | `BoundSwitchRow` / `SwitchRow` | Boolean. |
 | `SelectRow` | Enum: becomes a `SegmentedControl` when the options are few and short, a `Select` otherwise. |
 | `BoundCountRow` | A small count (colours, stops): segments `2 3 4 5` instead of a slider. |
-| `BoundColorRow` / `ColorRow` | Hex field + swatch; the picker opens beside the panel with an "In this song" row of colours the current look uses. |
+| `BoundColorRow` / `ColorRow` | Hex field + swatch; the picker opens beside the panel with an "In this song" row of colours the current look uses. `onRemove` adds a × after the swatch (gradient stops above two, any of them; the later ones move up). |
 | `GradientStops` | The gradient as a bar with draggable stops (positions are edited only here; the rows below hold the colours). |
 | `PresetSwatch` | The look presets as chips showing real shader renders (`src/ui/look/presets/*.jpg`) tinted with the user's colours. Regenerate with `scripts/capture-preset-thumbs.mjs` when a preset changes. |
 | `ImagePicker` | A user image (note texture, stage background): the picture is the control — empty it's a drop / click well, set it shows the image, its name and Remove. |
@@ -206,8 +207,9 @@ A settings tab is a stack of `Section`s (heading, optional feature switch via `e
 ## Editing notes
 
 - While paused, selected notes get the **selection card** beside them: velocity (a value and a slider), hand (Left / Right), finger (1–5), and Delete.
-- Mixed selections: velocity shows the range ("64–92") and a band on the track; dragging shifts every note by the same amount and keeps their differences, typing sets all. Hand and finger select nothing, ring the values in use and say "Mixed"; choosing one sets every selected note.
-- Hand and finger are note data, saved in the project. How they look is set in Customize: Coloring → By hand (left / right / unassigned colours) and Note labels → Show: pitch, finger or both (the finger sits at the keyboard end).
+- Mixed selections: velocity shows the range ("64–92") and a band on the track; dragging shifts every note by the same amount and keeps their differences, typing sets all. Hand and finger select nothing, ring the values in use and say "Mixed"; choosing one sets every selected note. Pressing the selected hand or finger again clears it (unassigned).
+- A click anywhere off the card closes it (clears the selection): on the islands, the timeline, Customize, a key, or the canvas below the hit line. On the canvas above the hit line the editor's own rules apply (a note click selects, an empty click adds a note).
+- Hand and finger are note data, saved in the project, and the virtual hands (alpha) play with them. How they look is set in Customize: Coloring → By hand (left / right / unassigned colours) and Note labels → Show: pitch, finger or both (the finger sits at the keyboard end).
 - Deletes don't show a toast; ⌘Z undoes them.
 
 ## Keyframes

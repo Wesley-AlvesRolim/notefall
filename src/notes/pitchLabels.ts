@@ -141,7 +141,10 @@ const LABEL_VERTEX = /* glsl */ `
   void main() {
     vec2 cell = vec2(mod(iGlyph, uGrid.x), floor(iGlyph / uGrid.x));
     // canvas rows run top-down; the texture is flipped (v = 1 at the top)
-    vUv = vec2((cell.x + uv.x) / uGrid.x, 1.0 - (cell.y + 1.0 - uv.y) / uGrid.y);
+    // quad uv from position (PlaneGeometry(1, 1): uv = position.xy + 0.5), so
+    // the shader stays within WebGL's 8 attribute locations (instanceMatrix = 4)
+    vec2 quv = position.xy + 0.5;
+    vUv = vec2((cell.x + quv.x) / uGrid.x, 1.0 - (cell.y + 1.0 - quv.y) / uGrid.y);
     vAlpha = iAlpha;
     vColor = iColor;
     vec4 world = modelMatrix * instanceMatrix * vec4(position, 1.0);

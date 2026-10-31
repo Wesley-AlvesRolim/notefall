@@ -60,6 +60,8 @@ export function buildSongHandMotion(song: ParsedSong, map: HandsTimeMap, opts: H
   // Dev-only overrides (tuning.ts); all undefined in production, so the lab defaults apply.
   const tm = getTuning<MotionOptions>('motion')
   const split = splitHands(notes, song.tracks, getTuning<SplitOptions>('split'))
+  // Hands set on notes in the selection card win over the automatic split (fingers: see assignFingers).
+  for (const n of notes) if (n.hand) split.set(n.id, n.hand)
   const reach = pruneUnreachable(notes, split, {
     ...(tm?.handScale !== undefined ? { handScale: tm.handScale } : null),
     ...getTuning<ReachOptions>('reach'),

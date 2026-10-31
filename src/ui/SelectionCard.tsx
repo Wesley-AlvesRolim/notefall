@@ -42,12 +42,16 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
   const pointerDownRef = useRef(false)
 
   // Pointer gestures on the canvas (new note, move, marquee, eraser) hide the card; presses on the
-  // card itself (slider drag) must not.
+  // card itself (slider drag) must not. A press anywhere off the canvas (islands, timeline, Customize)
+  // closes it by clearing the selection; on the canvas the editor decides (a note click keeps or
+  // changes the selection, an empty spot below the hit line or a key clears it).
   useEffect(() => {
     if (!open) return
     const down = (e: PointerEvent) => {
-      if (cardRef.current?.contains(e.target as Node)) return
+      const target = e.target as Element | null
+      if (cardRef.current?.contains(target)) return
       pointerDownRef.current = true
+      if (e.button === 0 && !(target instanceof HTMLCanvasElement)) useStore.getState().clearSelection()
     }
     const up = () => {
       pointerDownRef.current = false
@@ -282,12 +286,14 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
           values={selected.map((n) => n.hand)}
           options={HANDS.map((h) => ({ value: h, label: t(`selection.hands.${h}`) }))}
           onChange={(h) => applyToSelection((song, ids) => setNotesHand(song, ids, h))}
+          onClear={() => applyToSelection((song, ids) => setNotesHand(song, ids, undefined))}
         />
         <ChoiceRow
           label={t('selection.finger')}
           values={selected.map((n) => (n.finger === undefined ? undefined : (String(n.finger) as FingerKey)))}
           options={FINGERS.map((f) => ({ value: f, label: f }))}
           onChange={(f) => applyToSelection((song, ids) => setNotesFinger(song, ids, Number(f) as Finger))}
+          onClear={() => applyToSelection((song, ids) => setNotesFinger(song, ids, undefined))}
         />
       </div>
       <div className="border-t border-glass-edge p-1.5">
@@ -311,18 +317,21 @@ const FINGERS: FingerKey[] = ['1', '2', '3', '4', '5']
 
 /**
  * Hand / finger: segments for the choices. All selected notes agree → that value is selected; they differ → nothing
- * is selected, the values in use are ringed and the row says "Mixed"; none set → nothing selected. Choosing sets all.
+ * is selected, the values in use are ringed and the row says "Mixed"; none set → nothing selected. Choosing sets all;
+ * pressing the selected value again clears it from every selected note.
  */
 function ChoiceRow<T extends string>({
   label,
   values,
   options,
   onChange,
+  onClear,
 }: {
   label: string
   values: (T | undefined)[]
   options: { value: T; label: string }[]
   onChange: (v: T) => void
+  onClear: () => void
 }) {
   const { t } = useTranslation('editor')
   const present = new Set(values.filter((v): v is T => v !== undefined))
@@ -340,6 +349,7 @@ function ChoiceRow<T extends string>({
         present={mixed ? present : undefined}
         options={options}
         onChange={onChange}
+        onClear={onClear}
       />
     </div>
   )

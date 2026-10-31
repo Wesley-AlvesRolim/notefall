@@ -1,15 +1,18 @@
 # notefall
 
-A browser-based piano visualizer. Notes fall onto an 88-key keyboard while a MIDI
-plays — and you can play live, record, edit the MIDI right on the canvas, animate
-the look along the timeline, and export it all to video.
+A piano visualizer that runs in the browser. Notes from a MIDI file fall onto an
+88-key keyboard as the song plays. You can also play live, record, edit notes,
+change the look over time with keyframes, and export the result as video.
 
-**Your MIDI, recordings, and projects never leave your device.** No accounts, no
-content uploads — everything is processed entirely client-side. (Anonymous,
-opt-out usage stats only.)
+notefall is free to use, with no account or sign-up. All features are available
+without payment, and exported videos have no watermark.
+
+MIDI files, recordings, projects, and audio are processed in the browser and are
+not uploaded. The app sends anonymous usage statistics, which can be turned off
+in the app menu, and bug reports or feature requests only when you submit them.
 
 <p align="center">
-  <img src=".github/demo.gif" alt="notefall in action" width="800">
+  <img src=".github/screenshot.jpg" alt="notefall playing a song with the Customize panel open" width="800">
 </p>
 
 <p align="center">
@@ -18,32 +21,38 @@ opt-out usage stats only.)
 
 ## Features
 
-- **Falling notes** — a MIDI plays back through a sampled concert grand while
-  its notes fall onto a 3D 88-key keyboard, with glow, particles, and bloom.
-- **Play live** — touch, mouse, PC keyboard, or a hardware MIDI keyboard via
-  the Web MIDI API. Sustain pedal supported.
-- **Record** — capture a live performance (optional 4-beat metronome count-in)
-  and load it straight back as an editable song.
-- **Edit on the canvas** — move, resize, split, delete, draw, and marquee-select
-  notes directly on the visualizer, and mark each note's hand and finger. Full
-  undo/redo.
-- **Keyframes** — drop keyframes along the timeline and the look morphs between
-  them (camera, colors, opacity, bloom, background, …).
-- **Export** — offline render to WAV (audio), silent MP4 (video), or a full
-  A/V MP4, with resolution / fps / quality options and live progress + ETA.
-- **File-based projects** — save/load `.nfz` project files to your own
-  filesystem (no cloud, no IndexedDB-only fragility), with recent-files support.
+- **Playback**: plays a MIDI file with a sampled piano and shows the notes
+  falling onto a 3D keyboard, with optional glow, particles, and bloom.
+- **Look**: note styles (ice, jewel, marble, metal, 2D, and others); note colors
+  by track, gradient, random palette, or hand; pitch or finger labels on notes;
+  settings for the hit line, particles, keyboard, camera, and background.
+- **Live input**: touch, mouse, PC keyboard, or a MIDI keyboard through the Web
+  MIDI API, including the sustain pedal.
+- **Recording**: records live input, with an optional 4-beat count-in, and opens
+  the take as an editable song.
+- **Editing**: add, move, resize, split, delete, and select notes on the canvas;
+  set velocity, hand, and finger for the selected notes. Undo and redo.
+- **Timeline**: MIDI offset and trim, playback speed that changes over time, and
+  an audio track that plays along.
+- **Keyframes**: visual settings set at points on the timeline; values between
+  keyframes are interpolated.
+- **Virtual hands (alpha)**: 3D hands that play the song, using the hand and
+  finger set on each note where there is one.
+- **Export**: WAV, or MP4 (H.264) / WebM (VP9, AV1) video with or without audio;
+  resolution, frame rate, and quality are configurable.
+- **Projects**: saved as `.nfz` files on your own disk, with a list of recent
+  files in Chrome and Edge.
 
 ## Tech stack
 
 - Vite + React 18 + TypeScript
 - [`@react-three/fiber`](https://github.com/pmndrs/react-three-fiber) + drei +
   postprocessing (Bloom) for the 3D scene
-- [`smplr`](https://github.com/danigb/smplr) for the sampled grand piano,
-  [`tone`](https://tonejs.github.io) for AudioContext lifecycle
+- [`smplr`](https://github.com/danigb/smplr) for sample playback,
+  [`tone`](https://tonejs.github.io) for the AudioContext lifecycle
 - [`@tonejs/midi`](https://github.com/Tonejs/Midi) for MIDI parse/serialize
 - `react-aria-components` + Tailwind for the UI, `zustand` for state
-- `mediabunny` + WebCodecs for offline MP4 / WebM export
+- `mediabunny` + WebCodecs for MP4 / WebM export
 
 ## Working on the UI
 
@@ -51,7 +60,14 @@ The interface follows a small design system: tokens, a react-aria component kit
 and rules for layout, motion and copy. Read
 [`docs/design-system.md`](docs/design-system.md) before adding or changing UI.
 
+## Credits
+
+- Piano samples: [Salamander Grand Piano V3](https://archive.org/details/SalamanderGrandPianoV3)
+  by Alexander Holm, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)
+- Hand models: [Hand Models for the Godot XR Tools](https://github.com/GodotVR/godot-xr-tools)
+  by Miodrag Sejic, CC0
+
 ## License
 
-[PolyForm Shield 1.0.0](LICENSE.md) — source-available. Permits any use except
-offering a competing product or service.
+[PolyForm Shield 1.0.0](LICENSE.md). The source is available, and any use is
+permitted except offering a competing product or service.
