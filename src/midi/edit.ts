@@ -27,7 +27,7 @@ function sortByTime(notes: NoteEvent[]): NoteEvent[] {
   return notes.slice().sort((a, b) => a.time - b.time)
 }
 
-function computeDuration(prev: number, notes: NoteEvent[]): number {
+export function computeDuration(prev: number, notes: NoteEvent[]): number {
   let last = 0
   for (const n of notes) {
     const end = n.time + n.duration
