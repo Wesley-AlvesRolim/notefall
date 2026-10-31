@@ -177,10 +177,10 @@
     "close": "Close search"
   },
   "reset": {
-    "button": "Reset look",
+    "button": "Reset to defaults",
     "keyframe": "Reset this keyframe",
-    "tooltip": "Reset every setting in the look to its default",
-    "tooltipKeyframe": "Reset this keyframe to the default look",
+    "tooltip": "Reset every setting to its default",
+    "tooltipKeyframe": "Reset this keyframe to the defaults",
     "doubleClickReset": "Double-click to reset",
     "resetToDefault": "Reset to default",
     "resetRowToDefault": "Reset {{label}} to default"
@@ -429,7 +429,7 @@
     "set": "Set at this keyframe",
     "carried": "Carried in from the keyframes around it. Press to set it here.",
     "own": "Set at this keyframe",
-    "close": "Close Look"
+    "close": "Close Customize"
   },
   "slider": {
     "enterValue": "Enter value…",
@@ -440,7 +440,7 @@
     "back": "Back"
   },
   "panel": {
-    "title": "Look"
+    "title": "Customize"
   },
   "image": {
     "choose": "Choose image…",

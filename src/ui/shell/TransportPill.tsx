@@ -385,7 +385,7 @@ export function TransportPill() {
 
       <Divider vertical />
 
-      <ToggleButton icon={<Icon.LookIcon />} isSelected={lookOpen} onChange={setLookOpen}>
+      <ToggleButton icon={<Icon.CustomizeIcon />} isSelected={lookOpen} onChange={setLookOpen}>
         {t('transport.look')}
       </ToggleButton>
       <Tooltip label={t('transport.timeline')} shortcut={`${MOD}B`}>

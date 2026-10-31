@@ -177,10 +177,10 @@
     "close": "検索を閉じる"
   },
   "reset": {
-    "button": "見た目をリセット",
+    "button": "初期設定に戻す",
     "keyframe": "このキーフレームをリセット",
-    "tooltip": "見た目のすべての設定を初期値に戻す",
-    "tooltipKeyframe": "このキーフレームを初期の見た目に戻す",
+    "tooltip": "すべての設定を初期値に戻す",
+    "tooltipKeyframe": "このキーフレームを初期設定に戻す",
     "doubleClickReset": "ダブルクリックでリセット",
     "resetToDefault": "初期値にリセット",
     "resetRowToDefault": "{{label}} を初期値にリセット"
@@ -429,7 +429,7 @@
     "set": "このキーフレームで設定",
     "carried": "前後のキーフレームから補間された値です。押すとここで設定します。",
     "own": "このキーフレームで設定済み",
-    "close": "見た目を閉じる"
+    "close": "カスタマイズを閉じる"
   },
   "slider": {
     "enterValue": "値を入力…",
@@ -440,7 +440,7 @@
     "back": "戻る"
   },
   "panel": {
-    "title": "見た目"
+    "title": "カスタマイズ"
   },
   "image": {
     "choose": "画像を選ぶ…",
