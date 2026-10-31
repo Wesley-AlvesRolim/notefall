@@ -42,7 +42,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       {...rest}
       className={clsx(
-        'inline-flex flex-none cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-round font-medium transition-[background-color,filter] duration-100',
+        'nf-press inline-flex flex-none cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-round font-medium',
         size === 'md' ? 'h-control px-3.5' : 'h-control-sm px-2.5',
         VARIANT[variant],
         CONTROL_STATES,
@@ -84,7 +84,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       aria-label={label}
       {...rest}
       className={clsx(
-        'inline-grid flex-none cursor-pointer place-items-center rounded-round p-0 transition-[background-color,filter] duration-100',
+        'nf-press inline-grid flex-none cursor-pointer place-items-center rounded-round p-0',
         ICON_SIZE[size],
         CONTROL_STATES,
         className,
@@ -108,7 +108,7 @@ export function ToggleButton({ icon, className, children, ...rest }: ToggleButto
     <AriaToggleButton
       {...rest}
       className={clsx(
-        'inline-flex h-control flex-none cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-round px-3.5 font-medium text-ink transition-colors duration-100 data-[hovered]:bg-fill-hover data-[pressed]:bg-fill-selected',
+        'nf-press inline-flex h-control flex-none cursor-pointer items-center gap-[7px] whitespace-nowrap rounded-round px-3.5 font-medium text-ink data-[hovered]:bg-fill-hover data-[pressed]:bg-fill-selected',
         CONTROL_STATES,
         className,
       )}

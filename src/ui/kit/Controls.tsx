@@ -6,6 +6,8 @@ import {
   ProgressBar,
   Radio,
   RadioGroup,
+  SelectionIndicator,
+  SharedElementTransition,
   Select as AriaSelect,
   SelectValue,
   SliderThumb,
@@ -73,31 +75,35 @@ export function SegmentedControl<T extends string>({
   className?: string
 }) {
   return (
-    <RadioGroup
-      aria-label={ariaLabel}
-      value={value ?? ''}
-      onChange={(v) => onChange(v as T)}
-      orientation="horizontal"
-      className={clsx('grid auto-cols-fr grid-flow-col gap-0.5 rounded-[11px] bg-fill-field p-[3px]', className)}
-    >
-      {options.map((o) => (
-        <Radio
-          key={o.value}
-          value={o.value}
-          isDisabled={o.isDisabled}
-          data-present={present?.has(o.value) || undefined}
-          className={clsx(
-            'grid h-[30px] cursor-pointer place-items-center whitespace-nowrap rounded-field px-2 font-medium text-ink-muted outline-none transition-colors duration-100',
-            'data-[hovered]:text-ink data-[selected]:bg-fill-selected data-[selected]:text-ink data-[selected]:shadow-[inset_0_0_0_1px_var(--glass-edge)]',
-            'data-[present]:text-ink data-[present]:shadow-[inset_0_0_0_1.5px_var(--ink-muted)]',
-            'data-[focus-visible]:outline data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-[var(--focus)]',
-            'data-[disabled]:cursor-default data-[disabled]:opacity-40',
-          )}
-        >
-          {o.label}
-        </Radio>
-      ))}
-    </RadioGroup>
+    <SharedElementTransition>
+      <RadioGroup
+        aria-label={ariaLabel}
+        value={value ?? ''}
+        onChange={(v) => onChange(v as T)}
+        orientation="horizontal"
+        className={clsx('grid auto-cols-fr grid-flow-col gap-0.5 rounded-[11px] bg-fill-field p-[3px]', className)}
+      >
+        {options.map((o) => (
+          <Radio
+            key={o.value}
+            value={o.value}
+            isDisabled={o.isDisabled}
+            data-present={present?.has(o.value) || undefined}
+            className={clsx(
+              'nf-press relative grid h-[30px] cursor-pointer place-items-center whitespace-nowrap rounded-field px-2 font-medium text-ink-muted outline-none',
+              'data-[hovered]:text-ink data-[selected]:text-ink',
+              'data-[present]:text-ink data-[present]:shadow-[inset_0_0_0_1.5px_var(--ink-muted)]',
+              'data-[focus-visible]:outline data-[focus-visible]:outline-2 data-[focus-visible]:outline-offset-2 data-[focus-visible]:outline-[var(--focus)]',
+              'data-[disabled]:cursor-default data-[disabled]:opacity-40',
+            )}
+          >
+            {/* The selected fill slides between segments. */}
+            <SelectionIndicator className="absolute inset-0 rounded-field bg-fill-selected shadow-[inset_0_0_0_1px_var(--glass-edge)] transition-[translate,width] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none" />
+            <span className="relative">{o.label}</span>
+          </Radio>
+        ))}
+      </RadioGroup>
+    </SharedElementTransition>
   )
 }
 

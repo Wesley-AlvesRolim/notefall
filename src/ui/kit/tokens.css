@@ -69,3 +69,74 @@
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
+
+/* ── Motion ──────────────────────────────────────────────────────────────
+   Crisp and short: things that open come in from their trigger with a strong ease-out and
+   leave faster than they came. Animations use the individual `scale` / `translate` properties
+   so they compose with Tailwind's `transform` utilities instead of replacing them. Keyboard-driven changes are never animated. Reduced motion
+   keeps the fades and drops every movement. */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes nf-pop-in {
+  from { opacity: 0; scale: 0.96; }
+}
+@keyframes nf-pop-out {
+  to { opacity: 0; scale: 0.98; }
+}
+@keyframes nf-fade-in {
+  from { opacity: 0; }
+}
+@keyframes nf-fade-out {
+  to { opacity: 0; }
+}
+@keyframes nf-rise-in {
+  from { opacity: 0; translate: 0 8px; }
+}
+@keyframes nf-slide-in-right {
+  from { opacity: 0; translate: 12px 0; }
+}
+
+/* Menus, selects, pickers, popovers: grow from the trigger. */
+.nf-pop {
+  transform-origin: var(--trigger-anchor-point, top);
+}
+.nf-pop[data-entering] { animation: nf-pop-in 170ms var(--ease-out); }
+.nf-pop[data-exiting] { animation: nf-pop-out 110ms var(--ease-out) forwards; }
+
+/* Tooltips: quicker and smaller. */
+.nf-tip {
+  transform-origin: var(--trigger-anchor-point, bottom);
+}
+.nf-tip[data-entering] { animation: nf-pop-in 125ms var(--ease-out); }
+.nf-tip[data-exiting] { animation: nf-fade-out 90ms linear forwards; }
+
+/* Modal dialogs stay centred; the scrim fades. */
+.nf-scrim-anim[data-entering] { animation: nf-fade-in 200ms var(--ease-out); }
+.nf-scrim-anim[data-exiting] { animation: nf-fade-out 140ms var(--ease-out) forwards; }
+.nf-modal[data-entering] { animation: nf-pop-in 220ms var(--ease-out); }
+.nf-modal[data-exiting] { animation: nf-pop-out 140ms var(--ease-out) forwards; }
+
+/* Presence (see kit/usePresence): enter / exit of panels, the card and toasts. */
+.nf-enter-right { animation: nf-slide-in-right 240ms var(--ease-out); }
+.nf-enter-up { animation: nf-rise-in 240ms var(--ease-out); }
+.nf-enter-fade { animation: nf-fade-in 160ms var(--ease-out); }
+.nf-leaving { opacity: 0 !important; transition: opacity 140ms var(--ease-out); pointer-events: none; }
+
+/* Press feedback for every pressable control. */
+.nf-press {
+  transition: scale 160ms var(--ease-out), background-color 120ms ease, color 120ms ease, filter 120ms ease,
+    opacity 120ms ease;
+}
+.nf-press[data-pressed] { scale: 0.97; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nf-pop[data-entering], .nf-modal[data-entering] { animation-name: nf-fade-in; }
+  .nf-pop[data-exiting], .nf-modal[data-exiting] { animation-name: nf-fade-out; }
+  .nf-tip[data-entering] { animation-name: nf-fade-in; }
+  .nf-enter-right, .nf-enter-up { animation-name: nf-fade-in; }
+  .nf-press[data-pressed] { scale: none; }
+}

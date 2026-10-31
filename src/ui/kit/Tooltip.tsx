@@ -34,7 +34,7 @@ export function Tooltip({
       <AriaTooltip
         offset={8}
         placement={placement}
-        className="nf-glass-strong z-[100] inline-flex items-center gap-2 whitespace-nowrap rounded-field px-2.5 py-1.5 text-body text-ink outline-none"
+        className="nf-glass-strong nf-tip z-[100] inline-flex items-center gap-2 whitespace-nowrap rounded-field px-2.5 py-1.5 text-body text-ink outline-none"
       >
         {label}
         {shortcut && <Kbd>{shortcut}</Kbd>}

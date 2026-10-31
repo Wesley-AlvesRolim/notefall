@@ -21,7 +21,7 @@ export function Popover({ className, ...props }: Omit<AriaPopoverProps, 'classNa
     <AriaPopover
       offset={8}
       {...props}
-      className={clsx('nf-glass-strong z-[90] rounded-panel text-body text-ink outline-none', className)}
+      className={clsx('nf-glass-strong nf-pop z-[90] rounded-panel text-body text-ink outline-none', className)}
     />
   )
 }

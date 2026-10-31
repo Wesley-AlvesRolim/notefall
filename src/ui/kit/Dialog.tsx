@@ -34,9 +34,9 @@ export function Dialog({
       onOpenChange={onOpenChange}
       isDismissable={dismissable}
       isKeyboardDismissDisabled={!dismissable}
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-scrim p-4"
+      className="nf-scrim-anim fixed inset-0 z-[80] flex items-center justify-center bg-scrim p-4"
     >
-      <Modal className="max-h-full w-full outline-none" style={{ maxWidth: width }}>
+      <Modal className="nf-modal max-h-full w-full outline-none" style={{ maxWidth: width }}>
         <AriaDialog
           role={role}
           className={clsx(

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
 import { useStore, defaultSettings, type Settings } from '../store'
@@ -25,7 +25,7 @@ import { PresetSwatch } from './look/PresetSwatch'
 import { useBarColors, useEffectiveLook } from './look/useLookState'
 import { VelocityCurveEditor } from './VelocityCurveEditor'
 import { FileTrigger } from 'react-aria-components'
-import { Button, Icon, IconButton, Panel, GEOMETRY } from './kit'
+import { Button, Icon, IconButton, Panel, GEOMETRY, usePresence } from './kit'
 import { useShell } from './shell/uiState'
 import { useCustomTexture } from '../notes/customTexture'
 import { CAMERA_LIMITS } from '../scene/cameraLimits'
@@ -1213,11 +1213,12 @@ function TabPanel({ title, active, children }: { title: string; active: boolean;
 
 export function Inspector() {
   const lookOpen = useShell((st) => st.lookOpen)
-  if (!lookOpen) return null
-  return <LookPanel />
+  const { mounted, leaving } = usePresence(lookOpen)
+  if (!mounted) return null
+  return <LookPanel leaving={leaving} />
 }
 
-function LookPanel() {
+function LookPanel({ leaving }: { leaving: boolean }) {
   const { t } = useTranslation('inspector')
   const reset = useStore((st) => st.resetSettings)
   const keyframeTargeted = useStore((st) => st.editingKeyframeTime !== null)
@@ -1247,7 +1248,7 @@ function LookPanel() {
       <Panel
         ref={panelRef}
         aria-label={t('panel.title')}
-        className="fixed z-20"
+        className={clsx('fixed z-20 nf-enter-right', leaving && 'nf-leaving')}
         style={{
           right: GEOMETRY.EDGE,
           top: GEOMETRY.EDGE + GEOMETRY.BAR + GEOMETRY.GAP,
@@ -1518,21 +1519,53 @@ function LookPanel() {
   )
 }
 
-/** The five areas as equal-width tabs (kit SegmentedControl is a radio group; tabs here are a tablist). */
+/** The five areas as tabs; the selected fill slides to the chosen tab. Arrow keys move between tabs. */
 function SegmentedTabs({ tab, onChange }: { tab: InspectorTab; onChange: (t: InspectorTab) => void }) {
   const { t } = useTranslation('inspector')
+  const listRef = useRef<HTMLDivElement>(null)
+  const [pill, setPill] = useState<{ x: number; w: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-tab="${tab}"]`)
+    if (el) setPill({ x: el.offsetLeft, w: el.offsetWidth })
+  }, [tab])
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const i = INSPECTOR_TABS.indexOf(tab)
+    const next =
+      e.key === 'ArrowRight' ? INSPECTOR_TABS[(i + 1) % INSPECTOR_TABS.length]
+      : e.key === 'ArrowLeft' ? INSPECTOR_TABS[(i + INSPECTOR_TABS.length - 1) % INSPECTOR_TABS.length]
+      : null
+    if (!next) return
+    e.preventDefault()
+    onChange(next)
+    listRef.current?.querySelector<HTMLElement>(`[data-tab="${next}"]`)?.focus()
+  }
   return (
-    <div role="tablist" aria-label={t('tab.label')} className="flex min-w-0 flex-1 gap-0.5">
+    <div
+      ref={listRef}
+      role="tablist"
+      aria-label={t('tab.label')}
+      onKeyDown={onKeyDown}
+      className="relative flex min-w-0 flex-1 gap-0.5"
+    >
+      {pill && (
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 rounded-tab bg-fill-selected transition-[transform,width] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none"
+          style={{ width: pill.w, transform: `translateX(${pill.x}px)` }}
+        />
+      )}
       {INSPECTOR_TABS.map((id) => (
         <button
           key={id}
           type="button"
           role="tab"
+          data-tab={id}
+          tabIndex={tab === id ? 0 : -1}
           aria-selected={tab === id}
           onClick={() => onChange(id)}
           className={clsx(
-            'nf-focus h-8 flex-auto cursor-pointer whitespace-nowrap rounded-tab px-1.5 text-center text-label outline-none transition-colors duration-100',
-            tab === id ? 'bg-fill-selected text-ink' : 'text-ink-muted hover:text-ink',
+            'nf-focus relative h-8 flex-auto cursor-pointer whitespace-nowrap rounded-tab px-1.5 text-center text-label outline-none transition-colors duration-150',
+            tab === id ? 'text-ink' : 'text-ink-muted hover:text-ink',
           )}
         >
           {t(`tab.${id}`)}

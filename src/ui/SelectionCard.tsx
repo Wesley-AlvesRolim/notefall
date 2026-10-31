@@ -63,6 +63,12 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
     }
   }, [open])
 
+  // Fades out instead of popping; stays in place so a quick re-show doesn't jump.
+  const hideCard = (card: HTMLElement) => {
+    card.style.opacity = '0'
+    card.style.pointerEvents = 'none'
+  }
+
   // Placement loop.
   useLayoutEffect(() => {
     if (!open || !wrapEl) return
@@ -76,7 +82,7 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
       const h = card.offsetHeight
       const hide = !rect || pointerDownRef.current || !!useStore.getState().rangeSelectRect
       if (hide || !rect) {
-        card.style.visibility = 'hidden'
+        hideCard(card)
         return
       }
       const l = rect.left - w.left
@@ -84,7 +90,7 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
       const top = rect.top - w.top
       const bottom = rect.bottom - w.top
       if (r < 0 || l > w.width || bottom < 0 || top > w.height) {
-        card.style.visibility = 'hidden'
+        hideCard(card)
         return
       }
       // Free area: inside the canvas, below the top islands, above the pill, left of the Look panel.
@@ -106,6 +112,8 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
       const y = Math.max(minY, Math.min(cy - h / 2, maxY))
       card.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
       card.style.visibility = 'visible'
+      card.style.opacity = '1'
+      card.style.pointerEvents = ''
     }
     place()
     return () => cancelAnimationFrame(raf)
@@ -202,7 +210,7 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
       ref={cardRef}
       role="group"
       aria-label={t('selection.groupLabel', { count })}
-      className="absolute left-0 top-0 z-50 invisible"
+      className="absolute left-0 top-0 z-50 invisible opacity-0 transition-opacity duration-150 ease-[var(--ease-out)]"
       style={{ width: CARD_W }}
       onContextMenu={(e) => e.preventDefault()}
     >

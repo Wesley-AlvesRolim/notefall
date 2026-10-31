@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useStore } from '../store'
 import { useUserAudio } from '../audio/userAudio'
 import { audioEngine } from '../audio/engine'
-import { Button, GEOMETRY, Icon, IconButton, Panel, ToggleButton } from './kit'
+import { Button, GEOMETRY, Icon, IconButton, Panel, ToggleButton, usePresence } from './kit'
 import { useShell } from './shell/uiState'
 import { Timeline } from './Timeline'
 
@@ -93,10 +93,11 @@ export function TimelineEditor() {
       useStore.getState().updateSettings({ timelineEditorOpen: true })
     }
   }, [audioLoaded])
-  if (!open || !song) return null
+  const { mounted, leaving } = usePresence(open && !!song)
+  if (!mounted || !song) return null
   return (
     <Panel
-      className="fixed z-20 px-3.5 py-3"
+      className={`nf-enter-up fixed z-20 px-3.5 py-3 transition-[right] duration-200 ease-[var(--ease-out)] ${leaving ? 'nf-leaving' : ''}`}
       style={{
         left: GEOMETRY.EDGE,
         bottom: GEOMETRY.PILL_BOTTOM + GEOMETRY.PILL + GEOMETRY.GAP,

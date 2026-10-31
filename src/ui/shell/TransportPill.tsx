@@ -196,7 +196,7 @@ function HoverSlider({
             data-hover-slider={id}
             onMouseEnter={cancel}
             onMouseLeave={scheduleClose}
-            className="nf-glass-strong fixed z-[90] w-52 -translate-x-1/2 rounded-[14px] p-3.5 text-body text-ink"
+            className="nf-glass-strong nf-enter-up fixed z-[90] w-52 -translate-x-1/2 rounded-[14px] p-3.5 text-body text-ink"
             style={{ left: pos.left, bottom: pos.bottom }}
           >
             <Slider
