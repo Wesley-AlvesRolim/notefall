@@ -29,9 +29,7 @@
     "start": "Iniciar gravação",
     "label": "Gravar",
     "stopLabel": "Parar",
-    "countIn": "Pré-contagem",
-    "disableCountIn": "Desativar pré-contagem",
-    "enableCountIn": "Ativar pré-contagem"
+    "countIn": "Pré-contagem"
   },
   "recordings": {
     "unread": "Não lida",
@@ -45,9 +43,7 @@
     "confirmDelete": "Confirmar exclusão da gravação",
     "delete": "Excluir gravação",
     "trigger": "Gravações e pré-contagem",
-    "triggerWithNew": "Gravações e pré-contagem ({{count}} novas)",
-    "showWithNew": "Mostrar gravações ({{count}} novas)",
-    "show": "Mostrar gravações"
+    "triggerWithNew": "Gravações e pré-contagem ({{count}} novas)"
   },
   "toast": {
     "emptyRecording": "Nenhuma nota capturada — a gravação ficou vazia"
@@ -56,22 +52,19 @@
     "reportBug": "Relatar um bug…",
     "requestFeature": "Sugerir uma funcionalidade…",
     "viewOnGitHub": "Código-fonte no GitHub",
-    "build": "Build {{commit}}",
-    "aria": "Ajuda e feedback"
+    "build": "Build {{commit}}"
   },
   "analytics": {
     "label": "Ajude a melhorar o notefall",
     "caption": "Apenas uso anônimo — nunca suas músicas ou arquivos."
   },
   "badge": {
-    "unsavedAria": "Alterações não salvas",
-    "unsaved": "Não salvo"
+    "unsavedAria": "Alterações não salvas"
   },
   "projectName": {
     "aria": "Nome do projeto",
     "rename": "Renomear projeto",
-    "untitled": "Sem título",
-    "noFile": "Nenhum arquivo carregado"
+    "untitled": "Sem título"
   },
   "export": {
     "titleAudio": "Exportando áudio",
@@ -102,9 +95,5 @@
   "history": {
     "undo": "Desfazer",
     "redo": "Refazer"
-  },
-  "language": {
-    "label": "Idioma",
-    "aria": "Mudar idioma"
   }
 }

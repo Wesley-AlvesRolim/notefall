@@ -44,8 +44,7 @@
     "advancedSummaryAudio": "WAV",
     "qualityHint": "Taxa de bits do vídeo: {{mbps}} Mbps. Alta usa 1,5× a taxa de bits para bordas e brilho mais nítidos.",
     "fileFormat": "{{codec}} · {{res}} · {{fps}} fps",
-    "wavMeta": "WAV · 44,1 kHz",
-    "bitrateNote": "Bitrate de vídeo {{mbps}} Mbps. Alta usa 1,5× o bitrate para bordas e bloom mais limpos; todo o resto é igual."
+    "wavMeta": "WAV · 44,1 kHz"
   },
   "progress": {
     "note": "Isso pode levar um tempo. Não feche a aba.",
@@ -63,8 +62,7 @@
     "unsupportedTitle": "Tipo de arquivo não suportado",
     "unsupportedMessage": "\"{{name}}\" não está em um formato suportado. Solte um projeto .nfz, um arquivo .mid / .midi ou um áudio .mp3 / .wav.",
     "title": "Solte para abrir",
-    "hint": "MIDI, projeto do notefall ou áudio para o acompanhamento",
-    "indicator": "Solte para carregar (.mid / .midi / .nfz / .mp3 / .wav)"
+    "hint": "MIDI, projeto do notefall ou áudio para o acompanhamento"
   },
   "fastForward": {
     "rate": "2x"
@@ -199,12 +197,5 @@
     "scroll": "rolagem",
     "add": "Adicionar uma nota (espaço vazio)",
     "sheet": "Mostrar estes atalhos"
-  },
-  "noteMenu": {
-    "close": "Fechar",
-    "deleteOne": "Excluir nota",
-    "deleteMany": "Excluir {{count}} notas",
-    "notesSelected": "{{count}} notas selecionadas",
-    "velocity": "Velocidade"
   }
 }

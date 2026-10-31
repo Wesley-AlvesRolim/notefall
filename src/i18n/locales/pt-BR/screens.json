@@ -22,12 +22,5 @@
     "firefoxAfter": ".",
     "safariPath": "Menu Desenvolver → Recursos Experimentais → ativar",
     "safariAfter": " (se aparecer)."
-  },
-  "pageLoader": {
-    "loading": "Carregando"
-  },
-  "loading": {
-    "title": "Carregando amostras do piano",
-    "note": "O primeiro carregamento baixa ~77MB de amostras de alta qualidade; nas próximas sessões elas ficam em cache."
   }
 }
