@@ -177,23 +177,23 @@
   },
   "search": {
     "placeholder": "Search settings…",
-    "clear": "Clear search"
+    "clear": "Clear search",
+    "open": "Search settings",
+    "close": "Close search"
   },
   "reset": {
-    "button": "Reset",
-    "tooltip": "Reset all settings to defaults",
+    "button": "Reset look",
+    "keyframe": "Reset this keyframe",
+    "tooltip": "Reset every setting in the look to its default",
+    "tooltipKeyframe": "Reset this keyframe to the default look",
     "doubleClickReset": "Double-click to reset",
     "resetToDefault": "Reset to default",
     "resetRowToDefault": "Reset {{label}} to default"
   },
-  "banner": {
-    "editingDefaultLookPrefix": "Editing ",
-    "editingDefaultLookHighlight": "default look",
-    "editingDefaultLookSuffix": " — before the first pin",
-    "editingPin": "Editing pin"
-  },
   "color": {
-    "editAria": "Edit {{label}} color"
+    "editAria": "Edit {{label}} color",
+    "inSong": "In this song",
+    "hex": "Hex"
   },
   "look": {
     "preset": "Preset",
@@ -386,8 +386,7 @@
     "hide": "Fewer settings"
   },
   "scope": {
-    "wholeSong": "whole song",
-    "wholeSongTooltip": "A pin cannot hold this setting: changing it changes the whole song, not just the selected pin."
+    "note": "Can't change over time. Applies to the whole song."
   },
   "labels": {
     "format": "Format",
@@ -422,5 +421,26 @@
   },
   "hands": {
     "hint": "Experimental: virtual hands play the loaded song on the keyboard. Positions and fingering are estimated from the notes, so expect mistakes. Fast or dense pieces are likely to show missed keys and impossible movements."
+  },
+  "keyframes": {
+    "title": "Keyframe at {{time}}",
+    "prev": "Previous keyframe",
+    "next": "Next keyframe",
+    "strip": "Keyframes in this song",
+    "set": "Set at this keyframe",
+    "carried": "Carried in from the keyframes around it. Press to set it here.",
+    "own": "Set at this keyframe",
+    "close": "Close Look"
+  },
+  "slider": {
+    "enterValue": "Enter value…",
+    "copy": "Copy",
+    "paste": "Paste",
+    "value": "Value",
+    "apply": "Press Enter to apply",
+    "back": "Back"
+  },
+  "panel": {
+    "title": "Look"
   }
 }

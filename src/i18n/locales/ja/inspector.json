@@ -177,23 +177,23 @@
   },
   "search": {
     "placeholder": "設定を検索…",
-    "clear": "検索をクリア"
+    "clear": "検索をクリア",
+    "open": "設定を検索",
+    "close": "検索を閉じる"
   },
   "reset": {
-    "button": "リセット",
-    "tooltip": "すべての設定を初期値にリセット",
+    "button": "見た目をリセット",
+    "keyframe": "このキーフレームをリセット",
+    "tooltip": "見た目のすべての設定を初期値に戻す",
+    "tooltipKeyframe": "このキーフレームを初期の見た目に戻す",
     "doubleClickReset": "ダブルクリックでリセット",
     "resetToDefault": "初期値にリセット",
     "resetRowToDefault": "{{label}} を初期値にリセット"
   },
-  "banner": {
-    "editingDefaultLookPrefix": "編集中: ",
-    "editingDefaultLookHighlight": "デフォルトの見た目",
-    "editingDefaultLookSuffix": " — 最初のピンより前",
-    "editingPin": "ピンを編集中"
-  },
   "color": {
-    "editAria": "{{label}} のカラーを編集"
+    "editAria": "{{label}} のカラーを編集",
+    "inSong": "この曲の色",
+    "hex": "Hex"
   },
   "look": {
     "preset": "プリセット",
@@ -386,8 +386,7 @@
     "hide": "詳細設定を閉じる"
   },
   "scope": {
-    "wholeSong": "曲全体",
-    "wholeSongTooltip": "この設定はピンに保存できません。変更すると選択中のピンだけでなく曲全体が変わります。"
+    "note": "時間では変えられません。曲全体に適用されます。"
   },
   "labels": {
     "format": "表記",
@@ -422,5 +421,26 @@
   },
   "hands": {
     "hint": "試験機能：読み込んだ曲を仮想の手が鍵盤で弾きます。位置や指使いは音符から推定するため、不自然な動きが出ることがあります。速い曲や音の多い曲では、鍵に届かない、ありえない動きになるなどの破綻が起きやすくなります。"
+  },
+  "keyframes": {
+    "title": "{{time}} のキーフレーム",
+    "prev": "前のキーフレーム",
+    "next": "次のキーフレーム",
+    "strip": "この曲のキーフレーム",
+    "set": "このキーフレームで設定",
+    "carried": "前後のキーフレームから補間された値です。押すとここで設定します。",
+    "own": "このキーフレームで設定済み",
+    "close": "見た目を閉じる"
+  },
+  "slider": {
+    "enterValue": "値を入力…",
+    "copy": "コピー",
+    "paste": "ペースト",
+    "value": "値",
+    "apply": "Enter で適用",
+    "back": "戻る"
+  },
+  "panel": {
+    "title": "見た目"
   }
 }

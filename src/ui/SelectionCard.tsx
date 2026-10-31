@@ -7,7 +7,8 @@ import { deleteNotes, setNotesVelocity } from '../midi/edit'
 import { midiToName } from '../midi/noteName'
 import { selectionScreenRect } from '../scene/selectionBounds'
 import { notifyNotesDeleted } from './editor/deleteToast'
-import { Button, Icon, Panel } from './kit'
+import { Button, GEOMETRY, Icon, Panel } from './kit'
+import { useShell } from './shell/uiState'
 
 const CARD_W = 252
 const GAP = 14
@@ -86,15 +87,23 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
         card.style.visibility = 'hidden'
         return
       }
-      const roomRight = w.width - PAD - (r + GAP)
-      const roomLeft = l - GAP - PAD
+      // Free area: inside the canvas, below the top islands, above the pill, left of the Look panel.
+      const { EDGE, BAR, GAP: SURFACE_GAP, PILL, PILL_BOTTOM, PANEL } = GEOMETRY
+      const minX = Math.max(PAD, EDGE - w.left)
+      const maxX =
+        Math.min(w.width, window.innerWidth - (useShell.getState().lookOpen ? EDGE + PANEL + SURFACE_GAP : EDGE) - w.left) -
+        CARD_W
+      const minY = Math.max(PAD, EDGE + BAR + SURFACE_GAP - w.top)
+      const maxY = Math.min(w.height - PAD, window.innerHeight - (PILL_BOTTOM + PILL + SURFACE_GAP) - w.top) - h
+      const roomRight = maxX - (r + GAP)
+      const roomLeft = l - GAP - CARD_W - minX
       let x: number
-      if (roomRight >= CARD_W) x = r + GAP
-      else if (roomLeft >= CARD_W) x = l - GAP - CARD_W
+      if (roomRight >= 0) x = r + GAP
+      else if (roomLeft >= 0) x = l - GAP - CARD_W
       else x = roomRight >= roomLeft ? r + GAP : l - GAP - CARD_W
-      x = Math.max(PAD, Math.min(x, w.width - CARD_W - PAD))
+      x = Math.max(minX, Math.min(x, maxX))
       const cy = (Math.max(top, 0) + Math.min(bottom, w.height)) / 2
-      const y = Math.max(PAD, Math.min(cy - h / 2, w.height - h - PAD))
+      const y = Math.max(minY, Math.min(cy - h / 2, maxY))
       card.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
       card.style.visibility = 'visible'
     }
