@@ -106,7 +106,16 @@ export function TimelineEditor() {
     >
       <TimelineResizeHandle />
       <div className="mb-1.5 flex h-[34px] items-center gap-1">
-        <h2 className="mr-auto text-[14px] font-semibold">{t('editor.title')}</h2>
+        <h2 className="mr-auto text-heading">{t('editor.title')}</h2>
+        <Button
+          size="sm"
+          icon={<Icon.PlusIcon />}
+          onPress={() =>
+            useStore.getState().addKeyframe(audioEngine.currentSongTime())
+          }
+        >
+          {t('addKeyframe.label')}
+        </Button>
         <ToggleButton
           isSelected={follow}
           onChange={(v) => updateSettings({ followPlayhead: v })}
@@ -114,15 +123,6 @@ export function TimelineEditor() {
         >
           {t('follow.label')}
         </ToggleButton>
-        <Button
-          size="sm"
-          icon={<Icon.KeyframeIcon />}
-          onPress={() =>
-            useStore.getState().addKeyframe(audioEngine.currentSongTime())
-          }
-        >
-          {t('addKeyframe.label')}
-        </Button>
         <IconButton
           size="sm"
           label={t('editor.close')}

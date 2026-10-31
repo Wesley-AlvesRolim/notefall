@@ -22,12 +22,11 @@ import {
 } from '../midi/speedMap'
 import {
   CloseIcon,
-  EllipsisVerticalIcon,
   VolumeHighIcon,
   VolumeLowIcon,
   VolumeMuteIcon,
 } from './icons'
-import { Button } from './kit'
+import { Button, Icon } from './kit'
 import { SettingsPinLane, PIN_LANE_HEIGHT } from './SettingsPinLane'
 import { resolveNoteTintAt } from '../midi/settingsKeyframes'
 import { NoteColorResolver, noteColoringDeps } from '../notes/noteColor'
@@ -72,7 +71,7 @@ function inkRgba(alpha: number): string {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
 }
 
-const MINIMAP_HEIGHT = 10
+const MINIMAP_HEIGHT = 6
 // Time ruler — fine-grained scrub surface that maps to the visible
 // window. The full-song progress slider lives in the transport
 // overlay (SeekBar.tsx) and is no longer part of this row stack.
@@ -365,7 +364,6 @@ function RulerCanvas({
     const visEndAudio = midiOffsetSec + midiToTimeline(speedMap, visEndMidi)
     const audioVisDur = Math.max(1e-6, visEndAudio - visStartAudio)
     const major = pickTickInterval(audioVisDur)
-    const minor = major / 5
 
     /** TL_audio → x-pixel on the (display-time-based) canvas. */
     const audioToX = (audioT: number): number => {
@@ -374,21 +372,13 @@ function RulerCanvas({
       return Math.round((displayT - startTimeSec) * pxPerSec)
     }
 
-    // Minor ticks first (drawn under majors).
-    ctx.fillStyle = inkRgba(0.2)
-    const firstMinor = Math.ceil(visStartAudio / minor) * minor
-    for (let t = firstMinor; t <= visEndAudio + 1e-6; t += minor) {
-      ctx.fillRect(audioToX(t), height - 4, 1, 4)
-    }
-    // Major ticks + labels.
-    ctx.fillStyle = inkRgba(0.6)
-    ctx.font = '12px Geist, system-ui, sans-serif'
-    ctx.textBaseline = 'top'
+    // Labels only (no tick marks): the lanes below carry the grid.
+    ctx.fillStyle = inkRgba(0.44)
+    ctx.font = '12px "Geist Variable", Geist, system-ui, sans-serif'
+    ctx.textBaseline = 'middle'
     const firstMajor = Math.ceil(visStartAudio / major) * major
     for (let t = firstMajor; t <= visEndAudio + 1e-6; t += major) {
-      const x = audioToX(t)
-      ctx.fillRect(x, height - 8, 1, 8)
-      ctx.fillText(formatRulerLabel(t, major), x + 4, 2)
+      ctx.fillText(formatRulerLabel(t, major), audioToX(t) + 2, height / 2)
     }
   }, [width, height, startTimeSec, pxPerSec, speedMap, midiOffsetSec])
   return (
@@ -643,56 +633,44 @@ function LaneHeader({
   return (
     <div
       style={{ height }}
-      className="relative flex flex-col justify-between py-0.5 pr-1"
+      className="group/lane relative flex items-center gap-1 pr-1"
+      onContextMenu={onOpenMenu}
     >
-      <div className="flex items-center overflow-hidden">
-        <span
-          className={`truncate text-body ${dimmed ? 'text-ink-faint' : 'text-ink-muted'}`}
-          title={title}
+      <span
+        className={`truncate text-body ${dimmed ? 'text-ink-faint' : 'text-ink-muted'}`}
+        title={title}
+      >
+        {title}
+      </span>
+      {onToggleMute && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleMute()
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label={muted ? t('lane.unmute') : t('lane.mute')}
+          title={muted ? t('lane.unmute') : t('lane.mute')}
+          className={`nf-focus nf-press grid h-6 w-6 flex-none place-items-center rounded-round outline-none hover:bg-fill-hover ${muted ? 'text-ink-faint' : 'text-ink-muted hover:text-ink'}`}
         >
-          {title}
-        </span>
-      </div>
-      {(onToggleMute || onOpenMenu) && (
-        <div className="flex items-center justify-between">
-          {onToggleMute ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onToggleMute()
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              aria-label={muted ? t('lane.unmute') : t('lane.mute')}
-              title={muted ? t('lane.unmute') : t('lane.mute')}
-              className={`nf-focus flex h-5 w-5 items-center justify-center rounded-field outline-none hover:bg-fill-hover ${muted ? 'text-ink-faint' : 'text-ink-muted'}`}
-            >
-              {muted ? (
-                <VolumeMuteIcon className="h-3.5 w-3.5" />
-              ) : (
-                <VolumeHighIcon className="h-3.5 w-3.5" />
-              )}
-            </button>
-          ) : (
-            <span />
-          )}
-          {onOpenMenu && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onOpenMenu(e)
-              }}
-              onPointerDown={(e) => e.stopPropagation()}
-              onContextMenu={onOpenMenu}
-              aria-label={t('lane.options')}
-              title={t('lane.options')}
-              className="nf-focus flex h-5 w-5 items-center justify-center rounded-field text-ink-muted outline-none hover:bg-fill-hover hover:text-ink"
-            >
-              <EllipsisVerticalIcon className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
+          {muted ? <VolumeMuteIcon className="h-3.5 w-3.5" /> : <VolumeHighIcon className="h-3.5 w-3.5" />}
+        </button>
+      )}
+      {onOpenMenu && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onOpenMenu(e)
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label={t('lane.options')}
+          title={t('lane.options')}
+          className="nf-focus nf-press ml-auto grid h-6 w-6 flex-none place-items-center rounded-round text-ink-muted opacity-0 outline-none transition-opacity duration-150 hover:bg-fill-hover hover:text-ink focus-visible:opacity-100 group-hover/lane:opacity-100"
+        >
+          <Icon.ChevronIcon className="h-3.5 w-3.5" />
+        </button>
       )}
     </div>
   )
@@ -1133,7 +1111,7 @@ function SpeedAutomationLane({
       onPointerUp={onDotPointerUp}
       onPointerCancel={onDotPointerUp}
       style={{ height: laneHeight, touchAction: 'none' }}
-      className="relative overflow-hidden rounded-field bg-white/5"
+      className="group/speed relative overflow-hidden rounded-field bg-white/5"
       aria-label={t('speed.automationAria')}
       title={t('speed.automationTitle')}
     >
@@ -1183,7 +1161,7 @@ function SpeedAutomationLane({
             />
             <div
               aria-hidden
-              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-field bg-canvas/80 px-1 text-caption text-ink"
+              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-field bg-canvas/80 px-1 text-caption text-ink opacity-0 transition-opacity duration-150 group-hover/speed:opacity-100"
               style={{ top: labelBelow ? 8 : -18 }}
             >
               {p.value.toFixed(2)}×
@@ -1302,18 +1280,17 @@ function SpeedAutomationLane({
           />
         )
       })}
-      {/* Y-axis bounds — show the current visible range so the user
-          knows what wheel-zoom has set. Right-aligned so it doesn't
-          fight with the "speed" label. */}
+      {/* Y-axis bounds — the current visible range (what wheel-zoom has
+          set), shown while the pointer is over the lane. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute right-1.5 top-0.5 text-caption text-ink-faint"
+        className="pointer-events-none absolute right-1.5 top-0.5 text-caption text-ink-faint opacity-0 transition-opacity duration-150 group-hover/speed:opacity-100"
       >
         {topSpeed.toFixed(2)}×
       </div>
       <div
         aria-hidden
-        className="pointer-events-none absolute bottom-0.5 right-1.5 text-caption text-ink-faint"
+        className="pointer-events-none absolute bottom-0.5 right-1.5 text-caption text-ink-faint opacity-0 transition-opacity duration-150 group-hover/speed:opacity-100"
       >
         {botSpeed.toFixed(2)}×
       </div>
@@ -2299,8 +2276,8 @@ export function Timeline() {
             style={{ height: RULER_HEIGHT, touchAction: 'none' }}
             className={
               song
-                ? 'relative cursor-pointer overflow-hidden rounded-field bg-white/5'
-                : 'relative overflow-hidden rounded-field bg-white/5'
+                ? 'relative cursor-pointer overflow-hidden'
+                : 'relative overflow-hidden'
             }
             aria-label={t('ruler.seekAria')}
             title={song ? t('ruler.seekTitle') : undefined}
@@ -2540,8 +2517,8 @@ export function Timeline() {
             style={{ height: MINIMAP_HEIGHT, touchAction: 'none' }}
             className={
               song && maxScroll > 0
-                ? 'relative cursor-grab rounded-field bg-white/5 active:cursor-grabbing'
-                : 'relative rounded-field bg-white/5'
+                ? 'relative cursor-grab rounded-round bg-white/5 active:cursor-grabbing'
+                : 'relative rounded-round bg-white/5'
             }
             aria-label={t('minimap.panAria')}
             title={
@@ -2555,7 +2532,7 @@ export function Timeline() {
             {song && areaWidth > 0 && totalDuration > 0 && (
               <>
                 <div
-                  className="absolute inset-y-0 rounded-field bg-fill-selected"
+                  className="absolute inset-y-0 rounded-round bg-fill-track"
                   style={{
                     left: `${(clampedScroll / totalDuration) * 100}%`,
                     width: `${(viewDuration / totalDuration) * 100}%`,
@@ -2576,7 +2553,7 @@ export function Timeline() {
                     onPointerMove={onMinimapEdgePointerMove}
                     onPointerUp={onMinimapEdgePointerUp}
                     onPointerCancel={onMinimapEdgePointerUp}
-                    className="absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full bg-ink-muted shadow-sm hover:bg-ink"
+                    className={`absolute top-1/2 z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full bg-ink shadow-knob transition-opacity duration-150 ${minimapHovered ? 'opacity-100' : 'opacity-0'}`}
                     style={{ left: 0, touchAction: 'none' }}
                   />
                   <div
@@ -2585,7 +2562,7 @@ export function Timeline() {
                     onPointerMove={onMinimapEdgePointerMove}
                     onPointerUp={onMinimapEdgePointerUp}
                     onPointerCancel={onMinimapEdgePointerUp}
-                    className="absolute top-1/2 z-10 h-3 w-3 -translate-y-1/2 translate-x-1/2 cursor-ew-resize rounded-full bg-ink-muted shadow-sm hover:bg-ink"
+                    className={`absolute top-1/2 z-10 h-3 w-3 -translate-y-1/2 translate-x-1/2 cursor-ew-resize rounded-full bg-ink shadow-knob transition-opacity duration-150 ${minimapHovered ? 'opacity-100' : 'opacity-0'}`}
                     style={{ right: 0, touchAction: 'none' }}
                   />
                 </div>
