@@ -8,16 +8,15 @@ import { audioEngine } from './engine'
  */
 
 /**
- * Drop the editor's selection + per-note context menu. Called on every
- * play/pause transition so a paused-then-resumed session doesn't leave a
- * note "selected" or its velocity menu floating in mid-air after some of
+ * Drop the editor's selection. Called on every play/pause transition so a
+ * paused-then-resumed session doesn't leave a note "selected" or its
+ * selection card floating in mid-air after some of
  * those notes have already scrolled past the hit line. Editing and
  * playback are conceptually separate modes — pressing a transport
  * control resets the editing-mode state.
  */
 function resetEditorState(): void {
   const s = useStore.getState()
-  if (s.contextMenu) s.setContextMenu(null)
   if (s.selection.size > 0) s.clearSelection()
 }
 

@@ -3,38 +3,34 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
   type ReactNode,
+  type RefObject,
 } from 'react'
 import {
-  Slider,
-  SliderOutput,
-  SliderThumb,
-  SliderTrack,
-  Label,
-  Switch,
-  Select,
-  SelectValue,
-  Popover,
-  ListBox,
-  ListBoxItem,
   Button,
-  ColorPicker,
   ColorArea,
-  ColorSlider,
-  ColorThumb,
   ColorField,
+  ColorPicker,
+  ColorSlider,
   ColorSwatch,
-  Input,
-  DialogTrigger,
+  ColorThumb,
   Dialog,
+  DialogTrigger,
+  Input,
+  Label,
+  Slider,
+  SliderTrack,
 } from 'react-aria-components'
-import type { Key } from 'react-aria-components'
+import clsx from 'clsx'
 import { useTranslation } from 'react-i18next'
 import { defaultSettings, useStore, type Settings } from '../store'
-import { isAnimatableKey } from '../midi/settingsKeyframes'
+import { isAnimatableKey, resolveSettingsAt } from '../midi/settingsKeyframes'
+import { collectSongColors } from './look/songColors'
+import { Disclosure, GEOMETRY, Icon, KnobThumb, Menu, MenuItem, MenuSeparator, Popover, SegmentedControl, Select, Switch } from './kit'
 
 /**
  * Value an Inspector control should DISPLAY: the SELECTED pin's
@@ -160,9 +156,83 @@ const isMacPlatform = () =>
   /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '')
 
 /**
- * Floating context menu rendered at viewport coordinates. Used by slider
- * tracks to expose the reset gesture as a discoverable right-click action,
- * with the keyboard shortcut shown alongside.
+ * The Look panel's element: colour pickers open beside it (outside the panel, so
+ * glass never sits on glass) instead of beside their own row.
+ */
+export const LookAnchorContext = createContext<RefObject<HTMLElement | null> | null>(null)
+
+// ── Keyframe state of a row ───────────────────────────────────────────
+
+type KfState = 'set' | 'carried' | 'whole' | null
+
+/**
+ * While a keyframe is targeted: 'set' = the key is in its snapshot, 'carried' = interpolated from the keyframes
+ * around it, 'whole' = a key a keyframe can't hold. `null` without a keyframe target (or a row with no key).
+ */
+function useKfState(key?: keyof Settings): KfState {
+  return useStore((st): KfState => {
+    const t = st.editingKeyframeTime
+    if (t === null || !key) return null
+    if (!isAnimatableKey(key)) return 'whole'
+    const kf = st.settings.settingsKeyframes.find((p) => Math.abs(p.time - t) < 1e-6)
+    return kf && key in kf.settings ? 'set' : 'carried'
+  })
+}
+
+/** Store the value this key has at the targeted keyframe's time into that keyframe. */
+function setAtKeyframe(key: keyof Settings): void {
+  const st = useStore.getState()
+  const t = st.editingKeyframeTime
+  if (t === null) return
+  const value = resolveSettingsAt(st.settings, st.settings.settingsKeyframes, t)[key]
+  commitAtomic(() => writeSetting(key, value as Settings[typeof key]))
+}
+
+/** The ◆ before a row's label: filled = set at this keyframe, hollow = carried in (press to set it here). */
+export function KfMark({ settingKey }: { settingKey?: keyof Settings }) {
+  const { t } = useTranslation('inspector')
+  const state = useKfState(settingKey)
+  if (state !== 'set' && state !== 'carried') return null
+  const diamond = (filled: boolean) => (
+    <span
+      className={clsx(
+        'h-2 w-2 rotate-45 rounded-[1.5px] border-[1.5px]',
+        filled ? 'border-ink bg-ink' : 'border-ink-muted',
+      )}
+    />
+  )
+  if (state === 'set') {
+    return (
+      <span title={t('keyframes.own')} className="grid h-4 w-3 flex-none place-items-center">
+        {diamond(true)}
+      </span>
+    )
+  }
+  return (
+    <Button
+      aria-label={t('keyframes.set')}
+      onPress={() => settingKey && setAtKeyframe(settingKey)}
+      className="nf-focus -my-1 grid h-5 w-3 flex-none cursor-pointer place-items-center rounded-field p-0 outline-none"
+    >
+      <span title={t('keyframes.carried')} className="grid place-items-center">
+        {diamond(false)}
+      </span>
+    </Button>
+  )
+}
+
+/** "Can't change over time" line under a field whose key a keyframe can't hold (only while one is targeted). */
+export function ScopeNote({ settingKey }: { settingKey?: keyof Settings }) {
+  const { t } = useTranslation('inspector')
+  if (useKfState(settingKey) !== 'whole') return null
+  return <p className="text-caption text-ink-faint">{t('scope.note')}</p>
+}
+
+// ── Slider ────────────────────────────────────────────────────────────
+
+/**
+ * Menu at the cursor for a slider: enter a value, copy / paste, reset. Built on the kit Menu, anchored to a
+ * zero-size element at the click point.
  */
 function SliderContextMenu({
   x,
@@ -188,18 +258,12 @@ function SliderContextMenu({
   onClose: () => void
 }) {
   const { t } = useTranslation('inspector')
-  // Two-step UX: the menu first shows action items; clicking "Enter
-  // Value…" swaps the body for the numeric input. Keeps the resting menu
-  // visually clean while still surfacing the input affordance.
+  const anchorRef = useRef<HTMLSpanElement>(null)
+  // Two-step UX: the menu first shows action items; "Enter value…" swaps the body for the numeric input.
   const [mode, setMode] = useState<'menu' | 'input'>('menu')
-  // Input is editable raw numeric text. Initial value uses a precision that
-  // matches the slider's step — integer steps show no fractional digits,
-  // sub-unit steps round to enough digits to represent the step.
-  const decimals =
-    step >= 1 ? 0 : step >= 0.01 ? 2 : step >= 0.001 ? 3 : 4
-  const [text, setText] = useState(() =>
-    Number.isFinite(value) ? value.toFixed(decimals) : '',
-  )
+  // Initial value uses a precision that matches the slider's step.
+  const decimals = step >= 1 ? 0 : step >= 0.01 ? 2 : step >= 0.001 ? 3 : 4
+  const [text, setText] = useState(() => (Number.isFinite(value) ? value.toFixed(decimals) : ''))
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -209,161 +273,119 @@ function SliderContextMenu({
     }
   }, [mode])
 
-  useEffect(() => {
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as HTMLElement | null
-      if (t?.closest('[data-slider-context-menu]')) return
-      onClose()
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    // Defer attaching mousedown by a tick — the right-click that opened
-    // the menu would otherwise immediately hit this handler and close it.
-    const t = window.setTimeout(() => window.addEventListener('mousedown', onDown), 0)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      window.clearTimeout(t)
-      window.removeEventListener('mousedown', onDown)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [onClose])
-
+  const clamp = (v: number) => Math.max(min, Math.min(max, v))
   const commit = () => {
     const parsed = parseFloat(text)
-    if (Number.isFinite(parsed)) {
-      const clamped = Math.max(min, Math.min(max, parsed))
-      onChange(clamped)
-    }
+    if (Number.isFinite(parsed)) onChange(clamp(parsed))
     onClose()
   }
 
   const valueText = Number.isFinite(value) ? value.toFixed(decimals) : ''
-  const handleCopy = () => {
-    void navigator.clipboard?.writeText(valueText)
-    onClose()
-  }
   const handlePaste = async () => {
     try {
-      const t = await navigator.clipboard?.readText()
-      const parsed = parseFloat(t ?? '')
-      if (Number.isFinite(parsed)) {
-        onChange(Math.max(min, Math.min(max, parsed)))
-      }
+      const clip = await navigator.clipboard?.readText()
+      const parsed = parseFloat(clip ?? '')
+      if (Number.isFinite(parsed)) onChange(clamp(parsed))
     } catch {
-      // Permission denied / unsupported — silently ignore. The user will
-      // see the menu close and the value unchanged, no toast needed.
+      // Permission denied / unsupported: the menu closes and the value stays.
     }
     onClose()
   }
 
-  const shortcut = isMacPlatform() ? '⌘ Click' : 'Ctrl Click'
-  const W = 224
-  // Rough vertical estimate per mode for edge-clamping. Menu mode has
-  // input + copy/paste + min/max + (optional reset) + 2 separators.
-  const H =
-    mode === 'input'
-      ? 110
-      : 36 + 36 + 36 + (defaultValue !== undefined ? 36 : 0) + 18
-  const PAD = 8
-  const left = Math.max(PAD, Math.min(x, window.innerWidth - W - PAD))
-  const top = Math.max(PAD, Math.min(y, window.innerHeight - H - PAD))
-
-  const itemClass =
-    'flex w-full items-center justify-between gap-4 rounded px-2 py-1.5 text-left text-xs text-neutral-200 outline-none hover:bg-neutral-800 focus-visible:bg-neutral-800'
-  const hintClass = 'text-[10px] tabular-nums text-neutral-500'
-  const Separator = () => <div className="my-1 h-px bg-neutral-800" />
+  const onAction = (key: React.Key) => {
+    if (key === 'enter') {
+      setMode('input')
+      return
+    }
+    if (key === 'copy') {
+      void navigator.clipboard?.writeText(valueText)
+      onClose()
+    } else if (key === 'paste') {
+      void handlePaste()
+    } else if (key === 'reset' && defaultValue !== undefined) {
+      onChange(defaultValue)
+      onClose()
+    }
+  }
 
   return (
-    <div
-      data-slider-context-menu
-      className="fixed z-[100] w-[14rem] rounded-md bg-neutral-900 p-1 shadow-lg ring-1 ring-white/10"
-      style={{ left, top }}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      {mode === 'menu' ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setMode('input')}
-            className={itemClass}
-          >
-            <span>Enter Value…</span>
-            <span className={hintClass}>{valueText}</span>
-          </button>
-          <Separator />
-          <button type="button" onClick={handleCopy} className={itemClass}>
-            <span>Copy</span>
-            <span className={hintClass}>{valueText}</span>
-          </button>
-          <button type="button" onClick={handlePaste} className={itemClass}>
-            <span>Paste</span>
-          </button>
-          {defaultValue !== undefined && (
-            <>
-              <Separator />
+    <>
+      <span
+        ref={anchorRef}
+        aria-hidden
+        style={{ position: 'fixed', left: x, top: y, width: 0, height: 0, pointerEvents: 'none' }}
+      />
+      <Popover
+        triggerRef={anchorRef}
+        isOpen
+        onOpenChange={(open) => {
+          if (!open) onClose()
+        }}
+        placement="bottom start"
+        offset={2}
+        className="rounded-[14px]"
+      >
+        {mode === 'menu' ? (
+          <Menu aria-label={t('slider.value')} autoFocus="first" onAction={onAction}>
+            <MenuItem id="enter" hint={valueText}>
+              {t('slider.enterValue')}
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem id="copy" hint={valueText}>
+              {t('slider.copy')}
+            </MenuItem>
+            <MenuItem id="paste">{t('slider.paste')}</MenuItem>
+            {defaultValue !== undefined && (
+              <>
+                <MenuSeparator />
+                <MenuItem id="reset" hint={isMacPlatform() ? '⌘ Click' : 'Ctrl Click'}>
+                  {t('reset.resetToDefault')}
+                  {defaultLabel !== undefined && ` (${defaultLabel})`}
+                </MenuItem>
+              </>
+            )}
+          </Menu>
+        ) : (
+          <div className="grid w-[240px] gap-2 p-3">
+            <div className="flex items-center justify-between text-caption text-ink-faint">
+              <span>{t('slider.value')}</span>
+              <span>
+                {min}…{max}
+              </span>
+            </div>
+            <input
+              ref={inputRef}
+              type="text"
+              inputMode="decimal"
+              aria-label={t('slider.value')}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  commit()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setMode('menu')
+                }
+              }}
+              className="nf-focus h-8 w-full rounded-field bg-fill-field px-2.5 text-body tabular-nums text-ink outline-none"
+            />
+            <div className="flex items-center justify-between text-caption text-ink-faint">
+              <span>{t('slider.apply')}</span>
               <button
                 type="button"
-                onClick={() => {
-                  onChange(defaultValue)
-                  onClose()
-                }}
-                className={itemClass}
+                onClick={() => setMode('menu')}
+                className="nf-focus rounded-field px-1.5 py-0.5 text-ink-muted outline-none hover:bg-fill-hover hover:text-ink"
               >
-                <span>
-                  {t('reset.resetToDefault')}
-                  {defaultLabel !== undefined && (
-                    <span className="ml-1 text-[10px] tabular-nums text-neutral-500">
-                      ({defaultLabel})
-                    </span>
-                  )}
-                </span>
-                <span className="text-[10px] tracking-wider text-neutral-500">
-                  {shortcut}
-                </span>
+                {t('slider.back')}
               </button>
-            </>
-          )}
-        </>
-      ) : (
-        <div className="px-2 pt-1.5 pb-1">
-          <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-neutral-500">
-            <span>Value</span>
-            <span className="tabular-nums normal-case tracking-normal">
-              {min}…{max}
-            </span>
+            </div>
           </div>
-          <input
-            ref={inputRef}
-            type="text"
-            inputMode="decimal"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                commit()
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                e.stopPropagation()
-                setMode('menu')
-              }
-            }}
-            className="w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-xs tabular-nums text-neutral-100 outline-none focus:border-sky-500"
-          />
-          <div className="mt-1 flex items-center justify-between text-[9px] text-neutral-600">
-            <span>Enter to apply</span>
-            <button
-              type="button"
-              onClick={() => setMode('menu')}
-              className="rounded px-1 py-0.5 text-neutral-500 outline-none hover:bg-neutral-800 hover:text-neutral-300"
-            >
-              ← Back
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+        )}
+      </Popover>
+    </>
   )
 }
 
@@ -462,21 +484,62 @@ function useSliderTrackGestures({
   return { ref, menuNode }
 }
 
-/**
- * "Whole song" badge: shown while a pin is targeted on rows whose setting a pin can't hold (discrete choices, counts,
- * audio…), because editing them changes the base look for the whole song, not the targeted pin.
- */
-function ScopeBadge({ settingKey }: { settingKey?: keyof Settings }) {
-  const { t } = useTranslation('inspector')
-  const pinTargeted = useStore((st) => st.editingKeyframeTime !== null)
-  if (!settingKey || !pinTargeted || isAnimatableKey(settingKey)) return null
+/** Typed-value field of a slider row: commits on Enter / blur, Esc reverts, ↑ / ↓ nudge by one step. */
+function ValueField({
+  label,
+  shown,
+  value,
+  min,
+  max,
+  step,
+  onCommit,
+}: {
+  label: string
+  shown: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onCommit: (v: number) => void
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const clamp = (v: number) => Math.max(min, Math.min(max, v))
+  const decimals = step >= 1 ? 0 : step >= 0.01 ? 2 : step >= 0.001 ? 3 : 4
+  const commit = () => {
+    if (draft === null) return
+    const parsed = parseFloat(draft.replace(/[^\d.+\-eE]/g, ''))
+    setDraft(null)
+    if (Number.isFinite(parsed) && parsed !== value) onCommit(clamp(parsed))
+  }
   return (
-    <span
-      title={t('scope.wholeSongTooltip')}
-      className="ml-1 rounded border border-neutral-700 px-1 text-[9px] leading-[14px] text-neutral-400"
-    >
-      {t('scope.wholeSong')}
-    </span>
+    <input
+      type="text"
+      inputMode="decimal"
+      aria-label={label}
+      value={draft ?? shown}
+      onFocus={(e) => {
+        setDraft(shown)
+        e.currentTarget.select()
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        e.stopPropagation()
+        if (e.key === 'Enter') {
+          e.currentTarget.blur()
+        } else if (e.key === 'Escape') {
+          setDraft(null)
+          e.currentTarget.blur()
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault()
+          const base = draft !== null && Number.isFinite(parseFloat(draft)) ? parseFloat(draft) : value
+          const next = clamp(base + (e.key === 'ArrowUp' ? step : -step))
+          setDraft(next.toFixed(decimals))
+          onCommit(next)
+        }
+      }}
+      className="nf-focus h-[26px] w-[76px] flex-none rounded-field border-0 bg-fill-field px-2 text-right text-body tabular-nums text-ink outline-none"
+    />
   )
 }
 
@@ -488,13 +551,14 @@ type SliderRowProps = {
   step?: number
   onChange: (v: number) => void
   format?: (v: number) => string
-  /** Double-clicking the label / value row resets to this. */
+  /** Double-clicking the label resets to this. */
   defaultValue?: number
-  /** The setting this row edits: while a pin is targeted, a key a pin can't hold gets a "whole song" badge. */
+  /** The setting this row edits: drives the ◆ mark and the "can't change over time" line while a keyframe is targeted. */
   scopeKey?: keyof Settings
 }
 
 export function SliderRow({ label, value, min, max, step = 0.01, onChange, format, defaultValue, scopeKey }: SliderRowProps) {
+  const { t } = useTranslation('inspector')
   const visible = useRowMatchesQuery(label)
   const { ref: trackRef, menuNode } = useSliderTrackGestures({
     value,
@@ -512,6 +576,7 @@ export function SliderRow({ label, value, min, max, step = 0.01, onChange, forma
   // key also commits as its own entry.
   const gestureOpen = useRef(false)
   if (!visible) return null
+  const shown = format ? format(value) : value.toFixed(step < 1 ? 2 : 0)
   return (
     <Slider
       data-search-label={label}
@@ -532,50 +597,48 @@ export function SliderRow({ label, value, min, max, step = 0.01, onChange, forma
           useStore.getState().endSettingsEdit()
         }
       }}
-      className="flex flex-col gap-1 py-1"
+      className="grid gap-1.5"
     >
-      <div className="flex items-center justify-between text-xs select-none">
-        <span className="flex items-center gap-1">
-          <Label className="text-neutral-400">{label}</Label>
-          <ScopeBadge settingKey={scopeKey} />
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <KfMark settingKey={scopeKey} />
+          <Label
+            className="select-none truncate text-ink-muted"
+            onDoubleClick={defaultValue !== undefined ? () => commitAtomic(() => onChange(defaultValue)) : undefined}
+            title={defaultValue !== undefined ? t('reset.doubleClickReset') : undefined}
+          >
+            {label}
+          </Label>
         </span>
-        <SliderOutput className="text-neutral-200 tabular-nums">
-          {format ? format(value) : value.toFixed(step < 1 ? 2 : 0)}
-        </SliderOutput>
+        <ValueField
+          label={label}
+          shown={shown}
+          value={value}
+          min={min}
+          max={max}
+          step={step}
+          onCommit={(v) => commitAtomic(() => onChange(v))}
+        />
       </div>
-      <SliderTrack
-        ref={trackRef}
-        className="relative flex h-4 w-full cursor-pointer items-center"
-      >
-        {({ state, isHovered }) => {
-          const expanded = isHovered || state.isThumbDragging(0)
-          return (
-            <>
-              <div
-                className={`relative w-full overflow-hidden rounded-full transition-all duration-150 ${
-                  expanded ? 'h-2 bg-neutral-700' : 'h-1.5 bg-neutral-800'
-                }`}
-              >
-                <div
-                  className={`h-full transition-colors duration-150 ${
-                    expanded ? 'bg-sky-400' : 'bg-sky-500/80'
-                  }`}
-                  style={{ width: `${state.getThumbPercent(0) * 100}%` }}
-                />
-              </div>
-              <SliderThumb
-                className={`top-1/2 h-3 w-3 rounded-full bg-white shadow ring-1 ring-neutral-900 outline-none transition-all duration-150 ${
-                  expanded ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
-                } data-[dragging]:scale-125 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sky-400`}
-              />
-            </>
-          )
-        }}
+      <SliderTrack ref={trackRef} className="relative h-5 w-full cursor-pointer">
+        {({ state }) => (
+          <>
+            <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-[2px] bg-fill-track" />
+            <div
+              className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-[2px] bg-ink"
+              style={{ width: `${state.getThumbPercent(0) * 100}%` }}
+            />
+            <KnobThumb />
+          </>
+        )}
       </SliderTrack>
+      <ScopeNote settingKey={scopeKey} />
       {menuNode}
     </Slider>
   )
 }
+
+// ── Switch / Select / Color rows ──────────────────────────────────────
 
 type SwitchRowProps = {
   label: string
@@ -583,7 +646,6 @@ type SwitchRowProps = {
   onChange: (v: boolean) => void
   /** Double-clicking the label resets to this. */
   defaultValue?: boolean
-  /** The setting this row edits: while a pin is targeted, a key a pin can't hold gets a "whole song" badge. */
   scopeKey?: keyof Settings
 }
 
@@ -591,39 +653,160 @@ export function SwitchRow({ label, value, onChange, defaultValue, scopeKey }: Sw
   const { t } = useTranslation('inspector')
   if (!useRowMatchesQuery(label)) return null
   return (
-    <Switch
-      data-search-label={label}
-      isSelected={value}
-      onChange={(v) => commitAtomic(() => onChange(v))}
-      className="group relative flex items-center justify-between gap-2 py-1.5 text-xs cursor-pointer"
-    >
-      <span
-        className="text-neutral-400 select-none"
-        // Stop the propagating click so the toggle doesn't flip on the
-        // double-click; then apply the default. preventDefault for good
-        // measure since react-aria's Switch listens for label-like clicks.
-        onDoubleClick={
-          defaultValue !== undefined
-            ? (e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                commitAtomic(() => onChange(defaultValue))
-              }
-            : undefined
-        }
-        title={
-          defaultValue !== undefined
-            ? t('reset.doubleClickReset')
-            : undefined
-        }
+    <div data-search-label={label} className="grid gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <KfMark settingKey={scopeKey} />
+        <Switch
+          isSelected={value}
+          onChange={(v) => commitAtomic(() => onChange(v))}
+          className="min-w-0 flex-1"
+        >
+          <span
+            className="select-none truncate text-ink-muted"
+            // Stop the propagating click so the toggle doesn't flip on the
+            // double-click; then apply the default.
+            onDoubleClick={
+              defaultValue !== undefined
+                ? (e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    commitAtomic(() => onChange(defaultValue))
+                  }
+                : undefined
+            }
+            title={defaultValue !== undefined ? t('reset.doubleClickReset') : undefined}
+          >
+            {label}
+          </span>
+        </Switch>
+      </div>
+      <ScopeNote settingKey={scopeKey} />
+    </div>
+  )
+}
+
+/** Where a colour picker opens: its own row, or beside the Look panel when the panel provides an anchor. */
+function usePickerPlacement(triggerRef: RefObject<HTMLElement | null>) {
+  const anchor = useContext(LookAnchorContext)
+  const [crossOffset, setCrossOffset] = useState(0)
+  const measure = () => {
+    const a = anchor?.current
+    const r = triggerRef.current
+    if (a && r) setCrossOffset(Math.max(0, r.getBoundingClientRect().top - a.getBoundingClientRect().top - 8))
+  }
+  return anchor
+    ? {
+        measure,
+        props: {
+          triggerRef: anchor as RefObject<HTMLElement>,
+          placement: 'left top' as const,
+          offset: 12,
+          crossOffset,
+          // Keep the picker above the transport pill (never glass on glass).
+          containerPadding: GEOMETRY.PILL_BOTTOM + GEOMETRY.PILL + GEOMETRY.GAP,
+        },
+      }
+    : { measure, props: { placement: 'bottom end' as const, offset: 8, crossOffset: 0 } }
+}
+
+function PickerBody({ label, value, onPick }: { label: string; value: string; onPick: (hex: string) => void }) {
+  const { t } = useTranslation('inspector')
+  const songColors = useMemo(() => collectSongColors(value), [value])
+  const thumb =
+    'nf-focus h-[18px] w-[18px] rounded-full border-2 border-ink shadow-knob outline-none box-border'
+  return (
+    <Dialog aria-label={label} className="grid w-[280px] gap-3 p-3.5 outline-none">
+      <ColorArea
+        colorSpace="hsb"
+        xChannel="saturation"
+        yChannel="brightness"
+        className="relative h-[180px] w-full rounded-[10px]"
       >
-        {label}
-        <ScopeBadge settingKey={scopeKey} />
-      </span>
-      <span className="relative inline-block h-4 w-7 rounded-full bg-neutral-700 transition group-data-[selected]:bg-sky-500">
-        <span className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white transition group-data-[selected]:translate-x-3" />
-      </span>
-    </Switch>
+        <ColorThumb className={thumb} />
+      </ColorArea>
+      <ColorSlider colorSpace="hsb" channel="hue">
+        <SliderTrack className="relative h-3.5 w-full rounded-[7px]">
+          <ColorThumb className={clsx(thumb, 'top-1/2')} />
+        </SliderTrack>
+      </ColorSlider>
+      <div className="flex items-center gap-2">
+        <ColorField aria-label={t('color.hex')} className="flex-1">
+          <Input className="nf-focus h-8 w-full rounded-field bg-fill-field px-2.5 text-body uppercase tabular-nums text-ink outline-none" />
+        </ColorField>
+        <ColorSwatch className="h-8 w-8 flex-none rounded-field" />
+      </div>
+      {songColors.length > 0 && (
+        <div className="grid gap-1.5">
+          <span className="text-caption text-ink-faint">{t('color.inSong')}</span>
+          <div className="flex flex-wrap gap-1.5">
+            {songColors.map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-label={c}
+                title={c}
+                onClick={() => onPick(c)}
+                className="nf-focus h-7 w-7 cursor-pointer rounded-field border-0 p-0 outline-none"
+                style={{ background: c }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </Dialog>
+  )
+}
+
+/**
+ * The colour picker as a controlled popover anchored to any element (a gradient stop handle, say). The whole open
+ * session is one undo entry, like ColorRow's.
+ */
+export function ColorPickerPopover({
+  triggerRef,
+  isOpen,
+  onOpenChange,
+  label,
+  value,
+  onChange,
+}: {
+  triggerRef: RefObject<HTMLElement | null>
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
+  label: string
+  value: string
+  onChange: (v: string) => void
+}) {
+  const placement = usePickerPlacement(triggerRef)
+  const session = useRef(false)
+  useEffect(() => {
+    const s = useStore.getState()
+    if (isOpen && !session.current) {
+      session.current = true
+      placement.measure()
+      s.beginSettingsEdit()
+    } else if (!isOpen && session.current) {
+      session.current = false
+      s.endSettingsEdit()
+    }
+  })
+  useEffect(
+    () => () => {
+      if (session.current) useStore.getState().endSettingsEdit()
+    },
+    [],
+  )
+  return (
+    <ColorPicker value={value} onChange={(color) => onChange(color.toString('hex'))}>
+      <Popover
+        triggerRef={triggerRef as RefObject<HTMLElement>}
+        {...placement.props}
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        className="rounded-panel"
+      >
+        <PickerBody label={label} value={value} onPick={onChange} />
+      </Popover>
+    </ColorPicker>
   )
 }
 
@@ -650,7 +833,6 @@ type ColorRowProps = {
    * when `value` happens to equal `defaultValue`.
    */
   isModified?: boolean
-  /** The setting this row edits: while a pin is targeted, a key a pin can't hold gets a "whole song" badge. */
   scopeKey?: keyof Settings
 }
 
@@ -664,6 +846,8 @@ export function ColorRow({
   scopeKey,
 }: ColorRowProps) {
   const { t } = useTranslation('inspector')
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const placement = usePickerPlacement(triggerRef)
   const reset =
     onReset !== undefined
       ? () => commitAtomic(onReset)
@@ -683,90 +867,58 @@ export function ColorRow({
         value.toLowerCase() !== defaultValue.toLowerCase()
   if (!useRowMatchesQuery(label)) return null
   return (
-    <div data-search-label={label} className="flex items-center justify-between py-1 text-xs">
-      <span
-        className={`text-neutral-400 select-none ${reset ? 'cursor-pointer' : ''}`}
-        onDoubleClick={reset}
-        title={reset ? t('reset.doubleClickReset') : undefined}
-      >
-        {label}
-        <ScopeBadge settingKey={scopeKey} />
-      </span>
-      <div className="flex items-center gap-1">
-        {reset && isModified && (
-          <button
-            type="button"
-            onClick={reset}
-            aria-label={t('reset.resetRowToDefault', { label })}
-            title={t('reset.resetToDefault')}
-            className="flex h-5 w-5 items-center justify-center rounded text-neutral-500 outline-none hover:bg-neutral-800 hover:text-neutral-200 focus-visible:ring-1 focus-visible:ring-sky-400"
+    <div data-search-label={label} className="grid gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <KfMark settingKey={scopeKey} />
+          <span
+            className={clsx('select-none truncate text-ink-muted', reset && 'cursor-pointer')}
+            onDoubleClick={reset}
+            title={reset ? t('reset.doubleClickReset') : undefined}
           >
-            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden>
-              <path
-                d="M3 8a5 5 0 1 0 1.5-3.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-              <path
-                d="M3 2.5V5h2.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        )}
-      <ColorPicker
-        value={value}
-        onChange={(color) => onChange(color.toString('hex'))}
-      >
-        <DialogTrigger
-          onOpenChange={(open) => {
-            // A whole color-picker session (popover open → close) is one
-            // undo entry, regardless of how many drags / hex-field edits
-            // happened inside. Drags inside the popover fire onChange
-            // ~60×/s, so per-change history would saturate the stack.
-            const s = useStore.getState()
-            if (open) s.beginSettingsEdit()
-            else s.endSettingsEdit()
-          }}
-        >
-          <Button
-            aria-label={t('color.editAria', { label })}
-            className="flex items-center gap-2 rounded border border-neutral-700 bg-neutral-900 px-1.5 py-1 outline-none hover:border-neutral-600 focus-visible:border-sky-500"
-          >
-            <ColorSwatch className="h-4 w-4 rounded ring-1 ring-neutral-700" />
-            <span className="font-mono text-[10px] uppercase text-neutral-300">{value}</span>
-          </Button>
-          <Popover
-            placement="bottom end"
-            className="rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl outline-none data-[entering]:animate-in data-[entering]:fade-in data-[entering]:duration-150"
-          >
-            <Dialog className="flex flex-col gap-3 outline-none">
-              <ColorArea
-                colorSpace="hsb"
-                xChannel="saturation"
-                yChannel="brightness"
-                className="relative h-44 w-44 rounded"
+            {label}
+          </span>
+        </span>
+        <div className="flex flex-none items-center gap-1">
+          {reset && isModified && (
+            <Button
+              onPress={reset}
+              aria-label={t('reset.resetRowToDefault', { label })}
+              className="nf-focus grid h-6 w-6 cursor-pointer place-items-center rounded-field text-ink-muted outline-none data-[hovered]:bg-fill-hover data-[hovered]:text-ink"
+            >
+              <Icon.ResetIcon className="h-4 w-4" />
+            </Button>
+          )}
+          <ColorPicker value={value} onChange={(color) => onChange(color.toString('hex'))}>
+            <DialogTrigger
+              onOpenChange={(open) => {
+                // A whole color-picker session (popover open → close) is one
+                // undo entry, regardless of how many drags / hex-field edits
+                // happened inside. Drags inside the popover fire onChange
+                // ~60×/s, so per-change history would saturate the stack.
+                const s = useStore.getState()
+                if (open) {
+                  placement.measure()
+                  s.beginSettingsEdit()
+                } else s.endSettingsEdit()
+              }}
+            >
+              <Button
+                ref={triggerRef}
+                aria-label={t('color.editAria', { label })}
+                className="nf-focus flex h-[26px] cursor-pointer items-center gap-2 rounded-field bg-fill-field pl-2 pr-[3px] text-body uppercase tabular-nums text-ink outline-none data-[hovered]:bg-fill-selected"
               >
-                <ColorThumb className="z-10 h-4 w-4 rounded-full border-2 border-white shadow-md ring-1 ring-black/40 outline-none data-[focus-visible]:h-5 data-[focus-visible]:w-5" />
-              </ColorArea>
-              <ColorSlider colorSpace="hsb" channel="hue" className="flex flex-col gap-1">
-                <SliderTrack className="relative h-3 w-44 rounded">
-                  <ColorThumb className="top-1/2 h-4 w-4 rounded-full border-2 border-white shadow-md ring-1 ring-black/40 outline-none data-[focus-visible]:h-5 data-[focus-visible]:w-5" />
-                </SliderTrack>
-              </ColorSlider>
-              <ColorField className="flex items-center gap-2">
-                <Label className="text-[10px] uppercase tracking-wider text-neutral-500">Hex</Label>
-                <Input className="flex-1 rounded border border-neutral-700 bg-neutral-950 px-1.5 py-0.5 font-mono text-xs uppercase text-neutral-200 outline-none focus-visible:border-sky-500" />
-              </ColorField>
-            </Dialog>
-          </Popover>
-        </DialogTrigger>
-      </ColorPicker>
+                {value}
+                <ColorSwatch className="h-5 w-5 rounded-[6px]" />
+              </Button>
+              <Popover {...placement.props} className="rounded-panel">
+                <PickerBody label={label} value={value} onPick={onChange} />
+              </Popover>
+            </DialogTrigger>
+          </ColorPicker>
+        </div>
       </div>
+      <ScopeNote settingKey={scopeKey} />
     </div>
   )
 }
@@ -778,9 +930,19 @@ type SelectRowProps<T extends string> = {
   onChange: (v: T) => void
   /** Double-clicking the label resets to this. */
   defaultValue?: T
-  /** The setting this row edits: while a pin is targeted, a key a pin can't hold gets a "whole song" badge. */
   scopeKey?: keyof Settings
 }
+
+// Rough text width in "em": CJK counts double.
+const textUnits = (s: string) => [...s].reduce((n, c) => n + (c.charCodeAt(0) > 0x2e80 ? 2 : 1), 0)
+
+/** 2–3 short options read side by side; anything longer is a dropdown. */
+const fitsSegmented = (options: { label: string }[]) =>
+  options.length >= 2 &&
+  // Up to three words, or up to five very short ones (counts like 2 3 4 5).
+  options.length <= (options.every((o) => textUnits(o.label) <= 2) ? 5 : 3) &&
+  options.every((o) => textUnits(o.label) <= 12) &&
+  options.reduce((n, o) => n + textUnits(o.label), 0) <= 28
 
 export function SelectRow<T extends string>({ label, value, options, onChange, defaultValue, scopeKey }: SelectRowProps<T>) {
   const { t } = useTranslation('inspector')
@@ -789,43 +951,25 @@ export function SelectRow<T extends string>({ label, value, options, onChange, d
       ? () => commitAtomic(() => onChange(defaultValue))
       : undefined
   if (!useRowMatchesQuery(label)) return null
+  const apply = (v: T) => commitAtomic(() => onChange(v))
   return (
-    <div data-search-label={label} className="flex items-center justify-between py-1 text-xs">
-      <span
-        className={`text-neutral-400 select-none ${reset ? 'cursor-pointer' : ''}`}
-        onDoubleClick={reset}
-        title={reset ? t('reset.doubleClickReset') : undefined}
-      >
-        {label}
-        <ScopeBadge settingKey={scopeKey} />
+    <div data-search-label={label} className="grid gap-1.5">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <KfMark settingKey={scopeKey} />
+        <span
+          className={clsx('select-none truncate text-ink-muted', reset && 'cursor-pointer')}
+          onDoubleClick={reset}
+          title={reset ? t('reset.doubleClickReset') : undefined}
+        >
+          {label}
+        </span>
       </span>
-      <Select
-        selectedKey={value}
-        onSelectionChange={(k: Key | null) =>
-          k && commitAtomic(() => onChange(String(k) as T))
-        }
-      >
-        <Button className="flex items-center gap-2 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-neutral-200 outline-none focus-visible:border-sky-500">
-          <SelectValue />
-          <span className="text-neutral-500">▾</span>
-        </Button>
-        {/* react-aria caps the popover's max-height to the space available;
-            overflow-y-auto keeps a long option list (e.g. the note-look
-            presets) scrollable inside it instead of spilling out. */}
-        <Popover className="scroll-thin overflow-y-auto rounded border border-neutral-700 bg-neutral-900 p-1 shadow-xl">
-          <ListBox className="outline-none">
-            {options.map((o) => (
-              <ListBoxItem
-                key={o.value}
-                id={o.value}
-                className="cursor-pointer rounded px-2 py-1 text-neutral-200 outline-none data-[focused]:bg-neutral-800"
-              >
-                {o.label}
-              </ListBoxItem>
-            ))}
-          </ListBox>
-        </Popover>
-      </Select>
+      {fitsSegmented(options) ? (
+        <SegmentedControl value={value} onChange={apply} options={options} aria-label={label} />
+      ) : (
+        <Select value={value} onChange={apply} options={options} aria-label={label} />
+      )}
+      <ScopeNote settingKey={scopeKey} />
     </div>
   )
 }
@@ -857,13 +1001,13 @@ function useStoredBool(
 }
 
 /**
- * Collapsible card with a header (title + optional on/off switch + optional action slot). Title click toggles the
- * collapsed state, persisted to localStorage under `inspector.section.<title>`. `enabledKey` puts the feature's
- * on/off switch in the header: while it is off the body stays closed, so a disabled effect costs one line. The header
- * sticks to the top of the scrolling panel. Plays into the Inspector's search bar: when a query is active, the card
- * force-expands; if no descendant row carries `data-search-label` matching the query AND the title itself doesn't
- * match, the whole card is hidden. When the title matches, every row inside renders regardless of label match (a
- * relayed empty query via SearchContext.Provider).
+ * Titled group of settings: heading (13/600) with the feature's on/off switch, a `glass-edge` rule between
+ * neighbours. Title click folds the body, persisted to localStorage under `inspector.section.<title>`.
+ * `enabledKey` puts the feature's switch in the heading: while it is off the body stays closed and the title dims.
+ * Plays into the Inspector's search bar: when a query is active, the group force-expands; if no descendant row
+ * carries `data-search-label` matching the query AND the title itself doesn't match, the whole group is hidden.
+ * When the title matches, every row inside renders regardless of label match (a relayed empty query via
+ * SearchContext.Provider).
  */
 export function Section({
   title,
@@ -907,86 +1051,80 @@ export function Section({
   // row renders (no per-row filter applied inside this section).
   const childQuery = titleMatches && q ? '' : q
   return (
-    <div data-search-label={title} className="mt-2 border-t border-neutral-800/80 first:mt-0 first:border-t-0">
-      <div className="sticky top-0 z-10 -mx-3 flex items-center justify-between gap-2 bg-neutral-950 px-3 pt-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-neutral-300">
+    <section data-search-label={title} className="group/section border-b border-glass-edge px-4 py-3 last:border-b-0">
+      <div className="flex min-h-6 items-center justify-between gap-2">
         <button
           type="button"
           onClick={() => setStoredOpen(!storedOpen)}
           disabled={!!q || !isOn}
-          className={`flex flex-1 items-center gap-1.5 outline-none hover:text-white disabled:cursor-default ${isOn ? '' : 'text-neutral-500'}`}
+          aria-expanded={open}
+          className={clsx(
+            'nf-focus -ml-1 flex min-w-0 items-center gap-0.5 rounded-field pl-1 pr-1.5 text-heading outline-none disabled:cursor-default',
+            isOn ? 'text-ink' : 'text-ink-muted',
+          )}
         >
-          <svg
-            width="9"
-            height="9"
-            viewBox="0 0 12 12"
-            // kept visible (dimmed with the title) while the feature is off, so
-            // the title doesn't float without its chevron
-            className={`transition-transform ${open ? 'rotate-90' : ''} ${isOn ? '' : 'opacity-60'}`}
-            aria-hidden
-          >
-            <path
-              d="M4 2 L8 6 L4 10"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span>{title}</span>
+          <span className="truncate">{title}</span>
+          {/* The fold chevron shows only when it says something: on hover, or while folded. */}
+          <Icon.ChevronRightIcon
+            className={clsx(
+              'h-4 w-4 flex-none text-ink-faint transition-[transform,opacity] duration-150 motion-reduce:transition-none',
+              open ? 'rotate-90 opacity-0 group-hover/section:opacity-100' : 'opacity-100',
+              (q || !isOn) && '!opacity-0',
+            )}
+          />
         </button>
-        {action}
-        {enabledKey && (
-          <Switch
-            aria-label={t('row.enabled')}
-            isSelected={enabled}
-            onChange={(v) => {
-              commitAtomic(() => writeSetting(enabledKey, v as Settings[BooleanKeys]))
-              if (v) setStoredOpen(true)
-            }}
-            className="group relative flex cursor-pointer items-center normal-case"
-          >
-            <span className="relative inline-block h-4 w-7 rounded-full bg-neutral-700 transition group-data-[selected]:bg-sky-500">
-              <span className="absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white transition group-data-[selected]:translate-x-3" />
-            </span>
-          </Switch>
+        <div className="flex flex-none items-center gap-2">
+          {action}
+          {enabledKey && (
+            <Switch
+              aria-label={`${title}: ${t('row.enabled')}`}
+              isSelected={enabled}
+              onChange={(v) => {
+                commitAtomic(() => writeSetting(enabledKey, v as Settings[BooleanKeys]))
+                if (v) setStoredOpen(true)
+              }}
+            />
+          )}
+        </div>
+      </div>
+      {/* Folds by animating the row track (0fr ↔ 1fr), so the content keeps its natural height. */}
+      <div
+        className={clsx(
+          'grid transition-[grid-template-rows,opacity] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none',
+          open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
         )}
+        {...((!open ? { inert: '' } : {}) as Record<string, string>)}
+      >
+        {/* Clip box widened to the section's padding so knobs and focus rings at the edges aren't cut. */}
+        <div className="-mx-4 min-h-0 overflow-hidden px-4 pb-1">
+          <div ref={contentRef} className="grid grid-cols-[minmax(0,1fr)] gap-3 pt-3">
+            <SearchContext.Provider value={childQuery}>
+              {children}
+            </SearchContext.Provider>
+          </div>
+        </div>
       </div>
-      <div ref={contentRef} hidden={!open} className="pb-2">
-        <SearchContext.Provider value={childQuery}>
-          {children}
-        </SearchContext.Provider>
-      </div>
-    </div>
+    </section>
   )
 }
 
 /**
- * "Detail" disclosure inside a card: the card shows its everyday rows, the rest waits behind this toggle (open state
- * persisted per `id`; always open while searching so matches inside are visible).
+ * "More" disclosure inside a section: the section shows its everyday rows, the rest waits behind this toggle (open
+ * state persisted per `id`; always open while searching so matches inside are visible).
  */
-export function Detail({ id, children }: { id: string; children: ReactNode }) {
+export function Detail({ id, label, children }: { id: string; label?: string; children: ReactNode }) {
   const { t } = useTranslation('inspector')
   const q = useSearchQuery()
   const [storedOpen, setStoredOpen] = useStoredBool(`inspector.detail.${id}`, false)
-  const open = q ? true : storedOpen
+  if (q) return <div className="grid gap-3">{children}</div>
   return (
-    <div className="mt-1">
-      {!q && (
-        <button
-          type="button"
-          onClick={() => setStoredOpen(!storedOpen)}
-          aria-expanded={open}
-          className="flex w-full items-center gap-1.5 py-1 text-[11px] text-neutral-500 outline-none hover:text-neutral-300 focus-visible:text-neutral-200"
-        >
-          <svg width="8" height="8" viewBox="0 0 12 12" className={`transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
-            <path d="M4 2 L8 6 L4 10" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          {open ? t('detail.hide') : t('detail.show')}
-        </button>
-      )}
-      <div hidden={!open}>{children}</div>
-    </div>
+    <Disclosure
+      label={label ?? (storedOpen ? t('detail.hide') : t('detail.show'))}
+      isExpanded={storedOpen}
+      onExpandedChange={setStoredOpen}
+    >
+      {children}
+    </Disclosure>
   )
 }
 
@@ -1024,7 +1162,7 @@ export function VerticalSliderBands({
   defaultValues,
 }: VerticalSliderBandsProps) {
   return (
-    <div className="flex items-stretch justify-between gap-1 py-2">
+    <div className="flex items-stretch justify-between gap-1 py-1">
       {labels.map((label, i) => (
         <Band
           key={label}
@@ -1071,12 +1209,13 @@ function Band({ label, value, min, max, step, trackHeight, defaultValue, onChang
   })
   const gestureOpen = useRef(false)
   return (
-    <div className="flex flex-1 flex-col items-center gap-1">
-      <span className="text-[9px] tabular-nums text-neutral-400 select-none">
+    <div className="flex flex-1 flex-col items-center gap-1.5">
+      <span className="select-none text-caption tabular-nums text-ink-muted">
         {fmt(value)}
       </span>
       <Slider
         orientation="vertical"
+        aria-label={label}
         value={value}
         minValue={min}
         maxValue={max}
@@ -1097,12 +1236,11 @@ function Band({ label, value, min, max, step, trackHeight, defaultValue, onChang
       >
         <SliderTrack
           ref={trackRef}
-          className="relative w-2 cursor-pointer"
+          className="relative w-4 cursor-pointer"
           style={{ height: trackHeight }}
         >
-          {({ state, isHovered }) => {
+          {({ state }) => {
             const percent = state.getThumbPercent(0)
-            const expanded = isHovered || state.isThumbDragging(0)
             // Fill from the 50% line out to the thumb position.
             // percent: 0 = bottom (min), 1 = top (max), 0.5 = center.
             const fillStyle: CSSProperties =
@@ -1111,30 +1249,20 @@ function Band({ label, value, min, max, step, trackHeight, defaultValue, onChang
                 : { top: '50%', height: `${(0.5 - percent) * 100}%` }
             return (
               <>
-                <div
-                  className={`absolute inset-0 rounded-full transition-colors duration-150 ${
-                    expanded ? 'bg-neutral-700' : 'bg-neutral-800'
-                  }`}
-                />
+                <div className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-[2px] bg-fill-track" />
                 {/* Center reference line (0 dB) */}
-                <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-neutral-600" />
+                <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-ink-faint" />
                 <div
-                  className={`absolute inset-x-0 rounded-full transition-colors duration-150 ${
-                    expanded ? 'bg-sky-400' : 'bg-sky-500/80'
-                  }`}
+                  className="absolute left-1/2 w-1 -translate-x-1/2 rounded-[2px] bg-ink"
                   style={fillStyle}
                 />
-                <SliderThumb
-                  className={`left-1/2 h-3 w-3 rounded-full bg-white shadow ring-1 ring-neutral-900 outline-none transition-all duration-150 ${
-                    expanded ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
-                  } data-[dragging]:scale-125 focus-visible:scale-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-sky-400`}
-                />
+                <KnobThumb vertical small />
               </>
             )
           }}
         </SliderTrack>
       </Slider>
-      <span className="text-[9px] text-neutral-500">{label}</span>
+      <span className="select-none text-caption text-ink-faint">{label}</span>
       {menuNode}
     </div>
   )
@@ -1161,6 +1289,22 @@ export type StringKeys = {
 
 const writeSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => {
   useStore.getState().updateSettings({ [key]: value } as Partial<Settings>)
+}
+
+/** A small whole-number setting (a count of colours, stops…) as segments rather than a slider. */
+export function BoundCountRow({ label, settingKey, min, max }: { label: string; settingKey: NumericKeys; min: number; max: number }) {
+  const value = String(Math.round(useEffectiveSetting(settingKey) as number))
+  const options = Array.from({ length: max - min + 1 }, (_, i) => ({ value: String(min + i), label: String(min + i) }))
+  return (
+    <SelectRow
+      label={label}
+      value={value}
+      options={options}
+      onChange={(v) => writeSetting(settingKey, Number(v) as Settings[NumericKeys])}
+      defaultValue={String(defaultSettings[settingKey])}
+      scopeKey={settingKey}
+    />
+  )
 }
 
 export function BoundSliderRow({

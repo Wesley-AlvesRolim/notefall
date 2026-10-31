@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { setHandSongSource } from './midi/noteHands'
+import type { NoteLabelContent } from './notes/pitchLabels'
 import {
   NOTE_LOOK_PRESETS,
   type NoteBump,
@@ -96,6 +98,9 @@ export type Settings = {
   noteRandomColor3: string
   noteRandomColor4: string
   noteRandomColor5: string
+  /** `noteColorMode: 'hand'`: notes assigned to the left / right hand (others keep `noteColor`). */
+  noteHandColorL: string
+  noteHandColorR: string
   noteEmissive: number
   noteOpacity: number
   noteCornerRadius: number
@@ -398,6 +403,7 @@ export type Settings = {
   octaveLinesEnabled: boolean   // vertical B→C guide lines above the keyboard
   // Pitch names on the falling notes (at the keyboard end) and on the keys.
   noteLabelsEnabled: boolean
+  noteLabelContent: NoteLabelContent   // pitch name, finger number, or both
   noteLabelFormat: PitchLabelFormat
   noteLabelAccidental: Accidental
   noteLabelSize: number
@@ -716,6 +722,7 @@ export const defaultSettings: Settings = {
   backgroundColor: '#05060a',
   octaveLinesEnabled: true,
   noteLabelsEnabled: false,
+  noteLabelContent: 'pitch',
   noteLabelFormat: 'letter',
   noteLabelAccidental: 'sharp',
   noteLabelSize: 1,
@@ -786,7 +793,9 @@ export const defaultSettings: Settings = {
   midiSpeedAutomation: [],
   midiSpeedAutomationYRangeLog2: 1,
   midiSpeedAutomationYCenterLog2: 0,
-  timelineEditorOpen: true,
+  // Closed by default: the floating panel sits over the keyboard. A view preference, so opening a
+  // project keeps the current state (see loadProject).
+  timelineEditorOpen: false,
   timelineLaneScale: 1,
   timelineMidiLaneRatio: 1,
   timelineSpeedLaneRatio: 1,
@@ -926,7 +935,7 @@ function hashSong(song: ParsedSong | null): string {
   if (!song) return ''
   let acc = ''
   for (const n of song.notes) {
-    acc += `${n.id},${n.midi},${n.time.toFixed(6)},${n.duration.toFixed(6)},${n.velocity.toFixed(4)};`
+    acc += `${n.id},${n.midi},${n.time.toFixed(6)},${n.duration.toFixed(6)},${n.velocity.toFixed(4)},${n.hand ?? ''},${n.finger ?? ''};`
   }
   acc += '|'
   for (const p of song.pedals) {
@@ -1126,18 +1135,10 @@ type AppState = {
     r: { x1: number; y1: number; x2: number; y2: number } | null,
   ) => void
 
-  // Position (in viewport client coords) of the per-note context menu, or
-  // null when no menu is open. Set by a right-click on a falling note;
-  // cleared by outside-click / Escape / selection-empty. The menu reads
-  // velocity (etc.) from the current `selection`, not from a captured
-  // note id, so dragging-into-selection-then-right-clicking still works.
-  contextMenu: { x: number; y: number } | null
-  setContextMenu: (m: { x: number; y: number } | null) => void
-
   // Defaults inherited by the next new note (left-click on empty edit
   // area). Updated whenever exactly one note is the active edit subject:
   // selecting it (replaceSelection of size 1), creating a new note, or
-  // editing it via velocity menu / drag-resize. Survives Escape and
+  // editing it via the selection card / drag-resize. Survives Escape and
   // note deletion so a user can deselect / delete and the next created
   // note still picks up the last-touched note's feel.
   // `track` carries forward so a new note inherits the track (and thus
@@ -1654,8 +1655,6 @@ export const useStore = create<AppState>((set) => ({
   rangeSelectRect: null,
   setRangeSelectRect: (rangeSelectRect) => set({ rangeSelectRect }),
 
-  contextMenu: null,
-  setContextMenu: (contextMenu) => set({ contextMenu }),
 
   // Defaults match the original NEW_NOTE_DURATION / NEW_NOTE_VELOCITY in
   // EditTools — mirror them here so the very first new note (before any
@@ -1947,8 +1946,10 @@ export const useStore = create<AppState>((set) => ({
       return { projectName: name, editHistory: history, editFuture: [] }
     }),
 
-  loadProject: (nextSettings, nextSong, ref, projectName) => {
+  loadProject: (loadedSettings, nextSong, ref, projectName) => {
     dropSettingsBaseline()
+    // Whether the timeline panel is open is how this window is laid out, not part of the song.
+    const nextSettings = { ...loadedSettings, timelineEditorOpen: useStore.getState().settings.timelineEditorOpen }
     set({
       settings: nextSettings,
       song: nextSong,
@@ -1967,7 +1968,6 @@ export const useStore = create<AppState>((set) => ({
       editFuture: [],
       selection: new Set(),
       editingKeyframeTime: null,
-      contextMenu: null,
       rangeSelectRect: null,
     })
   },
@@ -1989,7 +1989,6 @@ export const useStore = create<AppState>((set) => ({
       editFuture: [],
       selection: new Set(),
       editingKeyframeTime: null,
-      contextMenu: null,
       rangeSelectRect: null,
     })
   },
@@ -2017,3 +2016,6 @@ export function useSettingsSlice<K extends readonly (keyof Settings)[]>(
     }),
   )
 }
+
+// Lets the note colouring look up a note's hand without importing the store.
+setHandSongSource(() => useStore.getState().song)

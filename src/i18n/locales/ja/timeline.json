@@ -1,42 +1,28 @@
 {
   "editor": {
-    "show": "タイムラインエディターを表示",
-    "hide": "タイムラインエディターを隠す",
-    "title": "タイムラインエディター",
+    "title": "タイムライン",
+    "close": "タイムラインを閉じる",
     "resizeLanes": "ドラッグでレーンの高さを変更",
     "resizeAria": "タイムラインエディターの高さを変更"
   },
   "follow": {
     "stop": "再生ヘッドの追従を停止",
     "start": "再生中に再生ヘッドを追従",
-    "label": "追従"
-  },
-  "empty": {
-    "prompt": "曲が読み込まれていません — .mid / .nfz ファイルをドロップするか、以下から選んでください",
-    "openFile": "ファイルを開く…",
-    "record": "録音",
-    "demoSongs": "デモ曲",
-    "demoSongsAria": "デモ曲"
-  },
-  "error": {
-    "couldNotOpenProjectTitle": "プロジェクトを開けませんでした",
-    "couldNotLoadDemoTitle": "デモを読み込めませんでした"
+    "label": "再生ヘッドに追従"
   },
   "lane": {
     "midi": "MIDI",
     "speed": "速度",
     "audio": "オーディオ",
-    "pins": "ピン",
-    "pinsLabel": "ピン",
-    "speedLabel": "速度",
     "options": "レーンのオプション",
     "mute": "ミュート",
     "unmute": "ミュート解除",
     "resizeLanes": "ドラッグでレーンの高さを変更",
     "decoding": "デコード中…",
-    "addAudio": "＋ オーディオを追加…",
+    "addAudio": "オーディオを追加…",
     "addAudioHint": "または音源ファイルをドラッグ＆ドロップ",
-    "addAudioFailed": "オーディオを読み込めませんでした"
+    "addAudioFailed": "オーディオを読み込めませんでした",
+    "keyframes": "キーフレーム"
   },
   "context": {
     "volume": "音量",
@@ -58,13 +44,6 @@
     "audioHead": "オーディオの先頭をトリミング",
     "audioTail": "オーディオの末尾をトリミング"
   },
-  "pin": {
-    "addAtPlayheadAria": "再生ヘッドにピンを追加",
-    "addAtPlayheadTitle": "再生ヘッドにピンを追加（P）",
-    "laneAria": "設定ピン",
-    "laneTitle": "ピンはある時点のビジュアル設定をキャプチャします — シーンは連続するピンの間でモーフィングします。空きスペースをクリックでピンを追加 · ピンをクリックで選択＋シーク · ドラッグで移動 · 右ドラッグで消去。",
-    "markerTitle": "{{time}} のピン — クリックで選択＋シーク · ドラッグで移動 · 右ドラッグで消去"
-  },
   "ruler": {
     "seekAria": "ルーラー — クリックでビュー内をシーク",
     "seekTitle": "ドラッグでシーク · ダブルクリックでフィット",
@@ -84,20 +63,13 @@
   "velocityCurve": {
     "label": "ベロシティカーブ"
   },
-  "transport": {
-    "rewindToStart": "先頭に巻き戻し",
-    "rewind10": "10秒戻す",
-    "forward10": "10秒進める",
-    "play": "再生",
-    "pause": "一時停止",
-    "enableLoop": "ループを有効化",
-    "disableLoop": "ループを無効化",
-    "volume": "音量",
-    "speed": "速度",
-    "playbackSpeed": "再生速度",
-    "resetCameraView": "カメラビューをリセット",
-    "enterFullscreen": "全画面表示にする",
-    "exitFullscreen": "全画面表示を解除",
-    "seek": "シーク"
+  "addKeyframe": {
+    "label": "キーフレームを追加",
+    "title": "再生ヘッドの位置にキーフレームを追加"
+  },
+  "keyframe": {
+    "laneAria": "キーフレーム",
+    "laneTitle": "キーフレームはその時点の見た目を記録し、隣り合うキーフレームの間で滑らかに変化します。空きスペースのクリックで追加、キーフレームのクリックで選択してその位置へ移動、ドラッグで移動、右ドラッグで削除。",
+    "markerTitle": "{{time}} のキーフレーム"
   }
 }

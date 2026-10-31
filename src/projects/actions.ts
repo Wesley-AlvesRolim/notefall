@@ -2,6 +2,7 @@ import i18n from '../i18n'
 import { audioEngine } from '../audio/engine'
 import { parseMidi } from '../midi/parse'
 import { serializeMidi } from '../midi/serialize'
+import { applyNoteHands, collectNoteHands } from '../midi/noteHands'
 import { useCustomTexture } from '../notes/customTexture'
 import { useStageBackground } from '../scene/stageBackground'
 import { AUDIO_EXTENSIONS, isAudioName, useUserAudio } from '../audio/userAudio'
@@ -100,6 +101,8 @@ function buildProjectFromState(name: string): Project {
     // The user-facing "Save Song as MIDI…" download still uses the
     // single-track default — those are separate code paths.
     songMidi: s.song ? serializeMidi(s.song, { preserveTracks: true }) : null,
+    // Hands / fingers aren't representable in the SMF; they ride in the manifest.
+    noteHands: s.song ? collectNoteHands(s.song) : null,
     // Capture the custom texture even if `noteTexture !== 'custom'` —
     // the user may have switched presets temporarily and we don't want
     // to drop their image on save. The noteTexture setting is what
@@ -210,7 +213,7 @@ async function applyOpenedProject(
   let song = null
   if (project.songMidi) {
     try {
-      song = await parseMidi(project.songMidi, project.name)
+      song = applyNoteHands(await parseMidi(project.songMidi, project.name), project.noteHands)
     } catch (e) {
       track('error_surfaced', { context: 'midi_parse' })
       return {

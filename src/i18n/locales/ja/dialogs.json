@@ -1,10 +1,10 @@
 {
   "confirm": {
-    "defaultConfirm": "OK",
+    "defaultConfirm": "続ける",
     "defaultCancel": "キャンセル"
   },
   "alert": {
-    "acknowledge": "OK"
+    "acknowledge": "閉じる"
   },
   "export": {
     "ariaLabel": "書き出し設定",
@@ -12,39 +12,43 @@
     "unsupported": "このブラウザーでは動画の書き出しを利用できません。音声の書き出しは利用できます。",
     "format": {
       "label": "形式",
-      "videoAudio": "動画＋音声",
-      "videoOnly": "動画のみ（無音）",
-      "audioOnly": "音声のみ（WAV）"
+      "videoAudio": "動画と音声",
+      "videoOnly": "動画のみ",
+      "audioOnly": "音声のみ"
     },
     "resolution": "解像度",
     "fps": "フレームレート",
     "fps30": "30 fps",
     "fps60": "60 fps",
     "quality": "画質",
-    "bitrateNote": "動画ビットレート {{mbps}} Mbps。「高」はエッジと光彩をよりきれいにするためにビットレートを1.5倍にします。それ以外は同じです。",
     "estimatedSize": "推定サイズ",
     "estimatedSizeValue": "約{{mb}} MB",
-    "playSoundOnComplete": "完了時に音を鳴らす",
-    "test": "テスト",
+    "playSoundOnComplete": "完了したら音を鳴らす",
+    "test": "音を試す",
     "cancel": "キャンセル",
-    "submit": "書き出し",
+    "submit": "書き出す",
     "codec": {
       "label": "コーデック",
       "h264": "H.264 + AAC（MP4）— 互換性が最も高い",
       "vp9": "VP9 + Opus（WebM）— オープンな形式",
       "av1": "AV1 + Opus（WebM）— オープン、最小サイズ、低速",
-      "checking": "対応コーデックを確認中…"
+      "checking": "対応コーデックを確認中"
     },
     "preflight": {
       "noWebCodecs": "動画の書き出しには WebCodecs が必要です（Chrome / Edge / Safari 16.4 以降）。このブラウザーでも「音声のみ（WAV）」は書き出せます。",
       "videoUnsupported": "このブラウザーでは {{codec}} の映像を {{width}}×{{height}}・{{fps}} fps でエンコードできません。{{alternatives}} を試すか、解像度やフレームレートを下げてください。",
       "audioUnsupported": "このブラウザーでは、{{codec}} の書き出しに必要な {{audioCodec}} の音声をエンコードできません。{{alternatives}} を試すか、「動画のみ」か「音声のみ（WAV）」で書き出してください。",
       "or": " または "
-    }
+    },
+    "advanced": "詳細設定",
+    "advancedSummaryAudio": "WAV",
+    "qualityHint": "動画ビットレート {{mbps}} Mbps。「高」はエッジと光彩をきれいにするため、ビットレートを1.5倍にします。",
+    "fileFormat": "{{codec}} · {{res}} · {{fps}} fps",
+    "wavMeta": "WAV · 44.1 kHz"
   },
   "progress": {
-    "note": "少し時間がかかる場合があります。タブを閉じないでください。",
-    "cancel": "キャンセル",
+    "note": "完了するまでこのタブを開いたままにしてください。",
+    "cancel": "書き出しをキャンセル",
     "eta": "残り{{eta}}",
     "etaSeconds": "{{count}}秒",
     "etaMinutes": "{{min}}分{{sec}}秒"
@@ -57,14 +61,8 @@
     "couldNotLoadAudioTitle": "音声を読み込めませんでした",
     "unsupportedTitle": "未対応のファイル形式です",
     "unsupportedMessage": "「{{name}}」は対応していない形式です。.nfz プロジェクト、.mid / .midi、または .mp3 / .wav の音声ファイルをドロップしてください。",
-    "indicator": "ドロップして読み込み（.mid / .midi / .nfz / .mp3 / .wav）"
-  },
-  "noteMenu": {
-    "close": "閉じる",
-    "deleteOne": "ノートを削除",
-    "deleteMany": "{{count}}個のノートを削除",
-    "notesSelected": "{{count}}個のノートを選択中",
-    "velocity": "ベロシティ"
+    "title": "ドロップして開く",
+    "hint": "MIDI、notefall のプロジェクト、または伴奏用の音声"
   },
   "fastForward": {
     "rate": "2x"
@@ -133,12 +131,12 @@
         "details": "動作、画面、ショートカットなど"
       }
     },
-    "includeEnv": "端末情報を含める（下の内容がそのまま送られます）",
-    "send": "送信",
-    "sending": "送信中…",
+    "includeEnv": "端末情報を含める",
+    "send": "報告を送る",
+    "sending": "送信中",
     "cancel": "キャンセル",
     "close": "閉じる",
-    "useGitHub": "GitHub で報告する",
+    "useGitHub": "代わりに GitHub で報告する",
     "openGitHub": "GitHub のフォームを開く",
     "unavailable": "この環境では報告フォームを使えません。",
     "errors": {
@@ -147,8 +145,57 @@
       "server": "送信できませんでした。",
       "network": "接続できないため送信できませんでした。"
     },
-    "sentTitle": "ありがとうございます。送信しました",
+    "sentTitle": "送信しました",
     "sentBody": "Issue #{{number}} として登録されました。",
-    "sentLink": "対応状況は GitHub で確認できます（#{{number}}）"
+    "sentLink": "対応状況は GitHub で確認できます（#{{number}}）",
+    "envHint": "下の内容がそのまま送られます。"
+  },
+  "shortcuts": {
+    "title": "キーボードショートカット",
+    "close": "閉じる",
+    "playback": "再生",
+    "editing": "編集",
+    "file": "ファイルと録音",
+    "mouse": "ノートのマウス操作",
+    "play": "再生 / 一時停止",
+    "scrub": "シーク（一時停止中）",
+    "scrubKey": "スクロール",
+    "ff": "2倍速で早送り",
+    "ffKey": "長押し",
+    "timeline": "タイムラインの表示切替",
+    "undo": "元に戻す",
+    "redo": "やり直す",
+    "delete": "選択を削除",
+    "clear": "選択を解除",
+    "nudgePitch": "±1半音ずらす",
+    "nudgeTime": "±0.05秒ずらす",
+    "keyframe": "キーフレームを追加（タイムライン）",
+    "open": "開く",
+    "save": "保存",
+    "saveAs": "名前を付けて保存",
+    "record": "録音",
+    "piano": "音を鳴らす",
+    "pianoKeys": "Z–M、A–J、Q–P、数字キー",
+    "select": "選択して移動",
+    "selectKey": "クリック、ドラッグ",
+    "rangeSelect": "範囲選択",
+    "rangeKey": "ドラッグ",
+    "addSelect": "選択に追加",
+    "split": "ノートを分割",
+    "menu": "ノートを選択",
+    "menuKey": "ダブルクリック",
+    "del": "ノートを削除",
+    "delKey": "右クリック",
+    "erase": "消しゴム",
+    "eraseKey": "右ドラッグ",
+    "resize": "ノートの長さを変更",
+    "resizeKey": "端をドラッグ",
+    "camera": "カメラをズーム",
+    "cameraKey": "スクロール",
+    "click": "クリック",
+    "dragWord": "ドラッグ",
+    "scroll": "スクロール",
+    "add": "ノートを追加（空いている場所）",
+    "sheet": "このショートカット一覧"
   }
 }

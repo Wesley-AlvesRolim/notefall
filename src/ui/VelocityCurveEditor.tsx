@@ -170,16 +170,16 @@ export function VelocityCurveEditor() {
   const q = useSearchQuery()
   if (!rowMatchesQuery('Velocity Curve', q)) return null
   return (
-    <div data-search-label="Velocity Curve" className="flex flex-col gap-2 py-1">
-      <div className="flex items-center text-xs select-none">
-        <span id={labelId} className="text-neutral-400">{t('velocityCurve.label')}</span>
+    <div data-search-label="Velocity Curve" className="grid gap-2">
+      <div className="flex items-center select-none">
+        <span id={labelId} className="text-ink-muted">{t('velocityCurve.label')}</span>
       </div>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
         aria-labelledby={labelId}
-        className="w-full select-none rounded bg-neutral-900/60 ring-1 ring-neutral-800"
+        className="w-full select-none rounded-field bg-fill-well"
         style={{ aspectRatio: `${W} / ${H}`, touchAction: 'none' }}
         onDoubleClick={onDoubleClick}
       >
@@ -195,15 +195,15 @@ export function VelocityCurveEditor() {
               y={PAD_Y + (PLOT_H - h)}
               width={2}
               height={h}
-              fill="#525252"
+              className="fill-fill-track"
             />
           )
         })}
         <path
           d={pathD}
           fill="none"
-          stroke="#60a5fa"
-          strokeWidth={1.5}
+          className="stroke-ink"
+          strokeWidth={2}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -230,9 +230,9 @@ export function VelocityCurveEditor() {
                 cx={px.x}
                 cy={px.y}
                 r={5}
-                fill="#e5e7eb"
-                stroke="#0a0a0a"
-                strokeWidth={1.5}
+                className="fill-ink"
+                stroke="rgba(0,0,0,0.4)"
+                strokeWidth={1}
                 pointerEvents="none"
               />
             </g>

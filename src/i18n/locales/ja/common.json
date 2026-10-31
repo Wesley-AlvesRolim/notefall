@@ -9,5 +9,44 @@
   "retry": "再試行",
   "loading": "読み込み中…",
   "yes": "はい",
-  "no": "いいえ"
+  "no": "いいえ",
+  "transport": {
+    "label": "再生コントロール",
+    "rewindToStart": "最初に戻る",
+    "rewind10": "10秒戻る",
+    "forward10": "10秒進む",
+    "play": "再生",
+    "pause": "一時停止",
+    "enableLoop": "ループ再生",
+    "disableLoop": "ループをやめる",
+    "volume": "音量",
+    "mute": "ミュート",
+    "unmute": "ミュート解除",
+    "speed": "速度",
+    "playbackSpeed": "再生速度",
+    "resetCameraView": "カメラの位置を元に戻す",
+    "enterFullscreen": "全画面にする",
+    "exitFullscreen": "全画面を終了",
+    "seek": "再生位置",
+    "look": "カスタマイズ",
+    "timeline": "タイムライン"
+  },
+  "loadingIsland": {
+    "title": "ピアノの音を読み込み中"
+  },
+  "startCard": {
+    "title": "曲を選んで始めましょう",
+    "text": "MIDI ファイルや notefall のプロジェクトをここにドロップするか、下から選べます。",
+    "open": "ファイルを開く…",
+    "demo": "デモ曲を試す",
+    "demoMenu": "デモ曲",
+    "record": "キーボードから録音",
+    "deviceConnected": "{{name}} 接続中",
+    "note": "すべてお使いのコンピューター内で処理され、アップロードはされません。",
+    "couldNotOpenTitle": "ファイルを開けませんでした",
+    "couldNotLoadDemoTitle": "デモを読み込めませんでした"
+  },
+  "pageLoader": {
+    "loading": "notefall を読み込み中"
+  }
 }

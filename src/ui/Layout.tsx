@@ -1,12 +1,19 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { UNSAFE_PortalProvider } from 'react-aria'
 import { DropZone } from 'react-aria-components'
 import { Toolbar } from './Toolbar'
 import { Inspector } from './Inspector'
 import { Viewport } from './Viewport'
 import { TimelineEditor } from './TimelineEditor'
 import { ConfirmModal } from './ConfirmModal'
-import { LoadingOverlay } from './LoadingOverlay'
+import { Icon, ToastHost, GEOMETRY, useReleaseFocusAfterPointer } from './kit'
+import { ShortcutSheet } from './shell/ShortcutSheet'
+import { TransportPill } from './shell/TransportPill'
+import { LoadingIsland } from './shell/LoadingIsland'
+import { StartCard } from './shell/StartCard'
+import { IdleDriver } from './shell/idle'
+import { setFullscreenRoot, useIsFullscreen } from './shell/fullscreen'
 import { useStore } from '../store'
 import { audioEngine } from '../audio/engine'
 import { midiInput } from '../audio/midiInput'
@@ -67,6 +74,17 @@ export function Layout() {
   const { t } = useTranslation('dialogs')
   const transport = useStore((s) => s.transport)
   useGlobalShortcuts()
+  useReleaseFocusAfterPointer()
+  // Fullscreen takes the whole app root so the floating chrome comes along. react-aria
+  // portals into document.body by default, which sits outside the fullscreen element, so
+  // redirect them to the root while fullscreen (and return body explicitly otherwise: once
+  // a PortalProvider exists, a nullish container renders nothing).
+  const rootRef = useRef<HTMLDivElement>(null)
+  const isFullscreen = useIsFullscreen()
+  useEffect(() => {
+    setFullscreenRoot(rootRef.current)
+    return () => setFullscreenRoot(null)
+  }, [])
 
   // ── Engine settings sync via imperative subscription ─────────────
   //
@@ -202,8 +220,12 @@ export function Layout() {
     // anywhere — Toolbar, Inspector, or canvas — routes the file. The
     // earlier Viewport-scoped DropZone left users dropping onto the
     // wrong surface with nothing happening.
+    <UNSAFE_PortalProvider
+      getContainer={() => (isFullscreen ? rootRef.current ?? document.body : document.body)}
+    >
     <DropZone
-      className="group/dropzone relative flex h-full w-full flex-col bg-neutral-950 outline-none"
+      ref={rootRef}
+      className="group/dropzone relative h-full w-full overflow-hidden bg-canvas outline-none"
       // Accept every file drop. react-aria's `DragTypes.has('Files')`
       // does NOT match native file drops the way HTML's
       // `dataTransfer.types.includes('Files')` does — it checks the
@@ -275,20 +297,17 @@ export function Layout() {
         })
       }}
     >
+      <Viewport />
       <Toolbar />
-      {/* Viewport + TimelineEditor stack in a left column so the
-          timeline editor sits under the canvas only. The Inspector
-          remains a tall right column from Toolbar to bottom — the
-          editor never extends under it. */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <Viewport />
-          <TimelineEditor />
-        </div>
-        <Inspector />
-      </div>
+      <Inspector />
+      <TimelineEditor />
+      <StartCard />
+      <TransportPill />
+      <LoadingIsland />
+      <ToastHost bottom={GEOMETRY.PILL_BOTTOM + GEOMETRY.PILL + GEOMETRY.GAP} />
+      <ShortcutSheet />
       <PinTargetSync />
-      <LoadingOverlay />
+      <IdleDriver />
       <ConfirmModal />
       {/* Drop indicator. Toggled via CSS off the DropZone's
           `data-drop-target` attribute — using a render-prop here would
@@ -299,12 +318,15 @@ export function Layout() {
           the user releases on. */}
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0 z-50 hidden items-center justify-center bg-sky-500/10 backdrop-blur-sm group-data-[drop-target]/dropzone:flex"
+        className="nf-enter-fade pointer-events-none fixed inset-0 z-50 hidden flex-col items-center justify-center gap-1 bg-scrim text-center group-data-[drop-target]/dropzone:flex"
       >
-        <div className="rounded-md border border-sky-500/40 bg-black/55 px-5 py-3 text-sm font-medium text-sky-100 shadow-lg backdrop-blur-md">
-          {t('drop.indicator')}
-        </div>
+        {/* the whole window is the drop target: a dashed frame just inside its edge */}
+        <span className="absolute inset-2 rounded-panel border-[1.5px] border-dashed border-ink-muted" />
+        <Icon.UploadIcon className="mb-1 h-7 w-7 text-ink" />
+        <span className="text-title text-ink">{t('drop.title')}</span>
+        <span className="text-ink-muted">{t('drop.hint')}</span>
       </div>
     </DropZone>
+    </UNSAFE_PortalProvider>
   )
 }

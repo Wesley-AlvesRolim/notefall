@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button, Checkbox, Dialog, Heading, Modal, ModalOverlay } from 'react-aria-components'
+import { Button, Dialog, DialogText, SegmentedControl, Switch } from './kit'
 import {
   ISSUES_URL,
   REPORT_LIMITS,
@@ -85,25 +85,21 @@ function Turnstile({ onToken, resetKey }: { onToken: (t: string | null) => void;
 }
 
 const fieldClass =
-  'w-full rounded border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-xs text-neutral-100 outline-none placeholder:text-neutral-600 focus:border-sky-500'
+  'nf-focus w-full rounded-field border-0 bg-fill-field px-2.5 py-2 text-body text-ink outline-none placeholder:text-ink-faint'
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[11px] text-neutral-400">
+    <label className="grid gap-1.5">
+      <span className="text-label text-ink-muted">
         {label}
-        {hint && <span className="ml-1 text-neutral-600">{hint}</span>}
+        {hint && <span className="ml-1 font-normal text-ink-faint">{hint}</span>}
       </span>
       {children}
     </label>
   )
 }
 
-const buttonClass =
-  'rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs text-neutral-200 outline-none hover:border-neutral-600 focus-visible:border-sky-500'
-const primaryClass =
-  'rounded border border-sky-500/60 bg-sky-500/15 px-3 py-1.5 text-xs text-sky-200 outline-none hover:bg-sky-500/25 focus-visible:border-sky-300 disabled:cursor-default disabled:opacity-40'
-const linkClass = 'text-sky-300 underline-offset-2 hover:underline'
+const linkClass = 'nf-focus rounded-sm text-ink underline underline-offset-2'
 
 export function FeedbackDialog({
   kind: initialKind,
@@ -169,182 +165,150 @@ export function FeedbackDialog({
 
   const fallbackUrl = githubIssueUrl(kind, includeEnv ? environment : '')
 
+  const sent = result?.kind === 'ok'
+
   return (
-    <ModalOverlay
+    <Dialog
       isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open && !sending) onClose()
       }}
-      isDismissable={!sending}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm data-[entering]:animate-in data-[entering]:fade-in data-[entering]:duration-150 data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:duration-100"
+      dismissable={!sending}
+      width={500}
+      title={sent ? t('feedback.sentTitle') : t('feedback.title')}
+      actions={
+        sent ? (
+          <Button autoFocus variant="primary" onPress={onClose}>
+            {t('feedback.close')}
+          </Button>
+        ) : (
+          <>
+            <a
+              href={fallbackUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${linkClass} mr-auto self-center`}
+            >
+              {t('feedback.useGitHub')}
+            </a>
+            <Button onPress={onClose} isDisabled={sending}>
+              {t('feedback.cancel')}
+            </Button>
+            <Button variant="primary" onPress={() => void send()} isDisabled={!canSend}>
+              {sending ? t('feedback.sending') : t('feedback.send')}
+            </Button>
+          </>
+        )
+      }
     >
-      <Modal className="outline-none data-[entering]:animate-in data-[entering]:zoom-in-95 data-[entering]:duration-150">
-        <Dialog
-          aria-label={t('feedback.ariaLabel')}
-          className="flex max-h-[90vh] w-[28rem] flex-col gap-4 overflow-y-auto rounded-md bg-black/70 p-5 shadow-lg ring-1 ring-white/10 backdrop-blur-md outline-none"
-        >
-          {result?.kind === 'ok' ? (
-            <>
-              <Heading slot="title" className="text-sm font-medium text-neutral-100">
-                {t('feedback.sentTitle')}
-              </Heading>
-              <p className="text-[11px] leading-relaxed text-neutral-300">
-                {t('feedback.sentBody', { number: result.number })}{' '}
-                <a href={result.url} target="_blank" rel="noopener noreferrer" className={linkClass}>
-                  {t('feedback.sentLink', { number: result.number })}
-                </a>
-              </p>
-              <div className="flex justify-end">
-                <Button autoFocus onPress={onClose} className={primaryClass}>
-                  {t('feedback.close')}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col gap-1.5">
-                <Heading slot="title" className="text-sm font-medium text-neutral-100">
-                  {t('feedback.title')}
-                </Heading>
-                <p className="text-[11px] leading-relaxed text-neutral-400">
-                  {t('feedback.publicNotice')}{' '}
-                  <a href={ISSUES_URL} target="_blank" rel="noopener noreferrer" className={linkClass}>
-                    {t('feedback.statusLink')}
-                  </a>
-                </p>
-              </div>
+      {sent ? (
+        <DialogText>
+          {t('feedback.sentBody', { number: result.number })}{' '}
+          <a href={result.url} target="_blank" rel="noopener noreferrer" className={linkClass}>
+            {t('feedback.sentLink', { number: result.number })}
+          </a>
+        </DialogText>
+      ) : (
+        <>
+          <DialogText>
+            {t('feedback.publicNotice')}{' '}
+            <a href={ISSUES_URL} target="_blank" rel="noopener noreferrer" className={linkClass}>
+              {t('feedback.statusLink')}
+            </a>
+          </DialogText>
 
-              <div className="flex gap-1 rounded border border-neutral-800 p-0.5" role="radiogroup" aria-label={t('feedback.kind')}>
-                {(['bug', 'feature'] as const).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    role="radio"
-                    aria-checked={kind === k}
-                    onClick={() => setKind(k)}
-                    className={`flex-1 rounded px-2 py-1 text-xs outline-none focus-visible:ring-1 focus-visible:ring-sky-500 ${
-                      kind === k ? 'bg-neutral-800 text-neutral-100' : 'text-neutral-400 hover:text-neutral-200'
-                    }`}
-                  >
-                    {t(`feedback.kinds.${k}`)}
-                  </button>
-                ))}
-              </div>
+          <SegmentedControl<ReportKind>
+            aria-label={t('feedback.kind')}
+            value={kind}
+            onChange={setKind}
+            options={[
+              { value: 'bug', label: t('feedback.kinds.bug') },
+              { value: 'feature', label: t('feedback.kinds.feature') },
+            ]}
+          />
 
-              <Field label={t('feedback.summary')}>
-                <input
-                  className={fieldClass}
-                  value={title}
-                  maxLength={REPORT_LIMITS.title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder={t(`feedback.placeholders.${kind}.summary`)}
-                />
-              </Field>
-              <Field label={t(`feedback.fields.${kind}.description`)}>
-                <textarea
-                  className={`${fieldClass} min-h-20 resize-y`}
-                  value={description}
-                  maxLength={REPORT_LIMITS.text}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder={t(`feedback.placeholders.${kind}.description`)}
-                />
-              </Field>
-              <Field label={t(`feedback.fields.${kind}.details`)} hint={t('feedback.optional')}>
-                <textarea
-                  className={`${fieldClass} min-h-16 resize-y`}
-                  value={details}
-                  maxLength={REPORT_LIMITS.text}
-                  onChange={(e) => setDetails(e.target.value)}
-                  placeholder={t(`feedback.placeholders.${kind}.details`)}
-                />
-              </Field>
-              {kind === 'bug' && (
-                <Field label={t('feedback.fields.bug.expected')} hint={t('feedback.optional')}>
-                  <textarea
-                    className={`${fieldClass} min-h-12 resize-y`}
-                    value={expected}
-                    maxLength={REPORT_LIMITS.text}
-                    onChange={(e) => setExpected(e.target.value)}
-                  />
-                </Field>
-              )}
-              {/* honeypot: hidden from people, tempting to form-filling bots */}
-              <input
-                tabIndex={-1}
-                aria-hidden
-                autoComplete="off"
-                className="hidden"
-                value={website}
-                onChange={(e) => setWebsite(e.target.value)}
-                name="website"
+          <Field label={t('feedback.summary')}>
+            <input
+              className={fieldClass}
+              value={title}
+              maxLength={REPORT_LIMITS.title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={t(`feedback.placeholders.${kind}.summary`)}
+            />
+          </Field>
+          <Field label={t(`feedback.fields.${kind}.description`)}>
+            <textarea
+              className={`${fieldClass} min-h-20 resize-y`}
+              value={description}
+              maxLength={REPORT_LIMITS.text}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={t(`feedback.placeholders.${kind}.description`)}
+            />
+          </Field>
+          <Field label={t(`feedback.fields.${kind}.details`)} hint={t('feedback.optional')}>
+            <textarea
+              className={`${fieldClass} min-h-16 resize-y`}
+              value={details}
+              maxLength={REPORT_LIMITS.text}
+              onChange={(e) => setDetails(e.target.value)}
+              placeholder={t(`feedback.placeholders.${kind}.details`)}
+            />
+          </Field>
+          {kind === 'bug' && (
+            <Field label={t('feedback.fields.bug.expected')} hint={t('feedback.optional')}>
+              <textarea
+                className={`${fieldClass} min-h-12 resize-y`}
+                value={expected}
+                maxLength={REPORT_LIMITS.text}
+                onChange={(e) => setExpected(e.target.value)}
               />
-
-              <div className="flex flex-col gap-1.5">
-                <Checkbox
-                  isSelected={includeEnv}
-                  onChange={setIncludeEnv}
-                  className="group flex cursor-pointer items-center gap-2 text-[11px] text-neutral-300 outline-none"
-                >
-                  {({ isSelected }) => (
-                    <>
-                      <span
-                        className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                          isSelected ? 'border-sky-400 bg-sky-500/20' : 'border-neutral-600 bg-neutral-900'
-                        } group-data-[focus-visible]:ring-1 group-data-[focus-visible]:ring-sky-500/40`}
-                      >
-                        {isSelected && (
-                          <svg viewBox="0 0 14 14" className="h-2.5 w-2.5 stroke-sky-300" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M2.5 7.5 L6 11 L11.5 3.5" />
-                          </svg>
-                        )}
-                      </span>
-                      <span>{t('feedback.includeEnv')}</span>
-                    </>
-                  )}
-                </Checkbox>
-                {includeEnv && (
-                  <pre className="max-h-28 overflow-auto whitespace-pre-wrap break-all rounded border border-neutral-800 bg-neutral-950 px-2 py-1.5 font-mono text-[10px] leading-snug text-neutral-500">
-                    {environment}
-                  </pre>
-                )}
-              </div>
-
-              {needsToken && <Turnstile onToken={setToken} resetKey={resetKey} />}
-
-              {result?.kind === 'unavailable' && (
-                <p className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-amber-200">
-                  {t('feedback.unavailable')}{' '}
-                  <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className={linkClass}>
-                    {t('feedback.openGitHub')}
-                  </a>
-                </p>
-              )}
-              {result?.kind === 'error' && (
-                <p className="rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-rose-200">
-                  {t(`feedback.errors.${result.reason}`)}{' '}
-                  <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className={linkClass}>
-                    {t('feedback.openGitHub')}
-                  </a>
-                </p>
-              )}
-
-              <div className="flex items-center justify-between gap-2">
-                <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className={`text-[11px] ${linkClass}`}>
-                  {t('feedback.useGitHub')}
-                </a>
-                <div className="flex gap-2">
-                  <Button onPress={onClose} isDisabled={sending} className={buttonClass}>
-                    {t('feedback.cancel')}
-                  </Button>
-                  <Button onPress={() => void send()} isDisabled={!canSend} className={primaryClass}>
-                    {sending ? t('feedback.sending') : t('feedback.send')}
-                  </Button>
-                </div>
-              </div>
-            </>
+            </Field>
           )}
-        </Dialog>
-      </Modal>
-    </ModalOverlay>
+          {/* honeypot: hidden from people, tempting to form-filling bots */}
+          <input
+            tabIndex={-1}
+            aria-hidden
+            autoComplete="off"
+            className="hidden"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            name="website"
+          />
+
+          <div className="grid gap-2">
+            <Switch isSelected={includeEnv} onChange={setIncludeEnv} className="gap-3">
+              <span className="grid">
+                <span>{t('feedback.includeEnv')}</span>
+                <span className="text-ink-muted">{t('feedback.envHint')}</span>
+              </span>
+            </Switch>
+            {includeEnv && (
+              <pre className="m-0 max-h-28 overflow-auto whitespace-pre-wrap break-all rounded-field bg-fill-well px-2.5 py-2 font-sans text-caption text-ink-muted">
+                {environment}
+              </pre>
+            )}
+          </div>
+
+          {needsToken && <Turnstile onToken={setToken} resetKey={resetKey} />}
+
+          {result?.kind === 'unavailable' && (
+            <p className="m-0 text-ink-muted">
+              {t('feedback.unavailable')}{' '}
+              <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className={linkClass}>
+                {t('feedback.openGitHub')}
+              </a>
+            </p>
+          )}
+          {result?.kind === 'error' && (
+            <p className="m-0 text-danger">
+              {t(`feedback.errors.${result.reason}`)}{' '}
+              <a href={fallbackUrl} target="_blank" rel="noopener noreferrer" className={linkClass}>
+                {t('feedback.openGitHub')}
+              </a>
+            </p>
+          )}
+        </>
+      )}
+    </Dialog>
   )
 }

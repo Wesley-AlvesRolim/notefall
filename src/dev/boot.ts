@@ -4,6 +4,7 @@ import { audioEngine } from '../audio/engine'
 import { useStore } from '../store'
 import * as tuning from '../hands/tuning'
 import * as build from '../hands/build'
+import { selectionScreenRect } from '../scene/selectionBounds'
 import { devToolsEnabled, setDevTools, subscribeDevMode, devNoAudio } from './mode'
 
 type Panel = { destroy: () => void }
@@ -36,7 +37,7 @@ async function sync(): Promise<void> {
 
 export function bootDev(): void {
   // Console handle (same module instances as the app) for poking at the pipeline.
-  ;(window as unknown as Record<string, unknown>).__nfDev = { tuning, build, store: useStore, engine: audioEngine }
+  ;(window as unknown as Record<string, unknown>).__nfDev = { tuning, build, store: useStore, engine: audioEngine, selectionScreenRect }
   subscribeDevMode(() => void sync())
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyD' && e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey && !e.repeat) {

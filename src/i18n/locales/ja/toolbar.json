@@ -13,7 +13,8 @@
     "saveSongAsMidi": "MIDIとして保存…",
     "export": "書き出し…",
     "demoSongs": "デモ曲",
-    "demoSongsLabel": "デモ曲"
+    "demoSongsLabel": "デモ曲",
+    "exportButton": "書き出し"
   },
   "midi": {
     "button": "MIDI入力",
@@ -27,12 +28,10 @@
     "cancelCountIn": "カウントインをキャンセル",
     "start": "録音を開始",
     "label": "録音",
-    "disableCountIn": "カウントインを無効化",
-    "enableCountIn": "カウントインを有効化"
+    "stopLabel": "停止",
+    "countIn": "カウントイン"
   },
   "recordings": {
-    "showWithNew": "録音を表示（新着{{count}}件）",
-    "show": "録音を表示",
     "unread": "未読",
     "heading": "録音",
     "clearAll": "すべて消去",
@@ -42,13 +41,14 @@
     "loadAndPlay": "読み込んで再生",
     "saveAsMid": ".mid として保存",
     "confirmDelete": "録音の削除を確定",
-    "delete": "録音を削除"
+    "delete": "録音を削除",
+    "trigger": "テイクとカウントイン",
+    "triggerWithNew": "テイクとカウントイン（新着{{count}}件）"
   },
   "toast": {
     "emptyRecording": "ノートがありません — 録音は空でした"
   },
   "help": {
-    "aria": "ヘルプとフィードバック",
     "reportBug": "バグを報告…",
     "requestFeature": "機能をリクエスト…",
     "viewOnGitHub": "GitHubで見る",
@@ -59,14 +59,12 @@
     "caption": "匿名の利用状況のみ — 楽曲やファイルは送信されません。"
   },
   "badge": {
-    "unsaved": "未保存",
     "unsavedAria": "未保存の変更"
   },
   "projectName": {
     "aria": "プロジェクト名",
     "rename": "プロジェクト名を変更",
-    "untitled": "無題",
-    "noFile": "ファイル未選択"
+    "untitled": "無題"
   },
   "export": {
     "titleAudio": "オーディオを書き出し中",
@@ -89,8 +87,13 @@
     "videoNotSupportedMessage": "お使いのブラウザは WebCodecs API に対応していません。ビデオを書き出すには Chrome、Edge、または Safari 16.4 以降をご利用ください。",
     "videoNotSupportedShort": "お使いのブラウザは WebCodecs API に対応していません。"
   },
-  "language": {
-    "label": "言語",
-    "aria": "言語を変更"
+  "app": {
+    "menuLabel": "notefall メニュー",
+    "shortcuts": "キーボードショートカット",
+    "language": "言語"
+  },
+  "history": {
+    "undo": "元に戻す",
+    "redo": "やり直す"
   }
 }

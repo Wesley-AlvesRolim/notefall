@@ -276,6 +276,7 @@ export function HitLine() {
         : mode === 'note' && r.noteColorMode === 'gradient'
           ? noteGradient(r)
           : null
+    // random / by-hand notes have no single colour: the line keeps hitLineColor
     const lineHex = mode === 'note' && r.noteColorMode === 'solid' ? r.noteColor : r.hitLineColor
     writeGradientUniforms(barMaterial.uniforms as unknown as GradientUniforms, gradient)
     writeGradientUniforms(waveMaterial.uniforms as unknown as GradientUniforms, gradient)

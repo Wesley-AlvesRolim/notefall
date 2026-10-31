@@ -116,6 +116,7 @@ export function pack(project: Project): Blob {
             fileName: project.userAudio.fileName,
           }
         : null,
+    ...(project.noteHands && project.noteHands.length > 0 ? { noteHands: project.noteHands } : {}),
   }
   const files: Zippable = {
     'manifest.json': strToU8(JSON.stringify(manifest, null, 2)),
@@ -234,6 +235,7 @@ export async function unpack(buf: ArrayBuffer): Promise<Project> {
     customTexture,
     stageBackground,
     userAudio,
+    noteHands: Array.isArray(manifest.noteHands) ? manifest.noteHands : null,
   }
 }
 

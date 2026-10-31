@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { Settings } from '../store'
+import { handOfNote } from '../midi/noteHands'
 import { KEY_COUNT, KEYBOARD_LAYOUT, MIDI_MIN } from '../keyboard/layout'
 
 /**
@@ -7,7 +8,8 @@ import { KEY_COUNT, KEYBOARD_LAYOUT, MIDI_MIN } from '../keyboard/layout'
  * colour stops spread across the note area at an angle (the falling notes shade it per pixel, everything that only
  * has a key — particles, flashes, key glow, the timeline clip — takes the colour at that key on the hit line);
  * `random` = every note (or pitch / pitch class) picks a palette colour from a seeded hash (per-track colours are
- * `solid`'s `trackColors`).
+ * `solid`'s `trackColors`); `hand` = the note's hand from the selection card (`noteHandColorL` / `R`), `noteColor` for
+ * notes without one.
  *
  * Stop / palette colours are interpolated as sRGB-encoded values; consumers get linear RGB. A gradient either blends
  * between neighbouring stops over a `softness` share of the gap between them, centred on its midpoint: 1 = a linear blend
@@ -16,7 +18,7 @@ import { KEY_COUNT, KEYBOARD_LAYOUT, MIDI_MIN } from '../keyboard/layout'
  * The hit line has its own colouring (`hitLineColorMode`): `solid` = hitLineColor, `gradient` = its own 2..5 stops
  * along the line, `note` = the notes' colouring (their gradient along the line, else noteColor).
  */
-export type NoteColorMode = 'solid' | 'gradient' | 'random'
+export type NoteColorMode = 'solid' | 'gradient' | 'random' | 'hand'
 export type NoteRandomBy = 'note' | 'pitch' | 'pitchClass'
 
 export const COLOR_STOPS_MAX = 5
@@ -67,6 +69,8 @@ export type NoteColorSettings = Pick<
   | 'noteRandomBy'
   | 'noteRandomSeed'
   | 'noteRandomCount'
+  | 'noteHandColorL'
+  | 'noteHandColorR'
   | (typeof GRADIENT_COLOR_KEYS)[number]
   | (typeof GRADIENT_POS_KEYS)[number]
   | (typeof RANDOM_COLOR_KEYS)[number]
@@ -95,6 +99,8 @@ export const NOTE_COLOR_DEFAULTS = {
   noteRandomColor3: '#ffd040',
   noteRandomColor4: '#80ff60',
   noteRandomColor5: '#b060ff',
+  noteHandColorL: '#ff8a5c',
+  noteHandColorR: '#5ad7ff',
 } satisfies Partial<NoteColorSettings>
 
 export type HitLineColorMode = 'solid' | 'gradient' | 'note'
@@ -257,6 +263,8 @@ export class NoteColorResolver {
   private base: Rgb = [1, 1, 1]
   private tracks = new Map<number, Rgb>()
   private palette: Rgb[] = []
+  private handL: Rgb = [1, 1, 1]
+  private handR: Rgb = [1, 1, 1]
   private keyGradient = new Float32Array(0)
   private out: Rgb = [0, 0, 0]
 
@@ -264,7 +272,10 @@ export class NoteColorResolver {
     this.s = s
     this.base = hexLinear(s.noteColor)
     this.tracks.clear()
-    if (s.noteColorMode === 'random') {
+    if (s.noteColorMode === 'hand') {
+      this.handL = hexLinear(s.noteHandColorL)
+      this.handR = hexLinear(s.noteHandColorR)
+    } else if (s.noteColorMode === 'random') {
       this.palette = RANDOM_COLOR_KEYS.slice(0, clampCount(s.noteRandomCount)).map((k) => hexLinear(s[k]))
     } else if (s.noteColorMode === 'gradient') {
       const g = noteGradient(s)
@@ -287,6 +298,10 @@ export class NoteColorResolver {
     const s = this.s
     if (!s) return this.base
     if (s.noteColorMode === 'random') return this.palette[randomSlot(s, midi, id)] ?? this.base
+    if (s.noteColorMode === 'hand') {
+      const hand = handOfNote(id)
+      return hand === 'L' ? this.handL : hand === 'R' ? this.handR : this.base
+    }
     if (s.noteColorMode === 'gradient') {
       const k = midi - MIDI_MIN
       if (k < 0 || k >= KEY_COUNT) return this.base
@@ -328,6 +343,8 @@ export function noteColoringDeps(s: NoteColorSettings): (string | number)[] {
     s.noteRandomBy,
     s.noteRandomSeed,
     s.noteRandomCount,
+    s.noteHandColorL,
+    s.noteHandColorR,
     ...GRADIENT_COLOR_KEYS.map((k) => s[k]),
     ...GRADIENT_POS_KEYS.map((k) => s[k]),
     ...RANDOM_COLOR_KEYS.map((k) => s[k]),

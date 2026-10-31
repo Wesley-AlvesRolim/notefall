@@ -16,7 +16,7 @@
     "view": "表示",
     "falling": "落下",
     "style": "スタイル",
-    "noteLabels": "音名（ノート）",
+    "noteLabels": "ノートのラベル",
     "keyLabels": "音名（鍵盤）",
     "hands": "手（アルファ版）"
   },
@@ -137,9 +137,6 @@
     "texture": "テクスチャ",
     "solid": "ソリッド",
     "customImage": "カスタム画像",
-    "chooseImage": "画像を選択",
-    "noImage": "画像なし",
-    "clear": "クリア",
     "scale": "スケール",
     "offsetX": "オフセット X",
     "offsetY": "オフセット Y",
@@ -153,8 +150,6 @@
     "title": "背景画像",
     "selectColor": "背景色",
     "chooseImage": "画像を選択",
-    "noImage": "画像なし",
-    "clear": "クリア",
     "fit": "フィットモード",
     "cover": "カバー",
     "contain": "全体を表示",
@@ -177,23 +172,23 @@
   },
   "search": {
     "placeholder": "設定を検索…",
-    "clear": "検索をクリア"
+    "clear": "検索をクリア",
+    "open": "設定を検索",
+    "close": "検索を閉じる"
   },
   "reset": {
-    "button": "リセット",
-    "tooltip": "すべての設定を初期値にリセット",
+    "button": "初期設定に戻す",
+    "keyframe": "このキーフレームをリセット",
+    "tooltip": "すべての設定を初期値に戻す",
+    "tooltipKeyframe": "このキーフレームを初期設定に戻す",
     "doubleClickReset": "ダブルクリックでリセット",
     "resetToDefault": "初期値にリセット",
     "resetRowToDefault": "{{label}} を初期値にリセット"
   },
-  "banner": {
-    "editingDefaultLookPrefix": "編集中: ",
-    "editingDefaultLookHighlight": "デフォルトの見た目",
-    "editingDefaultLookSuffix": " — 最初のピンより前",
-    "editingPin": "ピンを編集中"
-  },
   "color": {
-    "editAria": "{{label}} のカラーを編集"
+    "editAria": "{{label}} のカラーを編集",
+    "inSong": "この曲の色",
+    "hex": "Hex"
   },
   "look": {
     "preset": "プリセット",
@@ -342,11 +337,11 @@
       "solid": "単色",
       "gradient": "グラデーション",
       "random": "ランダム",
-      "note": "ノートに合わせる"
+      "note": "ノートに合わせる",
+      "hand": "手ごと"
     },
     "stops": "色数",
     "stopColor": "色 {{n}}",
-    "stopPosition": "位置 {{n}}",
     "angle": "角度",
     "randomBy": "割り当て",
     "randomBys": {
@@ -364,7 +359,13 @@
     "randomNotesHint": "ランダム配色には合わせる単一の色がないため、ラインは自身の色を使います。",
     "type": "種類",
     "solidColor": "単色",
-    "blackKeyDarkness": "黒鍵ノートの暗さ"
+    "blackKeyDarkness": "黒鍵ノートの暗さ",
+    "lowestKey": "最低音",
+    "highestKey": "最高音",
+    "stopHandle": "色{{n}}の位置",
+    "leftHand": "左手",
+    "rightHand": "右手",
+    "noHand": "手が未設定のノート"
   },
   "tab": {
     "label": "設定の区分",
@@ -386,8 +387,7 @@
     "hide": "詳細設定を閉じる"
   },
   "scope": {
-    "wholeSong": "曲全体",
-    "wholeSongTooltip": "この設定はピンに保存できません。変更すると選択中のピンだけでなく曲全体が変わります。"
+    "note": "時間では変えられません。曲全体に適用されます。"
   },
   "labels": {
     "format": "表記",
@@ -418,9 +418,42 @@
     "outlineColor": "縁取りの色",
     "whiteKeyColor": "白鍵上の色",
     "blackKeyColor": "黒鍵上の色",
-    "keyOffset": "手前からの距離"
+    "keyOffset": "手前からの距離",
+    "show": "表示",
+    "shows": {
+      "pitch": "音名",
+      "finger": "指番号",
+      "both": "両方"
+    }
   },
   "hands": {
     "hint": "試験機能：読み込んだ曲を仮想の手が鍵盤で弾きます。位置や指使いは音符から推定するため、不自然な動きが出ることがあります。速い曲や音の多い曲では、鍵に届かない、ありえない動きになるなどの破綻が起きやすくなります。"
+  },
+  "keyframes": {
+    "title": "{{time}} のキーフレーム",
+    "prev": "前のキーフレーム",
+    "next": "次のキーフレーム",
+    "strip": "この曲のキーフレーム",
+    "set": "このキーフレームで設定",
+    "carried": "前後のキーフレームから補間された値です。押すとここで設定します。",
+    "own": "このキーフレームで設定済み",
+    "close": "カスタマイズを閉じる"
+  },
+  "slider": {
+    "enterValue": "値を入力…",
+    "copy": "コピー",
+    "paste": "ペースト",
+    "value": "値",
+    "apply": "Enter で適用",
+    "back": "戻る"
+  },
+  "panel": {
+    "title": "カスタマイズ"
+  },
+  "image": {
+    "choose": "画像を選ぶ…",
+    "dropHint": "またはここに画像をドロップ",
+    "replace": "差し替える",
+    "remove": "外す"
   }
 }

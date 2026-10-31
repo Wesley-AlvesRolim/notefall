@@ -22,21 +22,21 @@
 export type ConfirmOptions = {
   title: string
   message: string
-  /** Defaults to "OK" if not provided. */
+  /** Defaults to "Continue" if not provided. */
   confirmLabel?: string
   /** Defaults to "Cancel" if not provided. */
   cancelLabel?: string
-  /** Styles the confirm button red so users notice it's a discard / delete. */
+  /** Marks the confirm as a discard / delete; its label should name the consequence. */
   destructive?: boolean
 }
 
-/** Visual accent for an alert. Errors get a rose border, info stays neutral. */
+/** Visual accent for an alert. Both render alike; the tone is informational. */
 export type AlertTone = 'info' | 'error'
 
 export type AlertOptions = {
   title: string
   message: string
-  /** Defaults to "OK". */
+  /** Defaults to "Close". */
   okLabel?: string
   /** Defaults to 'info'. */
   tone?: AlertTone

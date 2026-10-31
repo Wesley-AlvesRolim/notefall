@@ -1,6 +1,8 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import clsx from 'clsx'
 import { useStore, defaultSettings, type Settings } from '../store'
+import { audioEngine } from '../audio/engine'
 import {
   BoundColorRow,
   BoundSliderRow,
@@ -16,9 +18,17 @@ import {
   SliderRow,
   VerticalSliderBands,
   useEffectiveSetting,
+  LookAnchorContext,
+  BoundCountRow,
 } from './controls'
+import { GradientStops } from './look/GradientStops'
+import { PresetSwatch } from './look/PresetSwatch'
+import { ImagePicker } from './look/ImagePicker'
+import { useBarColors, useEffectiveLook } from './look/useLookState'
 import { VelocityCurveEditor } from './VelocityCurveEditor'
-import { Button, FileTrigger, OverlayArrow, Tooltip, TooltipTrigger } from 'react-aria-components'
+import { Button, Icon, IconButton, Panel, GEOMETRY, usePresence } from './kit'
+import { useShell } from './shell/uiState'
+import { useIdle } from './shell/idle'
 import { useCustomTexture } from '../notes/customTexture'
 import { CAMERA_LIMITS } from '../scene/cameraLimits'
 import {
@@ -35,10 +45,8 @@ import {
 } from '../notes/noteColor'
 import {
   NOTE_LOOK_PRESETS,
-  NOTE_LOOK_PRESET_NAMES,
   matchNoteLookPreset,
   lightsForMaterialSwitch,
-  type NoteLookPreset,
 } from '../notes/looks/noteLook'
 
 const EQ_LABELS = ['80', '250', '800', '2.5k', '6k', '12k']
@@ -86,10 +94,8 @@ function atomicUpdate(patch: Partial<Settings>): void {
 function SubGroup({ label, heading, children }: { label: string; heading?: boolean; children: ReactNode }) {
   const query = useSearchQuery()
   return (
-    <div className="ml-1 border-l border-neutral-800 pl-3">
-      {heading && !query && (
-        <div className="px-2 pt-2 pb-0.5 text-[10px] font-medium text-neutral-500">{label}</div>
-      )}
+    <div className="grid gap-3 empty:hidden">
+      {heading && !query && <div className="pt-1 text-label text-ink">{label}</div>}
       <SearchGroup label={label}>{children}</SearchGroup>
     </div>
   )
@@ -153,6 +159,7 @@ function CameraSection() {
         step={0.1}
         onChange={(v) => writeOrbit(v, tiltDeg, yawDeg)}
         defaultValue={def.cameraPos[2]}
+        scopeKey="cameraPos"
       />
       <SliderRow
         label={t('camera.horizontal')}
@@ -163,6 +170,7 @@ function CameraSection() {
         onChange={(v) => writeOrbit(distance, tiltDeg, v)}
         format={(v) => `${Math.round(v)}°`}
         defaultValue={0}
+        scopeKey="cameraPos"
       />
       <SliderRow
         label={t('camera.vertical')}
@@ -173,6 +181,7 @@ function CameraSection() {
         onChange={(v) => writeOrbit(distance, v, yawDeg)}
         format={(v) => `${Math.round(v)}°`}
         defaultValue={0}
+        scopeKey="cameraPos"
       />
       <SliderRow
         label={t('camera.pivotX')}
@@ -182,6 +191,7 @@ function CameraSection() {
         step={0.05}
         onChange={(v) => writePivot(0, v)}
         defaultValue={def.cameraLookAt[0]}
+        scopeKey="cameraLookAt"
       />
       <SliderRow
         label={t('camera.pivotY')}
@@ -191,6 +201,7 @@ function CameraSection() {
         step={0.05}
         onChange={(v) => writePivot(1, v)}
         defaultValue={def.cameraLookAt[1]}
+        scopeKey="cameraLookAt"
       />
       <SliderRow
         label={t('camera.pivotZ')}
@@ -200,6 +211,7 @@ function CameraSection() {
         step={0.05}
         onChange={(v) => writePivot(2, v)}
         defaultValue={def.cameraLookAt[2]}
+        scopeKey="cameraLookAt"
       />
     </>
   )
@@ -221,7 +233,7 @@ function TrackColorRows() {
   return (
     <>
       <BoundColorRow label={tr('coloring.baseColor')} settingKey="noteColor" />
-      <p className="pb-1 text-[10px] leading-snug text-neutral-500">{tr('coloring.baseColorHint')}</p>
+      <p className="text-caption text-ink-faint">{tr('coloring.baseColorHint')}</p>
       {noteTracks.map(({ t, idx }) => {
         const key = String(idx)
         const hasOverride = trackColors[key] !== undefined
@@ -268,17 +280,33 @@ function NoteColorControls() {
           { value: 'solid', label: t('coloring.modes.solid') },
           { value: 'gradient', label: t('coloring.modes.gradient') },
           { value: 'random', label: t('coloring.modes.random') },
+          { value: 'hand', label: t('coloring.modes.hand') },
         ]}
         onChange={(v) => atomicUpdate({ noteColorMode: v })}
         defaultValue={def.noteColorMode}
         scopeKey="noteColorMode"
       />
       {mode === 'solid' && <TrackColorRows />}
+      {mode === 'hand' && (
+        <SubGroup label={t('coloring.modes.hand')}>
+          <BoundColorRow label={t('coloring.leftHand')} settingKey="noteHandColorL" />
+          <BoundColorRow label={t('coloring.rightHand')} settingKey="noteHandColorR" />
+          <BoundColorRow label={t('coloring.noHand')} settingKey="noteColor" />
+        </SubGroup>
+      )}
       {mode === 'gradient' && (
         <SubGroup label={t('coloring.modes.gradient')}>
-          <BoundSliderRow label={t('coloring.stops')} settingKey="noteGradientStops" min={2} max={5} step={1} />
+          <BoundCountRow label={t('coloring.stops')} settingKey="noteGradientStops" min={2} max={5} />
           <BoundSliderRow label={t('coloring.softness')} settingKey="noteGradientSoftness" min={0} max={1} step={0.01} />
-          <GradientStopRows colorKeys={GRADIENT_COLOR_KEYS} posKeys={GRADIENT_POS_KEYS} count={stops} />
+          <GradientStops
+            label={t('coloring.modes.gradient')}
+            colorKeys={GRADIENT_COLOR_KEYS}
+            posKeys={GRADIENT_POS_KEYS}
+            count={stops}
+            softnessKey="noteGradientSoftness"
+            angleKey="noteGradientAngle"
+          />
+          <GradientStopRows colorKeys={GRADIENT_COLOR_KEYS} count={stops} />
           <BoundSliderRow label={t('coloring.angle')} settingKey="noteGradientAngle" min={0} max={360} step={1} />
         </SubGroup>
       )}
@@ -297,7 +325,7 @@ function NoteColorControls() {
             scopeKey="noteRandomBy"
           />
           <BoundSliderRow label={t('coloring.seed')} settingKey="noteRandomSeed" min={0} max={99} step={1} />
-          <BoundSliderRow label={t('coloring.paletteSize')} settingKey="noteRandomCount" min={1} max={5} step={1} />
+          <BoundCountRow label={t('coloring.paletteSize')} settingKey="noteRandomCount" min={1} max={5} />
           {RANDOM_COLOR_KEYS.slice(0, count).map((k, i) => (
             <BoundColorRow key={k} label={t('coloring.paletteColor', { n: i + 1 })} settingKey={k} />
           ))}
@@ -340,6 +368,26 @@ function PitchLabelRows({ target }: { target: 'note' | 'key' }) {
         scopeKey={accidentalKey}
       />
     </>
+  )
+}
+
+/** What note labels show: pitch, finger number (set in the selection card), or both. */
+function NoteLabelContentRow() {
+  const { t } = useTranslation('inspector')
+  const content = useStore((st) => st.settings.noteLabelContent)
+  return (
+    <SelectRow
+      label={t('labels.show')}
+      value={content}
+      options={[
+        { value: 'pitch', label: t('labels.shows.pitch') },
+        { value: 'finger', label: t('labels.shows.finger') },
+        { value: 'both', label: t('labels.shows.both') },
+      ]}
+      onChange={(v) => atomicUpdate({ noteLabelContent: v })}
+      defaultValue={def.noteLabelContent}
+      scopeKey="noteLabelContent"
+    />
   )
 }
 
@@ -387,6 +435,8 @@ function TextureControls() {
   // Older projects may still carry the removed 'liquid' / 'gem' values.
   const noteTexture = useStore((st) => (st.settings.noteTexture === 'custom' ? 'custom' : 'solid'))
   const customFileName = useCustomTexture((st) => st.fileName)
+  const customBytes = useCustomTexture((st) => st.fileBytes)
+  const customMime = useCustomTexture((st) => st.fileMime)
   const setCustomFile = useCustomTexture((st) => st.setFromFile)
   return (
     <>
@@ -402,31 +452,15 @@ function TextureControls() {
       />
       <SubGroup label={t('texture.texture')}>
         {noteTexture === 'custom' && (
-          <div className="flex items-center gap-2 px-2 py-1">
-            <FileTrigger
-              acceptedFileTypes={['image/*']}
-              onSelect={async (e) => {
-                if (!e) return
-                const file = Array.from(e)[0]
-                if (file) await setCustomFile(file)
-              }}
-            >
-              <Button className="rounded bg-neutral-800 px-2 py-1 text-[10px] text-neutral-200 hover:bg-neutral-700">
-                {t('texture.chooseImage')}
-              </Button>
-            </FileTrigger>
-            <span className="flex-1 truncate text-[10px] text-neutral-400">
-              {customFileName ?? t('texture.noImage')}
-            </span>
-            {customFileName && (
-              <Button
-                onPress={() => setCustomFile(null)}
-                className="rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
-              >
-                {t('texture.clear')}
-              </Button>
-            )}
-          </div>
+          <ImagePicker
+            label={t('texture.customImage')}
+            fileName={customFileName}
+            bytes={customBytes}
+            mime={customMime}
+            accept={['image/*']}
+            onPick={(file) => setCustomFile(file)}
+            onClear={() => void setCustomFile(null)}
+          />
         )}
         {noteTexture === 'custom' && (
           <>
@@ -540,6 +574,8 @@ function NoteLookControls() {
       time === null ? undefined : st.settings.settingsKeyframes.find((p) => Math.abs(p.time - time) < 1e-6)
     return matchNoteLookPreset({ ...st.settings, ...kf?.settings }) ?? 'custom'
   })
+  const lookSettings = useEffectiveLook()
+  const barColors = useBarColors()
   const material = useStore((st) => st.settings.noteMaterial)
   const shape = useStore((st) => st.settings.noteShape)
   const pattern = useStore((st) => st.settings.notePattern)
@@ -547,19 +583,15 @@ function NoteLookControls() {
   const bump = useStore((st) => st.settings.noteBump)
   return (
     <>
-      <SelectRow<NoteLookPreset | 'custom'>
-        label={t('look.preset')}
-        value={preset}
-        options={[
-          ...NOTE_LOOK_PRESET_NAMES.map((name) => ({ value: name, label: t(`look.presets.${name}`) })),
-          ...(preset === 'custom' ? [{ value: 'custom' as const, label: t('look.presets.custom') }] : []),
-        ]}
-        onChange={(v) => {
-          if (v !== 'custom') atomicUpdate(NOTE_LOOK_PRESETS[v])
-        }}
-        defaultValue="plain"
-        scopeKey="noteMaterial"
-      />
+      <SearchableBlock label={t('look.preset')}>
+        <PresetSwatch
+          label={t('look.preset')}
+          value={preset}
+          look={lookSettings}
+          colors={barColors}
+          onChange={(v) => atomicUpdate(NOTE_LOOK_PRESETS[v])}
+        />
+      </SearchableBlock>
       <SelectRow
         label={t('look.material')}
         value={material}
@@ -761,6 +793,8 @@ function NoteLookControls() {
 function BackgroundImageControls() {
   const { t } = useTranslation('inspector')
   const fileName = useStageBackground((state) => state.fileName)
+  const bgBytes = useStageBackground((state) => state.fileBytes)
+  const bgMime = useStageBackground((state) => state.fileMime)
   const setBackgroundFile = useStageBackground((state) => state.setFromFile)
   const fit = useStore((state) => state.settings.backgroundImageFit)
 
@@ -781,57 +815,17 @@ function BackgroundImageControls() {
 
   return (
     <>
-      {/* Heading, then everything that belongs to the image indented
-          under a hairline rule. Without it the framing rows sat at the
-          same level as the background colour and the preview switch, so
-          nothing said they only apply to the image.
-
-          The rule lives on a wrapper whose children all return null when
-          the Inspector's search filter excludes them — the wrapper then
-          collapses to zero height and the rule goes with it, instead of
-          being left behind over empty space. */}
-      <SearchableBlock label={t('backgroundImage.title')}>
-        {/* The label is on its own line: label + button + filename +
-            Clear do not fit across the ~260px row without the filename
-            crowding Clear. Same shape as the EQ block. */}
-        <div className="select-none py-1 text-xs text-neutral-400">
-          {t('backgroundImage.title')}
-        </div>
-      </SearchableBlock>
-      <SubGroup label={t('backgroundImage.title')}>
-        <SearchableBlock
-          label={`${t('backgroundImage.title')} ${t('backgroundImage.chooseImage')}`}
-        >
-          <div className="flex items-center gap-2 py-1">
-            <FileTrigger
-              acceptedFileTypes={[...STAGE_BACKGROUND_ACCEPTED_TYPES]}
-              onSelect={async (event) => {
-                if (!event) return
-                const file = Array.from(event)[0]
-                if (file) await chooseImage(file)
-              }}
-            >
-              <Button className="shrink-0 rounded bg-neutral-800 px-2 py-1 text-[10px] text-neutral-200 hover:bg-neutral-700">
-                {t('backgroundImage.chooseImage')}
-              </Button>
-            </FileTrigger>
-            {/* A long filename still truncates; the title attribute keeps
-                the whole of it reachable on hover. */}
-            <span
-              className="min-w-0 flex-1 truncate text-[10px] text-neutral-400"
-              title={fileName ?? undefined}
-            >
-              {fileName ?? t('backgroundImage.noImage')}
-            </span>
-            {fileName && (
-              <Button
-                onPress={() => void setBackgroundFile(null)}
-                className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
-              >
-                {t('backgroundImage.clear')}
-              </Button>
-            )}
-          </div>
+      <SubGroup heading label={t('backgroundImage.title')}>
+        <SearchableBlock label={`${t('backgroundImage.title')} ${t('backgroundImage.chooseImage')}`}>
+          <ImagePicker
+            label={t('backgroundImage.title')}
+            fileName={fileName}
+            bytes={bgBytes}
+            mime={bgMime}
+            accept={STAGE_BACKGROUND_ACCEPTED_TYPES}
+            onPick={chooseImage}
+            onClear={() => void setBackgroundFile(null)}
+          />
         </SearchableBlock>
         {fileName && (
           <>
@@ -930,9 +924,11 @@ function HitLineColorControls() {
   const { t } = useTranslation('inspector')
   const mode = useStore((st) => st.settings.hitLineColorMode)
   const stops = useStore((st) => Math.round(st.settings.hitLineGradientStops))
-  // random note colours have no single colour to follow: the line keeps its own
+  // random / by-hand note colours have no single colour to follow: the line keeps its own
   const ownColor = useStore(
-    (st) => st.settings.hitLineColorMode === 'solid' || (st.settings.hitLineColorMode === 'note' && st.settings.noteColorMode === 'random'),
+    (st) =>
+      st.settings.hitLineColorMode === 'solid' ||
+      (st.settings.hitLineColorMode === 'note' && (st.settings.noteColorMode === 'random' || st.settings.noteColorMode === 'hand')),
   )
   return (
     <>
@@ -949,7 +945,7 @@ function HitLineColorControls() {
         scopeKey="hitLineColorMode"
       />
       {mode === 'note' && ownColor && (
-        <p className="pb-1 text-[10px] leading-snug text-neutral-500">{t('coloring.randomNotesHint')}</p>
+        <p className="text-caption text-ink-faint">{t('coloring.randomNotesHint')}</p>
       )}
       {ownColor && (
         <SubGroup label={t('coloring.color')}>
@@ -958,9 +954,16 @@ function HitLineColorControls() {
       )}
       {mode === 'gradient' && (
         <SubGroup label={t('coloring.modes.gradient')}>
-          <BoundSliderRow label={t('coloring.stops')} settingKey="hitLineGradientStops" min={2} max={5} step={1} />
+          <BoundCountRow label={t('coloring.stops')} settingKey="hitLineGradientStops" min={2} max={5} />
           <BoundSliderRow label={t('coloring.softness')} settingKey="hitLineGradientSoftness" min={0} max={1} step={0.01} />
-          <GradientStopRows colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS} posKeys={HIT_LINE_GRADIENT_POS_KEYS} count={stops} />
+          <GradientStops
+            label={t('coloring.modes.gradient')}
+            colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS}
+            posKeys={HIT_LINE_GRADIENT_POS_KEYS}
+            count={stops}
+            softnessKey="hitLineGradientSoftness"
+          />
+          <GradientStopRows colorKeys={HIT_LINE_GRADIENT_COLOR_KEYS} count={stops} />
         </SubGroup>
       )}
     </>
@@ -968,29 +971,19 @@ function HitLineColorControls() {
 }
 
 /** Colour + position rows of the first `count` gradient stops. */
+/** One colour row per active stop. Positions are set by dragging the stops on the gradient bar. */
 function GradientStopRows({
   colorKeys,
-  posKeys,
   count,
 }: {
   colorKeys: readonly (typeof GRADIENT_COLOR_KEYS | typeof HIT_LINE_GRADIENT_COLOR_KEYS)[number][]
-  posKeys: readonly (typeof GRADIENT_POS_KEYS | typeof HIT_LINE_GRADIENT_POS_KEYS)[number][]
   count: number
 }) {
   const { t } = useTranslation('inspector')
   return (
     <>
       {colorKeys.slice(0, count).map((k, i) => (
-        <Fragment key={k}>
-          <BoundColorRow label={t('coloring.stopColor', { n: i + 1 })} settingKey={k} />
-          <BoundSliderRow
-            label={t('coloring.stopPosition', { n: i + 1 })}
-            settingKey={posKeys[i]}
-            min={0}
-            max={1}
-            step={0.01}
-          />
-        </Fragment>
+        <BoundColorRow key={k} label={t('coloring.stopColor', { n: i + 1 })} settingKey={k} />
       ))}
     </>
   )
@@ -1002,7 +995,7 @@ function EqRow() {
   const eqBands = useStore((st) => st.settings.eqBands)
   return (
     <SearchableBlock label={t('eq.block')}>
-      <div className="pt-1 text-[10px] text-neutral-400">{t('eq.label')}</div>
+      <div className="select-none text-ink-muted">{t('eq.label')}</div>
       <VerticalSliderBands
         values={eqBands}
         labels={EQ_LABELS}
@@ -1075,65 +1068,86 @@ function PreDelayRow() {
   )
 }
 
-// Indicator of WHAT the Inspector controls currently edit. The target
-// follows the PLAYHEAD (nearest pin at/before the head — see
-// `PinTargetSync`): move the timeline and the banner retargets. Before
-// the first pin there's no target → the base "default look" (held
-// separately; editing a pin never touches it). No pins at all → nothing
-// to disambiguate.
-function PinEditingBanner() {
+// ── Keyframes header ─────────────────────────────────────────────────
+//
+// Shown ONLY while the playhead sits on a keyframe (`editingKeyframeTime`, kept by `PinTargetSync`: the nearest
+// keyframe at or before the head). Names it, steps to its neighbours and shows all keyframes across the song.
+
+const fmtClock = (sec: number) => {
+  const s = Math.max(0, Math.floor(sec))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+/** Select a keyframe and move the playhead to it (the same two calls as a click on the timeline's keyframe lane). */
+function goToKeyframe(time: number): void {
+  const t = Math.max(0, time)
+  useStore.getState().selectKeyframe(time)
+  audioEngine.seek(t)
+  useStore.getState().setCurrentTime(t)
+}
+
+function KeyframesHeader() {
   const { t } = useTranslation('inspector')
   const keyframes = useStore((st) => st.settings.settingsKeyframes)
-  const editingTime = useStore((st) => st.editingKeyframeTime)
-  if (keyframes.length === 0) return null
-  const idx =
-    editingTime !== null
-      ? keyframes.findIndex((p) => Math.abs(p.time - editingTime) < 1e-6)
-      : -1
-  // Understated status strip — same neutral divider as the rest of
-  // the Inspector chrome, faint sky wash, sky diamond echoing the pin
-  // marker, mono time echoing the timeline readouts.
-  if (idx < 0) {
-    // Head before the first pin → editing the separate base default.
-    return (
-      <div className="flex items-center gap-2 border-b border-neutral-800 bg-sky-500/[0.04] px-3 py-1.5">
-        <span
-          aria-hidden
-          className="h-[7px] w-[7px] shrink-0 rotate-45 rounded-[1px] ring-1 ring-neutral-500"
-        />
-        <span className="flex-1 truncate text-[11px] text-neutral-400">
-          {t('banner.editingDefaultLookPrefix')}
-          <span className="text-neutral-300">
-            {t('banner.editingDefaultLookHighlight')}
-          </span>
-          {t('banner.editingDefaultLookSuffix')}
+  const editing = useStore((st) => st.editingKeyframeTime)
+  const songDuration = useStore((st) => st.song?.duration ?? 0)
+  const currentTime = useStore((st) => st.currentTime)
+  if (editing === null) return null
+  const idx = keyframes.findIndex((p) => Math.abs(p.time - editing) < 1e-6)
+  if (idx < 0) return null
+  const last = keyframes[keyframes.length - 1].time
+  const span = Math.max(songDuration, last, currentTime, 1)
+  const pct = (sec: number) => `${Math.min(100, Math.max(0, (sec / span) * 100))}%`
+  const prev = keyframes[idx - 1]
+  const next = keyframes[idx + 1]
+  return (
+    <div className="grid gap-2 border-b border-glass-edge py-2.5 pl-4 pr-3">
+      <div className="flex items-center gap-1.5">
+        <Icon.KeyframeIcon className="h-3.5 w-3.5 flex-none" />
+        <span className="text-heading">{t('keyframes.title', { time: fmtClock(keyframes[idx].time) })}</span>
+        <span className="ml-auto flex flex-none items-center">
+          <IconButton size="sm" label={t('keyframes.prev')} isDisabled={!prev} onPress={() => prev && goToKeyframe(prev.time)}>
+            <Icon.ChevronLeftIcon />
+          </IconButton>
+          <IconButton size="sm" label={t('keyframes.next')} isDisabled={!next} onPress={() => next && goToKeyframe(next.time)}>
+            <Icon.ChevronRightIcon />
+          </IconButton>
         </span>
       </div>
-    )
-  }
-  const s = Math.max(0, keyframes[idx].time)
-  const m = Math.floor(s / 60)
-  const r = s - m * 60
-  const stamp = `${m}:${r.toFixed(2).padStart(5, '0')}`
-  return (
-    <div className="flex items-center gap-2 border-b border-neutral-800 bg-sky-500/[0.06] px-3 py-1.5">
-      <span
-        aria-hidden
-        className="h-[7px] w-[7px] shrink-0 rotate-45 rounded-[1px] bg-sky-300"
-      />
-      <span className="flex-1 truncate text-[11px] text-neutral-300">
-        {t('banner.editingPin')}{' '}
-        <span className="font-mono text-sky-300">
-          {idx + 1}/{keyframes.length}
-        </span>{' '}
-        <span className="font-mono text-[10px] text-neutral-500">{stamp}</span>
-      </span>
+      <div role="group" aria-label={t('keyframes.strip')} className="px-1.5">
+        <div className="relative h-4">
+          <div aria-hidden className="absolute inset-x-0 top-[7px] h-0.5 rounded-[1px] bg-fill-track" />
+          {keyframes.map((k, i) => (
+            <button
+              key={k.time}
+              type="button"
+              aria-label={fmtClock(k.time)}
+              aria-current={i === idx || undefined}
+              onClick={() => goToKeyframe(k.time)}
+              className="nf-focus absolute top-0 -ml-2 grid h-4 w-4 cursor-pointer place-items-center rounded-field p-0 outline-none"
+              style={{ left: pct(k.time) }}
+            >
+              <span
+                className={clsx(
+                  'h-2.5 w-2.5 rotate-45 rounded-[2px] border-[1.5px]',
+                  i === idx ? 'border-ink bg-ink' : 'border-ink-muted',
+                )}
+              />
+            </button>
+          ))}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -bottom-0.5 -top-0.5 -ml-px w-0.5 bg-ink-muted"
+            style={{ left: pct(currentTime) }}
+          />
+        </div>
+      </div>
     </div>
   )
 }
 
 type InspectorTab = 'notes' | 'effects' | 'keyboard' | 'scene' | 'sound'
-const INSPECTOR_TABS: InspectorTab[] = ['notes', 'effects', 'scene', 'keyboard', 'sound']
+const INSPECTOR_TABS: InspectorTab[] = ['notes', 'effects', 'keyboard', 'scene', 'sound']
 const TAB_STORAGE_KEY = 'inspector.tab'
 
 function readStoredTab(): InspectorTab {
@@ -1168,7 +1182,7 @@ function TabPanel({ title, active, children }: { title: string; active: boolean;
   return (
     <div ref={ref} hidden={!!q && !hasMatch}>
       {q && (
-        <div className="pt-3 pb-1 text-[10px] font-medium uppercase tracking-wider text-sky-300/80">{title}</div>
+        <div className="px-4 pt-3 text-caption text-ink-faint">{title}</div>
       )}
       {children}
     </div>
@@ -1176,10 +1190,23 @@ function TabPanel({ title, active, children }: { title: string; active: boolean;
 }
 
 export function Inspector() {
+  const lookOpen = useShell((st) => st.lookOpen)
+  const { mounted, leaving } = usePresence(lookOpen)
+  if (!mounted) return null
+  return <LookPanel leaving={leaving} />
+}
+
+function LookPanel({ leaving }: { leaving: boolean }) {
+  // Closing the panel under the pointer must not leave the chrome hidden.
+  useEffect(() => () => useIdle.getState().setOverPanel(false), [])
   const { t } = useTranslation('inspector')
   const reset = useStore((st) => st.resetSettings)
+  const keyframeTargeted = useStore((st) => st.editingKeyframeTime !== null)
+  const setLookOpen = useShell((st) => st.setLookOpen)
   const [query, setQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [tab, setTabState] = useState<InspectorTab>(readStoredTab)
+  const panelRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const setTab = (next: InspectorTab) => {
     setTabState(next)
@@ -1191,294 +1218,342 @@ export function Inspector() {
       /* storage unavailable — the tab is just not remembered */
     }
   }
-  const searching = query.trim() !== ''
+  const closeSearch = () => {
+    setQuery('')
+    setSearchOpen(false)
+  }
 
   return (
-    <aside className="flex h-full w-72 flex-col border-l border-neutral-800 bg-neutral-950">
-      <div className="flex items-center gap-2 border-b border-neutral-800 px-3 py-2">
-        <div className="relative flex-1">
-          <svg
-            className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-neutral-500"
-            width="11"
-            height="11"
-            viewBox="0 0 16 16"
-            fill="none"
-            aria-hidden
-          >
-            <circle cx="7" cy="7" r="4.5" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M11 11L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('search.placeholder')}
-            spellCheck={false}
-            className="w-full rounded border border-neutral-800 bg-neutral-900 py-1 pl-7 pr-7 text-xs text-neutral-200 placeholder-neutral-500 outline-none focus:border-sky-600"
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery('')}
-              aria-label={t('search.clear')}
-              className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-neutral-500 outline-none hover:bg-neutral-800 hover:text-neutral-200"
-            >
-              <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden>
-                <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
+    <LookAnchorContext.Provider value={panelRef}>
+      <Panel
+        ref={panelRef}
+        aria-label={t('panel.title')}
+        className={clsx('fixed z-20 nf-enter-right', leaving && 'nf-leaving')}
+        onPointerEnter={(e) => e.pointerType === 'mouse' && useIdle.getState().setOverPanel(true)}
+        onPointerLeave={() => useIdle.getState().setOverPanel(false)}
+        style={{
+          right: GEOMETRY.EDGE,
+          top: GEOMETRY.EDGE + GEOMETRY.BAR + GEOMETRY.GAP,
+          bottom: GEOMETRY.PILL_BOTTOM + GEOMETRY.PILL + GEOMETRY.GAP,
+          width: GEOMETRY.PANEL,
+        }}
+      >
+        <div className="flex flex-none items-center gap-1 border-b border-glass-edge p-2">
+          {searchOpen ? (
+            <div className="relative flex-1">
+              <Icon.SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+              <input
+                type="text"
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === 'Escape') closeSearch()
+                }}
+                aria-label={t('search.open')}
+                placeholder={t('search.placeholder')}
+                spellCheck={false}
+                className="nf-focus h-8 w-full rounded-tab bg-fill-field pl-9 pr-9 text-body text-ink outline-none placeholder:text-ink-faint"
+              />
+              <IconButton
+                size="sm"
+                label={t('search.clear')}
+                tooltip={false}
+                onPress={closeSearch}
+                className="absolute right-0.5 top-1/2 -translate-y-1/2 text-ink-muted"
+              >
+                <Icon.CloseIcon />
+              </IconButton>
+            </div>
+          ) : (
+            <>
+              <SegmentedTabs tab={tab} onChange={setTab} />
+              <IconButton size="sm" label={t('search.open')} onPress={() => setSearchOpen(true)}>
+                <Icon.SearchIcon />
+              </IconButton>
+            </>
           )}
         </div>
-        <TooltipTrigger delay={300}>
+        <KeyframesHeader />
+        <SearchProvider query={query}>
+          <div ref={scrollRef} className="scroll-thin min-h-0 flex-1 overflow-y-auto">
+            <TabPanel title={t('tab.notes')} active={tab === 'notes'}>
+              <Section title={t('section.style')}>
+                <NoteLookControls />
+              </Section>
+              <Section title={t('section.coloring')}>
+                <NoteColorControls />
+              </Section>
+              <Section title={t('section.falling')} enabledKey="notesEnabled">
+                <BoundSliderRow label={t('row.fallTime')} settingKey="fallDurationSec" min={0.5} max={8} step={0.1} />
+                <BoundSliderRow label={t('row.width')} settingKey="noteWidthScale" min={0.2} max={1.5} step={0.01} />
+                <BoundSliderRow label={t('row.opacity')} settingKey="noteOpacity" min={0} max={1} step={0.01} />
+                <BoundSliderRow label={t('row.minLength')} settingKey="noteMinLength" min={0} max={0.6} step={0.01} />
+                <FallDirectionRow />
+              </Section>
+              <Section title={t('section.noteLabels')} enabledKey="noteLabelsEnabled">
+                <NoteLabelContentRow />
+                <PitchLabelRows target="note" />
+                <NoteLabelPositionRow />
+                <BoundSliderRow label={t('labels.size')} settingKey="noteLabelSize" min={0.3} max={2} step={0.01} />
+                <BoundColorRow label={t('row.color')} settingKey="noteLabelColor" />
+                <BoundSliderRow label={t('row.opacity')} settingKey="noteLabelOpacity" min={0} max={1} step={0.01} />
+                <BoundSliderRow label={t('labels.outlineWidth')} settingKey="noteLabelOutlineWidth" min={0} max={1} step={0.01} />
+                <BoundColorRow label={t('labels.outlineColor')} settingKey="noteLabelOutlineColor" />
+                <BoundSliderRow label={t('labels.offset')} settingKey="noteLabelOffset" min={0} max={1} step={0.01} />
+              </Section>
+              <Section title={t('section.texture')} defaultOpen={false}>
+                <TextureControls />
+              </Section>
+            </TabPanel>
+
+            <TabPanel title={t('tab.effects')} active={tab === 'effects'}>
+              <Section title={t('section.hitLine')} enabledKey="hitLineEnabled">
+                <HitLineColorControls />
+                <BoundSliderRow label={t('row.barIntensity')} settingKey="hitLineIntensity" min={0} max={8} step={0.05} />
+                <BoundSliderRow label={t('row.barThickness')} settingKey="hitLineThickness" min={0} max={1} step={0.01} />
+                <BoundSliderRow label={t('row.barHalo')} settingKey="hitLineBarHalo" min={0} max={6} step={0.05} />
+                <BoundSwitchRow label={t('row.waveEnabled')} settingKey="hitLineWaveEnabled" />
+                <Detail id="hitLine">
+                  <BoundSliderRow label={t('row.barY')} settingKey="hitLineBarY" min={-1} max={1} step={0.01} />
+                  <SubGroup heading label={t('group.wave')}>
+                    <BoundSliderRow label={t('row.waveIntensity')} settingKey="hitLineWaveIntensity" min={0} max={4} step={0.05} />
+                    <BoundSliderRow label={t('row.waveY')} settingKey="hitLineWaveY" min={-1} max={1} step={0.01} />
+                    <BoundSliderRow label={t('row.waveAmplitude')} settingKey="hitLineWaveAmplitude" min={0} max={1} step={0.01} />
+                    <BoundSliderRow label={t('row.waveScale')} settingKey="hitLineWaveScale" min={0.5} max={200} step={0.5} />
+                    <BoundSliderRow label={t('row.waveScrollSpeed')} settingKey="hitLineWaveScrollSpeed" min={-3} max={3} step={0.05} />
+                    <BoundSliderRow label={t('row.waveMorphSpeed')} settingKey="hitLineWaveMorphSpeed" min={0} max={3} step={0.05} />
+                    <BoundSliderRow label={t('row.waveThickness')} settingKey="hitLineWaveThickness" min={0} max={0.2} step={0.005} />
+                    <BoundSliderRow label={t('row.waveHalo')} settingKey="hitLineWaveHalo" min={0} max={3} step={0.05} />
+                    <BoundSliderRow label={t('row.waveGrain')} settingKey="hitLineWaveGrain" min={0} max={3} step={0.05} />
+                  </SubGroup>
+                </Detail>
+              </Section>
+
+              <Section title={t('section.particles')} enabledKey="particlesEnabled">
+                <FollowColorRows followKey="particleColorFollowNote" colorKey="particleColor" />
+                <BoundSliderRow label={t('row.particleCount')} settingKey="particleDotCount" min={0} max={10} step={0.05} />
+                <BoundSliderRow label={t('row.particleSize')} settingKey="particleDotSize" min={0} max={3} step={0.01} />
+                <BoundSliderRow label={t('row.particleOpacity')} settingKey="particleDotOpacity" min={0} max={1} step={0.01} />
+                <BoundSliderRow label={t('row.particleBrightness')} settingKey="particleDotBrightness" min={0} max={3} step={0.01} />
+                <BoundSliderRow label={t('row.particleLife')} settingKey="particleLife" min={0.1} max={3} step={0.05} />
+                <BoundSliderRow label={t('row.particleRise')} settingKey="particleRise" min={0} max={4} step={0.05} />
+                <Detail id="particles">
+                  <ParticleBlendingRow />
+                  <BoundSliderRow label={t('row.particleSpread')} settingKey="particleSpread" min={0} max={2} step={0.01} />
+                  <BoundSliderRow label={t('row.emitterWidth')} settingKey="particleEmitterWidth" min={0} max={3} step={0.05} />
+                  <SubGroup heading label={t('group.turbulence')}>
+                    <BoundSliderRow label={t('row.flowStrength')} settingKey="particleFlowStrength" min={0} max={4} step={0.05} />
+                    <BoundSliderRow label={t('row.flowX')} settingKey="particleFlowX" min={0} max={2} step={0.01} />
+                    <BoundSliderRow label={t('row.flowY')} settingKey="particleFlowY" min={0} max={2} step={0.01} />
+                    <BoundSliderRow label={t('row.flowZ')} settingKey="particleFlowZ" min={0} max={2} step={0.01} />
+                    <BoundSliderRow label={t('row.octaves')} settingKey="particleFlowOctaves" min={1} max={4} step={1} />
+                    <BoundSliderRow label={t('row.octaveScale')} settingKey="particleFlowOctaveScale" min={0.5} max={3} step={0.01} />
+                    <BoundSliderRow label={t('row.octaveGain')} settingKey="particleFlowOctaveGain" min={0} max={2} step={0.01} />
+                    <BoundSliderRow label={t('row.flowFrequency')} settingKey="particleFlowFrequency" min={0.1} max={5} step={0.05} />
+                    <BoundSliderRow label={t('row.flowEvolution')} settingKey="particleFlowEvolution" min={0} max={5} step={0.05} />
+                    <BoundSliderRow label={t('row.flowFollow')} settingKey="particleFlowFollow" min={0} max={1} step={0.01} />
+                  </SubGroup>
+                  <SubGroup heading label={t('group.motion')}>
+                    <BoundSliderRow label={t('row.launchSpeed')} settingKey="particleLaunchSpeed" min={0} max={5} step={0.05} />
+                    <BoundSliderRow label={t('row.randomDirection')} settingKey="particleRandomDirection" min={0} max={1} step={0.01} />
+                    <BoundSliderRow label={t('row.randomSpeed')} settingKey="particleRandomSpeed" min={0} max={1} step={0.01} />
+                    <BoundSliderRow label={t('row.airFriction')} settingKey="particleAirFriction" min={0} max={2} step={0.01} />
+                    <BoundSliderRow label={t('row.gravityCurl')} settingKey="particleGravityCurl" min={0} max={2} step={0.01} />
+                    <BoundSliderRow label={t('row.twirl')} settingKey="particleTwirl" min={0} max={3} step={0.05} />
+                    <BoundSliderRow label={t('row.twirlVariance')} settingKey="particleTwirlVariance" min={0} max={2} step={0.05} />
+                    <BoundSwitchRow label={t('row.motionTrail')} settingKey="particleMotionTrail" />
+                  </SubGroup>
+                  <SubGroup heading label={t('group.rays')}>
+                    <BoundSwitchRow label={t('row.enabled')} settingKey="particleRaysEnabled" />
+                    <BoundSliderRow label={t('row.rayLength')} settingKey="particleRayLength" min={0} max={4} step={0.05} />
+                    <BoundSliderRow label={t('row.rayOpacity')} settingKey="particleRayOpacity" min={0} max={1} step={0.01} />
+                    <BoundSliderRow label={t('row.rayAngle')} settingKey="particleRayAngle" min={-180} max={180} step={1} />
+                    <BoundSliderRow label={t('row.raySpread')} settingKey="particleRaySpread" min={-180} max={180} step={1} />
+                  </SubGroup>
+                  <SubGroup heading label={t('group.fog')}>
+                    <BoundSwitchRow label={t('row.enabled')} settingKey="particleFogEnabled" />
+                    <BoundSliderRow label={t('row.fogCount')} settingKey="particleFogCount" min={0} max={5} step={0.05} />
+                    <BoundSliderRow label={t('row.fogOpacity')} settingKey="particleFogOpacity" min={0} max={1} step={0.01} />
+                  </SubGroup>
+                </Detail>
+              </Section>
+
+              {/* Bloom is a global post-process applied AFTER all the visual
+                  emitters above, so it closes the tab. */}
+              <Section title={t('section.bloom')} enabledKey="bloomEnabled">
+                <BoundSliderRow label={t('row.bloomIntensity')} settingKey="bloomIntensity" min={0} max={4} step={0.05} />
+                <BoundSliderRow label={t('row.bloomThreshold')} settingKey="bloomThreshold" min={0} max={1} step={0.01} />
+                <BoundSliderRow label={t('row.bloomRadius')} settingKey="bloomRadius" min={0} max={1} step={0.01} />
+                <BoundSliderRow label={t('row.bloomSmoothing')} settingKey="bloomSmoothing" min={0} max={1} step={0.01} />
+              </Section>
+
+              <Section title={t('section.flash')} enabledKey="flashEnabled">
+                <FollowColorRows followKey="flashFollowNote" colorKey="flashColor" />
+                <BoundSliderRow label={t('row.flashBrightness')} settingKey="flashBrightness" min={0} max={1} step={0.01} />
+                <BoundSliderRow label={t('row.flashIntensity')} settingKey="flashIntensity" min={0} max={2} step={0.05} />
+                <BoundSliderRow label={t('row.flashSize')} settingKey="flashSize" min={0.3} max={5} step={0.05} />
+                <Detail id="flash">
+                  <BoundSliderRow label={t('row.flashWidth')} settingKey="flashWidth" min={0.3} max={5} step={0.05} />
+                  <BoundSliderRow label={t('row.flashHalo')} settingKey="flashHaloWidth" min={0} max={2} step={0.05} />
+                </Detail>
+              </Section>
+            </TabPanel>
+
+            <TabPanel title={t('tab.scene')} active={tab === 'scene'}>
+              <Section title={t('section.background')}>
+                {/* Colour and image are siblings, not alternatives: the image
+                    composites OVER the colour, which still shows through at
+                    opacity < 1 and in whatever the fit / scale / offset leaves
+                    uncovered. The framing rows appear only once an image is
+                    loaded, the way `TextureControls` gates its rows. */}
+                <BoundColorRow
+                  label={t('backgroundImage.selectColor')}
+                  settingKey="backgroundColor"
+                />
+                <BackgroundImageControls />
+              </Section>
+              <Section title={t('section.camera')}>
+                <CameraSection />
+                <p className="text-caption text-ink-faint">{t('camera.hint')}</p>
+              </Section>
+              <Section title={t('section.view')}>
+                <BoundSwitchRow label={t('row.octaveLines')} settingKey="octaveLinesEnabled" />
+                <BoundSwitchRow label={t('row.highFpsPreview')} settingKey="previewHighFps" />
+              </Section>
+            </TabPanel>
+
+            <TabPanel title={t('tab.keyboard')} active={tab === 'keyboard'}>
+              <Section title={t('section.keyboard')}>
+                <BoundSliderRow label={t('row.keyboardY')} settingKey="keyboardScreenY" min={0} max={1} step={0.01} />
+                <BoundSliderRow label={t('row.brightness')} settingKey="keyboardBrightness" min={0} max={2} step={0.01} />
+                <BoundColorRow label={t('row.whiteKeys')} settingKey="whiteKeyColor" />
+                <BoundColorRow label={t('row.blackKeys')} settingKey="blackKeyColor" />
+                <BoundColorRow label={t('row.wood')} settingKey="woodColor" />
+              </Section>
+              <Section title={t('section.keyLabels')} enabledKey="keyLabelsEnabled">
+                <KeyLabelsModeRow />
+                <PitchLabelRows target="key" />
+                <BoundSliderRow label={t('labels.size')} settingKey="keyLabelSize" min={0.3} max={2} step={0.01} />
+                <BoundSliderRow label={t('row.opacity')} settingKey="keyLabelOpacity" min={0} max={1} step={0.01} />
+                <BoundColorRow label={t('labels.whiteKeyColor')} settingKey="keyLabelWhiteColor" />
+                <BoundColorRow label={t('labels.blackKeyColor')} settingKey="keyLabelBlackColor" />
+                <BoundSliderRow label={t('labels.keyOffset')} settingKey="keyLabelOffset" min={0} max={0.8} step={0.01} />
+              </Section>
+              <Section title={t('section.keyGlow')} enabledKey="keyGlowEnabled">
+                <FollowColorRows followKey="keyGlowFollowNote" colorKey="keyGlowColor" />
+                <BoundSliderRow label={t('row.glowIntensity')} settingKey="keyGlowIntensity" min={0} max={5} step={0.05} />
+                <BoundSliderRow label={t('row.glowDecay')} settingKey="keyGlowDecay" min={0.05} max={2} step={0.01} />
+              </Section>
+              <Section title={t('section.hands')} enabledKey="handsEnabled">
+                <p className="text-caption text-ink-faint">{t('hands.hint')}</p>
+                <BoundSliderRow label={t('row.handsHumanize')} settingKey="handsHumanize" min={0} max={1} step={0.01} />
+                <BoundSliderRow label={t('row.handsFlashLight')} settingKey="handsFlashLight" min={0} max={2} step={0.05} />
+                <BoundSwitchRow label={t('row.handsMotionBlur')} settingKey="handsMotionBlur" />
+                <BoundSliderRow label={t('row.handsBlurSamples')} settingKey="handsBlurSamples" min={2} max={16} step={1} />
+              </Section>
+            </TabPanel>
+
+            <TabPanel title={t('tab.sound')} active={tab === 'sound'}>
+              <Section title={t('section.audio')}>
+                <BoundSwitchRow label={t('row.pedalEnabled')} settingKey="pedalEnabled" />
+                <BoundSliderRow label={t('row.transpose')} settingKey="transpose" min={-24} max={24} step={1} />
+                <BoundSliderRow label={t('row.release')} settingKey="releaseTime" min={0.01} max={1.5} step={0.01} />
+                <EqRow />
+                <Detail id="audio">
+                  <BoundSliderRow label={t('row.detune')} settingKey="samplerDetune" min={-100} max={100} step={1} />
+                  <VelocityCurveEditor />
+                  <BoundSliderRow label={t('row.velocityCompensation')} settingKey="velocityCompensation" min={0} max={1} step={0.05} />
+                </Detail>
+              </Section>
+              <Section title={t('section.reverb')} enabledKey="reverbEnabled">
+                <BoundSliderRow label={t('row.reverbDry')} settingKey="reverbDry" min={0} max={2} step={0.01} />
+                <BoundSliderRow label={t('row.reverbWet')} settingKey="reverbWet" min={0} max={2} step={0.01} />
+                <BoundSliderRow label={t('row.reverbSize')} settingKey="reverbSize" min={0.3} max={5} step={0.1} />
+                <BoundSliderRow label={t('row.reverbDecayTime')} settingKey="reverbDecayTime" min={0.1} max={8} step={0.05} />
+                <Detail id="reverb">
+                  <BoundSliderRow label={t('row.reverbDecay')} settingKey="reverbDecay" min={0} max={6} step={0.05} />
+                  <PreDelayRow />
+                  <BoundSliderRow label={t('row.reverbDamping')} settingKey="reverbDamping" min={0} max={0.99} step={0.01} />
+                  <BoundSliderRow label={t('row.reverbHiCut')} settingKey="reverbHiCut" min={500} max={20000} step={100} />
+                  <BoundSliderRow label={t('row.reverbLowCut')} settingKey="reverbLowCut" min={20} max={1000} step={10} />
+                </Detail>
+              </Section>
+            </TabPanel>
+          </div>
+        </SearchProvider>
+        <div className="flex flex-none items-center justify-between gap-2 border-t border-glass-edge px-2 py-1.5">
           <Button
+            variant="quiet"
+            size="sm"
+            icon={<Icon.ResetIcon />}
             onPress={() => reset()}
-            className="shrink-0 rounded px-2 py-0.5 text-[10px] text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
+            className="text-ink-muted"
           >
-            {t('reset.button')}
+            {keyframeTargeted ? t('reset.keyframe') : t('reset.button')}
           </Button>
-          <Tooltip
-            offset={6}
-            className="rounded-md border border-neutral-700 bg-neutral-800 px-2 py-1 text-[10px] text-neutral-200 shadow-lg outline-none data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out"
-          >
-            <OverlayArrow>
-              <svg viewBox="0 0 8 8" width={8} height={8} className="fill-neutral-800 stroke-neutral-700 group-data-[placement=bottom]/popover:rotate-180">
-                <path d="M0 0 L4 4 L8 0" />
-              </svg>
-            </OverlayArrow>
-            {t('reset.tooltip')}
-          </Tooltip>
-        </TooltipTrigger>
-      </div>
-      <div role="tablist" aria-label={t('tab.label')} className={`flex border-b border-neutral-800 px-1 ${searching ? 'opacity-40' : ''}`}>
-        {INSPECTOR_TABS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => {
-              setTab(id)
-              setQuery('')
-            }}
-            className={`flex-1 whitespace-nowrap border-b-2 px-0.5 py-1.5 text-[11px] tracking-tight outline-none transition-colors focus-visible:text-white ${
-              tab === id && !searching
-                ? 'border-sky-500 text-neutral-100'
-                : 'border-transparent text-neutral-500 hover:text-neutral-300'
-            }`}
-          >
-            {t(`tab.${id}`)}
-          </button>
-        ))}
-      </div>
-      <PinEditingBanner />
-      <SearchProvider query={query}>
-      <div ref={scrollRef} className="scroll-thin flex-1 overflow-y-auto px-3 pb-6">
-        <TabPanel title={t('tab.notes')} active={tab === 'notes'}>
-          <Section title={t('section.style')}>
-            <NoteLookControls />
-          </Section>
-          <Section title={t('section.coloring')}>
-            <NoteColorControls />
-          </Section>
-          <Section title={t('section.falling')} enabledKey="notesEnabled">
-            <BoundSliderRow label={t('row.fallTime')} settingKey="fallDurationSec" min={0.5} max={8} step={0.1} />
-            <BoundSliderRow label={t('row.width')} settingKey="noteWidthScale" min={0.2} max={1.5} step={0.01} />
-            <BoundSliderRow label={t('row.opacity')} settingKey="noteOpacity" min={0} max={1} step={0.01} />
-            <BoundSliderRow label={t('row.minLength')} settingKey="noteMinLength" min={0} max={0.6} step={0.01} />
-            <FallDirectionRow />
-          </Section>
-          <Section title={t('section.noteLabels')} enabledKey="noteLabelsEnabled">
-            <PitchLabelRows target="note" />
-            <NoteLabelPositionRow />
-            <BoundSliderRow label={t('labels.size')} settingKey="noteLabelSize" min={0.3} max={2} step={0.01} />
-            <BoundColorRow label={t('row.color')} settingKey="noteLabelColor" />
-            <BoundSliderRow label={t('row.opacity')} settingKey="noteLabelOpacity" min={0} max={1} step={0.01} />
-            <BoundSliderRow label={t('labels.outlineWidth')} settingKey="noteLabelOutlineWidth" min={0} max={1} step={0.01} />
-            <BoundColorRow label={t('labels.outlineColor')} settingKey="noteLabelOutlineColor" />
-            <BoundSliderRow label={t('labels.offset')} settingKey="noteLabelOffset" min={0} max={1} step={0.01} />
-          </Section>
-          <Section title={t('section.texture')} defaultOpen={false}>
-            <TextureControls />
-          </Section>
-        </TabPanel>
+          <IconButton size="sm" label={t('keyframes.close')} onPress={() => setLookOpen(false)}>
+            <Icon.CloseIcon />
+          </IconButton>
+        </div>
+      </Panel>
+    </LookAnchorContext.Provider>
+  )
+}
 
-        <TabPanel title={t('tab.effects')} active={tab === 'effects'}>
-          <Section title={t('section.hitLine')} enabledKey="hitLineEnabled">
-            <HitLineColorControls />
-            <BoundSliderRow label={t('row.barIntensity')} settingKey="hitLineIntensity" min={0} max={8} step={0.05} />
-            <BoundSliderRow label={t('row.barThickness')} settingKey="hitLineThickness" min={0} max={1} step={0.01} />
-            <BoundSliderRow label={t('row.barHalo')} settingKey="hitLineBarHalo" min={0} max={6} step={0.05} />
-            <BoundSwitchRow label={t('row.waveEnabled')} settingKey="hitLineWaveEnabled" />
-            <Detail id="hitLine">
-              <BoundSliderRow label={t('row.barY')} settingKey="hitLineBarY" min={-1} max={1} step={0.01} />
-              <SubGroup heading label={t('group.wave')}>
-                <BoundSliderRow label={t('row.waveIntensity')} settingKey="hitLineWaveIntensity" min={0} max={4} step={0.05} />
-                <BoundSliderRow label={t('row.waveY')} settingKey="hitLineWaveY" min={-1} max={1} step={0.01} />
-                <BoundSliderRow label={t('row.waveAmplitude')} settingKey="hitLineWaveAmplitude" min={0} max={1} step={0.01} />
-                <BoundSliderRow label={t('row.waveScale')} settingKey="hitLineWaveScale" min={0.5} max={200} step={0.5} />
-                <BoundSliderRow label={t('row.waveScrollSpeed')} settingKey="hitLineWaveScrollSpeed" min={-3} max={3} step={0.05} />
-                <BoundSliderRow label={t('row.waveMorphSpeed')} settingKey="hitLineWaveMorphSpeed" min={0} max={3} step={0.05} />
-                <BoundSliderRow label={t('row.waveThickness')} settingKey="hitLineWaveThickness" min={0} max={0.2} step={0.005} />
-                <BoundSliderRow label={t('row.waveHalo')} settingKey="hitLineWaveHalo" min={0} max={3} step={0.05} />
-                <BoundSliderRow label={t('row.waveGrain')} settingKey="hitLineWaveGrain" min={0} max={3} step={0.05} />
-              </SubGroup>
-            </Detail>
-          </Section>
-
-          <Section title={t('section.particles')} enabledKey="particlesEnabled">
-            <FollowColorRows followKey="particleColorFollowNote" colorKey="particleColor" />
-            <BoundSliderRow label={t('row.particleCount')} settingKey="particleDotCount" min={0} max={10} step={0.05} />
-            <BoundSliderRow label={t('row.particleSize')} settingKey="particleDotSize" min={0} max={3} step={0.01} />
-            <BoundSliderRow label={t('row.particleOpacity')} settingKey="particleDotOpacity" min={0} max={1} step={0.01} />
-            <BoundSliderRow label={t('row.particleBrightness')} settingKey="particleDotBrightness" min={0} max={3} step={0.01} />
-            <BoundSliderRow label={t('row.particleLife')} settingKey="particleLife" min={0.1} max={3} step={0.05} />
-            <BoundSliderRow label={t('row.particleRise')} settingKey="particleRise" min={0} max={4} step={0.05} />
-            <Detail id="particles">
-              <ParticleBlendingRow />
-              <BoundSliderRow label={t('row.particleSpread')} settingKey="particleSpread" min={0} max={2} step={0.01} />
-              <BoundSliderRow label={t('row.emitterWidth')} settingKey="particleEmitterWidth" min={0} max={3} step={0.05} />
-              <SubGroup heading label={t('group.turbulence')}>
-                <BoundSliderRow label={t('row.flowStrength')} settingKey="particleFlowStrength" min={0} max={4} step={0.05} />
-                <BoundSliderRow label={t('row.flowX')} settingKey="particleFlowX" min={0} max={2} step={0.01} />
-                <BoundSliderRow label={t('row.flowY')} settingKey="particleFlowY" min={0} max={2} step={0.01} />
-                <BoundSliderRow label={t('row.flowZ')} settingKey="particleFlowZ" min={0} max={2} step={0.01} />
-                <BoundSliderRow label={t('row.octaves')} settingKey="particleFlowOctaves" min={1} max={4} step={1} />
-                <BoundSliderRow label={t('row.octaveScale')} settingKey="particleFlowOctaveScale" min={0.5} max={3} step={0.01} />
-                <BoundSliderRow label={t('row.octaveGain')} settingKey="particleFlowOctaveGain" min={0} max={2} step={0.01} />
-                <BoundSliderRow label={t('row.flowFrequency')} settingKey="particleFlowFrequency" min={0.1} max={5} step={0.05} />
-                <BoundSliderRow label={t('row.flowEvolution')} settingKey="particleFlowEvolution" min={0} max={5} step={0.05} />
-                <BoundSliderRow label={t('row.flowFollow')} settingKey="particleFlowFollow" min={0} max={1} step={0.01} />
-              </SubGroup>
-              <SubGroup heading label={t('group.motion')}>
-                <BoundSliderRow label={t('row.launchSpeed')} settingKey="particleLaunchSpeed" min={0} max={5} step={0.05} />
-                <BoundSliderRow label={t('row.randomDirection')} settingKey="particleRandomDirection" min={0} max={1} step={0.01} />
-                <BoundSliderRow label={t('row.randomSpeed')} settingKey="particleRandomSpeed" min={0} max={1} step={0.01} />
-                <BoundSliderRow label={t('row.airFriction')} settingKey="particleAirFriction" min={0} max={2} step={0.01} />
-                <BoundSliderRow label={t('row.gravityCurl')} settingKey="particleGravityCurl" min={0} max={2} step={0.01} />
-                <BoundSliderRow label={t('row.twirl')} settingKey="particleTwirl" min={0} max={3} step={0.05} />
-                <BoundSliderRow label={t('row.twirlVariance')} settingKey="particleTwirlVariance" min={0} max={2} step={0.05} />
-                <BoundSwitchRow label={t('row.motionTrail')} settingKey="particleMotionTrail" />
-              </SubGroup>
-              <SubGroup heading label={t('group.rays')}>
-                <BoundSwitchRow label={t('row.enabled')} settingKey="particleRaysEnabled" />
-                <BoundSliderRow label={t('row.rayLength')} settingKey="particleRayLength" min={0} max={4} step={0.05} />
-                <BoundSliderRow label={t('row.rayOpacity')} settingKey="particleRayOpacity" min={0} max={1} step={0.01} />
-                <BoundSliderRow label={t('row.rayAngle')} settingKey="particleRayAngle" min={-180} max={180} step={1} />
-                <BoundSliderRow label={t('row.raySpread')} settingKey="particleRaySpread" min={-180} max={180} step={1} />
-              </SubGroup>
-              <SubGroup heading label={t('group.fog')}>
-                <BoundSwitchRow label={t('row.enabled')} settingKey="particleFogEnabled" />
-                <BoundSliderRow label={t('row.fogCount')} settingKey="particleFogCount" min={0} max={5} step={0.05} />
-                <BoundSliderRow label={t('row.fogOpacity')} settingKey="particleFogOpacity" min={0} max={1} step={0.01} />
-              </SubGroup>
-            </Detail>
-          </Section>
-
-          {/* Bloom is a global post-process applied AFTER all the visual
-              emitters above, so it closes the tab. */}
-          <Section title={t('section.bloom')} enabledKey="bloomEnabled">
-            <BoundSliderRow label={t('row.bloomIntensity')} settingKey="bloomIntensity" min={0} max={4} step={0.05} />
-            <BoundSliderRow label={t('row.bloomThreshold')} settingKey="bloomThreshold" min={0} max={1} step={0.01} />
-            <BoundSliderRow label={t('row.bloomRadius')} settingKey="bloomRadius" min={0} max={1} step={0.01} />
-            <BoundSliderRow label={t('row.bloomSmoothing')} settingKey="bloomSmoothing" min={0} max={1} step={0.01} />
-          </Section>
-
-          <Section title={t('section.flash')} enabledKey="flashEnabled">
-            <FollowColorRows followKey="flashFollowNote" colorKey="flashColor" />
-            <BoundSliderRow label={t('row.flashBrightness')} settingKey="flashBrightness" min={0} max={1} step={0.01} />
-            <BoundSliderRow label={t('row.flashIntensity')} settingKey="flashIntensity" min={0} max={2} step={0.05} />
-            <BoundSliderRow label={t('row.flashSize')} settingKey="flashSize" min={0.3} max={5} step={0.05} />
-            <Detail id="flash">
-              <BoundSliderRow label={t('row.flashWidth')} settingKey="flashWidth" min={0.3} max={5} step={0.05} />
-              <BoundSliderRow label={t('row.flashHalo')} settingKey="flashHaloWidth" min={0} max={2} step={0.05} />
-            </Detail>
-          </Section>
-        </TabPanel>
-
-        <TabPanel title={t('tab.scene')} active={tab === 'scene'}>
-          <Section title={t('section.background')}>
-            {/* Colour and image are siblings, not alternatives: the image
-                composites OVER the colour, which still shows through at
-                opacity < 1 and in whatever the fit / scale / offset leaves
-                uncovered. The framing rows appear only once an image is
-                loaded, the way `TextureControls` gates its rows. */}
-            <BoundColorRow
-              label={t('backgroundImage.selectColor')}
-              settingKey="backgroundColor"
-            />
-            <BackgroundImageControls />
-          </Section>
-          <Section title={t('section.camera')}>
-            <CameraSection />
-            <p className="px-2 pt-1 pb-2 text-[10px] leading-snug text-neutral-500">
-              {t('camera.hint')}
-            </p>
-          </Section>
-          <Section title={t('section.view')}>
-            <BoundSwitchRow label={t('row.octaveLines')} settingKey="octaveLinesEnabled" />
-            <BoundSwitchRow label={t('row.highFpsPreview')} settingKey="previewHighFps" />
-          </Section>
-        </TabPanel>
-
-        <TabPanel title={t('tab.keyboard')} active={tab === 'keyboard'}>
-          <Section title={t('section.keyboard')}>
-            <BoundSliderRow label={t('row.keyboardY')} settingKey="keyboardScreenY" min={0} max={1} step={0.01} />
-            <BoundSliderRow label={t('row.brightness')} settingKey="keyboardBrightness" min={0} max={2} step={0.01} />
-            <BoundColorRow label={t('row.whiteKeys')} settingKey="whiteKeyColor" />
-            <BoundColorRow label={t('row.blackKeys')} settingKey="blackKeyColor" />
-            <BoundColorRow label={t('row.wood')} settingKey="woodColor" />
-          </Section>
-          <Section title={t('section.keyLabels')} enabledKey="keyLabelsEnabled">
-            <KeyLabelsModeRow />
-            <PitchLabelRows target="key" />
-            <BoundSliderRow label={t('labels.size')} settingKey="keyLabelSize" min={0.3} max={2} step={0.01} />
-            <BoundSliderRow label={t('row.opacity')} settingKey="keyLabelOpacity" min={0} max={1} step={0.01} />
-            <BoundColorRow label={t('labels.whiteKeyColor')} settingKey="keyLabelWhiteColor" />
-            <BoundColorRow label={t('labels.blackKeyColor')} settingKey="keyLabelBlackColor" />
-            <BoundSliderRow label={t('labels.keyOffset')} settingKey="keyLabelOffset" min={0} max={0.8} step={0.01} />
-          </Section>
-          <Section title={t('section.keyGlow')} enabledKey="keyGlowEnabled">
-            <FollowColorRows followKey="keyGlowFollowNote" colorKey="keyGlowColor" />
-            <BoundSliderRow label={t('row.glowIntensity')} settingKey="keyGlowIntensity" min={0} max={5} step={0.05} />
-            <BoundSliderRow label={t('row.glowDecay')} settingKey="keyGlowDecay" min={0.05} max={2} step={0.01} />
-          </Section>
-          <Section title={t('section.hands')} enabledKey="handsEnabled">
-            <p className="px-2 pb-1 text-[10px] leading-snug text-neutral-500">{t('hands.hint')}</p>
-            <BoundSliderRow label={t('row.handsHumanize')} settingKey="handsHumanize" min={0} max={1} step={0.01} />
-            <BoundSliderRow label={t('row.handsFlashLight')} settingKey="handsFlashLight" min={0} max={2} step={0.05} />
-            <BoundSwitchRow label={t('row.handsMotionBlur')} settingKey="handsMotionBlur" />
-            <BoundSliderRow label={t('row.handsBlurSamples')} settingKey="handsBlurSamples" min={2} max={16} step={1} />
-          </Section>
-        </TabPanel>
-
-        <TabPanel title={t('tab.sound')} active={tab === 'sound'}>
-          <Section title={t('section.audio')}>
-            <BoundSwitchRow label={t('row.pedalEnabled')} settingKey="pedalEnabled" />
-            <BoundSliderRow label={t('row.transpose')} settingKey="transpose" min={-24} max={24} step={1} />
-            <BoundSliderRow label={t('row.release')} settingKey="releaseTime" min={0.01} max={1.5} step={0.01} />
-            <EqRow />
-            <Detail id="audio">
-              <BoundSliderRow label={t('row.detune')} settingKey="samplerDetune" min={-100} max={100} step={1} />
-              <VelocityCurveEditor />
-              <BoundSliderRow label={t('row.velocityCompensation')} settingKey="velocityCompensation" min={0} max={1} step={0.05} />
-            </Detail>
-          </Section>
-          <Section title={t('section.reverb')} enabledKey="reverbEnabled">
-            <BoundSliderRow label={t('row.reverbDry')} settingKey="reverbDry" min={0} max={2} step={0.01} />
-            <BoundSliderRow label={t('row.reverbWet')} settingKey="reverbWet" min={0} max={2} step={0.01} />
-            <BoundSliderRow label={t('row.reverbSize')} settingKey="reverbSize" min={0.3} max={5} step={0.1} />
-            <BoundSliderRow label={t('row.reverbDecayTime')} settingKey="reverbDecayTime" min={0.1} max={8} step={0.05} />
-            <Detail id="reverb">
-              <BoundSliderRow label={t('row.reverbDecay')} settingKey="reverbDecay" min={0} max={6} step={0.05} />
-              <PreDelayRow />
-              <BoundSliderRow label={t('row.reverbDamping')} settingKey="reverbDamping" min={0} max={0.99} step={0.01} />
-              <BoundSliderRow label={t('row.reverbHiCut')} settingKey="reverbHiCut" min={500} max={20000} step={100} />
-              <BoundSliderRow label={t('row.reverbLowCut')} settingKey="reverbLowCut" min={20} max={1000} step={10} />
-            </Detail>
-          </Section>
-        </TabPanel>
-      </div>
-      </SearchProvider>
-    </aside>
+/** The five areas as tabs; the selected fill slides to the chosen tab. Arrow keys move between tabs. */
+function SegmentedTabs({ tab, onChange }: { tab: InspectorTab; onChange: (t: InspectorTab) => void }) {
+  const { t } = useTranslation('inspector')
+  const listRef = useRef<HTMLDivElement>(null)
+  const [pill, setPill] = useState<{ x: number; w: number } | null>(null)
+  useLayoutEffect(() => {
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-tab="${tab}"]`)
+    if (el) setPill({ x: el.offsetLeft, w: el.offsetWidth })
+  }, [tab])
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const i = INSPECTOR_TABS.indexOf(tab)
+    const next =
+      e.key === 'ArrowRight' ? INSPECTOR_TABS[(i + 1) % INSPECTOR_TABS.length]
+      : e.key === 'ArrowLeft' ? INSPECTOR_TABS[(i + INSPECTOR_TABS.length - 1) % INSPECTOR_TABS.length]
+      : null
+    if (!next) return
+    e.preventDefault()
+    onChange(next)
+    listRef.current?.querySelector<HTMLElement>(`[data-tab="${next}"]`)?.focus()
+  }
+  return (
+    <div
+      ref={listRef}
+      role="tablist"
+      aria-label={t('tab.label')}
+      onKeyDown={onKeyDown}
+      className="relative flex min-w-0 flex-1 gap-0.5"
+    >
+      {pill && (
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 rounded-tab bg-fill-selected transition-[transform,width] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none"
+          style={{ width: pill.w, transform: `translateX(${pill.x}px)` }}
+        />
+      )}
+      {INSPECTOR_TABS.map((id) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          data-tab={id}
+          tabIndex={tab === id ? 0 : -1}
+          aria-selected={tab === id}
+          onClick={() => onChange(id)}
+          className={clsx(
+            'nf-focus relative h-8 flex-auto cursor-pointer whitespace-nowrap rounded-tab px-1.5 text-center text-label outline-none transition-colors duration-150',
+            tab === id ? 'text-ink' : 'text-ink-muted hover:text-ink',
+          )}
+        >
+          {t(`tab.${id}`)}
+        </button>
+      ))}
+    </div>
   )
 }

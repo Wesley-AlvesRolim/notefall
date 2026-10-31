@@ -13,6 +13,7 @@ const HIT_PARTICLES_KEYS = [
   'noteColor',
   'noteMinLength',
   'noteLabelsEnabled',
+  'noteLabelContent',
   'noteLabelFormat',
   'noteLabelAccidental',
   'particleAirFriction',
@@ -600,6 +601,7 @@ export function HitParticles() {
     // labelled notes are drawn at least as long as their label
     const labelSettings = {
       noteLabelsEnabled: settings.noteLabelsEnabled,
+      noteLabelContent: settings.noteLabelContent,
       noteLabelFormat: settings.noteLabelFormat,
       noteLabelAccidental: settings.noteLabelAccidental,
       noteLabelSize: rs.noteLabelSize,
