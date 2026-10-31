@@ -7,7 +7,7 @@ import { Inspector } from './Inspector'
 import { Viewport } from './Viewport'
 import { TimelineEditor } from './TimelineEditor'
 import { ConfirmModal } from './ConfirmModal'
-import { ToastHost, GEOMETRY, useReleaseFocusAfterPointer } from './kit'
+import { Icon, ToastHost, GEOMETRY, useReleaseFocusAfterPointer } from './kit'
 import { ShortcutSheet } from './shell/ShortcutSheet'
 import { TransportPill } from './shell/TransportPill'
 import { LoadingIsland } from './shell/LoadingIsland'
@@ -318,11 +318,13 @@ export function Layout() {
           the user releases on. */}
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0 z-50 hidden items-center justify-center bg-scrim group-data-[drop-target]/dropzone:flex"
+        className="nf-enter-fade pointer-events-none fixed inset-0 z-50 hidden flex-col items-center justify-center gap-1 bg-scrim text-center group-data-[drop-target]/dropzone:flex"
       >
-        <div className="nf-glass-strong rounded-round px-6 py-3 text-title text-ink">
-          {t('drop.indicator')}
-        </div>
+        {/* the whole window is the drop target: a dashed frame just inside its edge */}
+        <span className="absolute inset-2 rounded-panel border-[1.5px] border-dashed border-ink-muted" />
+        <Icon.UploadIcon className="mb-1 h-7 w-7 text-ink" />
+        <span className="text-title text-ink">{t('drop.title')}</span>
+        <span className="text-ink-muted">{t('drop.hint')}</span>
       </div>
     </DropZone>
     </UNSAFE_PortalProvider>

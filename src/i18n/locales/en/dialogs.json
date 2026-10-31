@@ -61,7 +61,8 @@
     "couldNotLoadAudioTitle": "Could not load audio",
     "unsupportedTitle": "Unsupported file type",
     "unsupportedMessage": "\"{{name}}\" is not a supported format. Drop a .nfz project, .mid / .midi, or .mp3 / .wav audio file.",
-    "indicator": "Drop to load (.mid / .midi / .nfz / .mp3 / .wav)"
+    "title": "Drop to open",
+    "hint": "MIDI, notefall project, or audio for the accompaniment"
   },
   "fastForward": {
     "rate": "2x"

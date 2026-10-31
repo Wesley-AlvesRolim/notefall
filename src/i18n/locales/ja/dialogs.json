@@ -61,7 +61,8 @@
     "couldNotLoadAudioTitle": "音声を読み込めませんでした",
     "unsupportedTitle": "未対応のファイル形式です",
     "unsupportedMessage": "「{{name}}」は対応していない形式です。.nfz プロジェクト、.mid / .midi、または .mp3 / .wav の音声ファイルをドロップしてください。",
-    "indicator": "ドロップして読み込み（.mid / .midi / .nfz / .mp3 / .wav）"
+    "title": "ドロップして開く",
+    "hint": "MIDI、notefall のプロジェクト、または伴奏用の音声"
   },
   "fastForward": {
     "rate": "2x"

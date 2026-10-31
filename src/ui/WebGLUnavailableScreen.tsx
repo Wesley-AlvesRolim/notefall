@@ -1,7 +1,6 @@
 import { useTranslation } from 'react-i18next'
-
-import { Button, LogoMark } from './kit'
-import { MonitorIcon } from './icons'
+import { Button } from './kit'
+import { ScreenFrame } from './shell/ScreenFrame'
 
 /**
  * Shown when the browser can't provide a WebGL context — typically
@@ -17,40 +16,27 @@ import { MonitorIcon } from './icons'
  */
 export function WebGLUnavailableScreen() {
   const { t } = useTranslation('screens')
+  const steps = [
+    ['chromeLabel', 'chromePath', 'chromeSetting', 'chromeAfter'],
+    ['firefoxLabel', 'firefoxPath', 'firefoxSetting', 'firefoxAfter'],
+    ['safariLabel', 'safariPath', 'safariSetting', 'safariAfter'],
+  ] as const
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-auto bg-canvas px-6 py-8 text-ink">
-      <div className="nf-glass-strong grid w-full max-w-[460px] justify-items-center gap-3 rounded-panel px-6 py-8 text-center">
-        <span className="flex items-center gap-2 text-title">
-          <LogoMark className="h-6 w-6" />
-          notefall
-        </span>
-        <MonitorIcon className="mt-2 h-10 w-10 text-ink-muted" />
-        <h1 className="m-0 text-display">{t('webgl.title')}</h1>
-        <p className="m-0 max-w-sm text-ink-muted">{t('webgl.body')}</p>
-
-        <div className="mt-2 grid w-full gap-1.5 rounded-field bg-fill-well px-4 py-3 text-left">
-          <p className="m-0 text-heading">{t('webgl.howToTitle')}</p>
-          <p className="m-0 text-ink-muted">
-            <span className="text-ink">{t('webgl.chromeLabel')}</span> {t('webgl.chromePath')}{' '}
-            <span className="text-ink">{t('webgl.chromeSetting')}</span>
-            {t('webgl.chromeAfter')}
+    <ScreenFrame title={t('webgl.title')}>
+      <p className="-mt-2 mb-0 text-ink-muted">{t('webgl.body')}</p>
+      <div className="grid gap-2">
+        <p className="m-0 text-heading">{t('webgl.howToTitle')}</p>
+        {steps.map(([label, path, setting, after]) => (
+          <p key={label} className="m-0 text-ink-muted">
+            <span className="text-ink">{t(`webgl.${label}`)}</span> {t(`webgl.${path}`)}{' '}
+            <span className="text-ink">{t(`webgl.${setting}`)}</span>
+            {t(`webgl.${after}`)}
           </p>
-          <p className="m-0 text-ink-muted">
-            <span className="text-ink">{t('webgl.firefoxLabel')}</span> {t('webgl.firefoxPath')}{' '}
-            <span className="text-ink">{t('webgl.firefoxSetting')}</span>
-            {t('webgl.firefoxAfter')}
-          </p>
-          <p className="m-0 text-ink-muted">
-            <span className="text-ink">{t('webgl.safariLabel')}</span> {t('webgl.safariPath')}{' '}
-            <span className="text-ink">{t('webgl.safariSetting')}</span>
-            {t('webgl.safariAfter')}
-          </p>
-        </div>
-
-        <Button variant="primary" className="mt-1" onPress={() => window.location.reload()}>
-          {t('webgl.reload')}
-        </Button>
+        ))}
       </div>
-    </div>
+      <Button variant="primary" className="w-fit" onPress={() => window.location.reload()}>
+        {t('webgl.reload')}
+      </Button>
+    </ScreenFrame>
   )
 }

@@ -348,12 +348,12 @@ export function CustomizeIcon(props: IconProps) {
   )
 }
 
-/** Reset the camera: a camera whose lens is a "go back" arrow. */
+/** Reset the camera: the pre-redesign 3D-view cube (corners and centre of a cube), redrawn in line. */
 export function ResetViewIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
-      <path d='M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1.5-2h6l1.5 2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z' />
-      <path d='M9.2 13a2.8 2.8 0 1 0 .9-2.05' /><path d='M9.9 9.3v1.75h1.75' />
+      <path d='M9.75 4.3L12 3l2.25 1.3M17.55 6.2l2.25 1.3v2.6M19.8 13.9v2.6l-2.25 1.3M14.25 19.7L12 21l-2.25-1.3M6.45 17.8L4.2 16.5v-2.6M4.2 10.1V7.5l2.25-1.3' />
+      <path d='M12 12v3.2M12 12l-2.8-1.6M12 12l2.8-1.6' />
     </svg>
   )
 }

@@ -1,7 +1,9 @@
 {
   "unsupported": {
-    "title": "This device is not supported",
-    "body": "Please open notefall on a desktop or tablet in landscape orientation — a wider screen is required."
+    "title": "Open notefall on a computer",
+    "body": "notefall needs a wider screen: a desktop, or a tablet held sideways. Send yourself the link and open it there.",
+    "copyLink": "Copy link",
+    "copied": "Link copied"
   },
   "webgl": {
     "title": "Hardware acceleration is required",
