@@ -30,7 +30,7 @@ import clsx from 'clsx'
 import { useTranslation } from 'react-i18next'
 import { defaultSettings, useStore, type Settings } from '../store'
 import { isAnimatableKey, resolveSettingsAt } from '../midi/settingsKeyframes'
-import { Disclosure, Icon, Menu, MenuItem, MenuSeparator, Popover, SegmentedControl, Select, Switch } from './kit'
+import { Disclosure, GEOMETRY, Icon, Menu, MenuItem, MenuSeparator, Popover, SegmentedControl, Select, Switch } from './kit'
 
 /**
  * Value an Inspector control should DISPLAY: the SELECTED pin's
@@ -695,7 +695,17 @@ function usePickerPlacement(triggerRef: RefObject<HTMLElement | null>) {
     if (a && r) setCrossOffset(Math.max(0, r.getBoundingClientRect().top - a.getBoundingClientRect().top - 8))
   }
   return anchor
-    ? { measure, props: { triggerRef: anchor as RefObject<HTMLElement>, placement: 'left top' as const, offset: 12, crossOffset } }
+    ? {
+        measure,
+        props: {
+          triggerRef: anchor as RefObject<HTMLElement>,
+          placement: 'left top' as const,
+          offset: 12,
+          crossOffset,
+          // Keep the picker above the transport pill (never glass on glass).
+          containerPadding: GEOMETRY.PILL_BOTTOM + GEOMETRY.PILL + GEOMETRY.GAP,
+        },
+      }
     : { measure, props: { placement: 'bottom end' as const, offset: 8, crossOffset: 0 } }
 }
 
