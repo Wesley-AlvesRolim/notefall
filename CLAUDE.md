@@ -206,20 +206,9 @@ Zip wrapper present from day 1 even with only `manifest.json`, so audio-sync (fu
 
 `App.tsx` mounts `<Layout />` only when (a) WebGL context available (`detectWebGLAvailable()` probes webgl2 then webgl) and (b) viewport ≥ 1024 px. WebGL takes precedence over viewport-size.
 
-Full-bleed canvas with floating glass surfaces (design system: **`docs/design-system.md`** — read it before UI work; tokens in `ui/kit/tokens.css`, exposed as Tailwind names — `text-ink-muted`, `bg-fill-field`, `rounded-panel`, …; no raw colours, nothing under 12 px, no mono, no uppercase labels, no accent hue).
+**Design system: `docs/design-system.md`** is the single source for how everything outside the canvas looks and behaves (layout, tokens by name, kit components, motion, focus, copy, what never to do). It is imported by `src/ui/CLAUDE.md`, so it loads whenever files under `src/ui/` are read. Values live only in code: `ui/kit/tokens.css` (+ the Tailwind names in `tailwind.config.js`) and `GEOMETRY` in `ui/kit/Surface.tsx`; don't restate them here or in the doc.
 
-```
-┌ song island ─────────┐                     ┌ input island ──────────┐
-│ ◆notefall File name ↶↷│   loading island    │ MIDI  ● Record ▾ │ Export│
-└──────────────────────┘                     └────────────────────────┘
-        Viewport: 16:9 letterboxed, absolute inset-0     ┌ Customize  ┐
-        (StartCard centred when no song)                  │ (lookOpen) │
-┌ Timeline panel (timelineEditorOpen) ──────────────┐     │            │
-└────────────────────────────────────────────────────┘     └────────────┘
-                 ( transport pill: ⏮ ⟲ ▶ ⟳ time scrub │ speed vol … │ Customize Timeline )
-```
-
-Islands sit 16 px from the edges, the pill 20 px from the bottom; the Customize panel docks right (top 80, bottom 100, 344 wide); the Timeline floats above the pill and stops left of the Customize panel; toasts (`kit/Toast`, one at a time) sit above the pill. While playing, the islands and pill fade after 2 s without pointer movement (`shell/idle.ts`); they also step aside while the mouse is over the Customize panel (playing or paused), so the picture can be judged while tuning. The timeline panel starts closed (`timelineEditorOpen` default false) and opening a project keeps the window's current state, since the floating panel sits over the keyboard. Fullscreen fullscreens the app root (`shell/fullscreen.ts`), so the chrome comes along; `UNSAFE_PortalProvider` in Layout keeps react-aria overlays inside it.
+Implementation notes the doc doesn't cover: the canvas is `absolute inset-0` in `Layout` with every surface `fixed` over it; the chrome's idle fade and the over-Customize hide are one store (`shell/idle.ts`, `useChromeHidden`); fullscreen targets the app root (`shell/fullscreen.ts`) and `UNSAFE_PortalProvider` in `Layout` keeps react-aria overlays inside it; `timelineEditorOpen` defaults to false and `loadProject` keeps the window's current value (it's view state that happens to live in `Settings`).
 
 **Inspector** = the Customize panel (`ui/Inspector.tsx`, parts in `ui/controls.tsx`; open state `useShell.lookOpen`, toggled from the pill): five tabs (Notes / Effects / Keyboard / Scene / Sound, remembered in localStorage); each tab is a stack of `Section` cards whose header carries the feature's on/off switch (`enabledKey`; off = body closed) and sticks while scrolling; everyday rows first, the rest behind a `Detail` disclosure. Search spans every tab (matches grouped under the tab name). Effects' colour is always the same select (`FollowColorRows`: follow notes | solid; the hit line adds its own gradient). While a keyframe is targeted, rows whose key a keyframe can't hold (`isAnimatableKey` false) carry the line "Can't change over time. Applies to the whole song." (`scopeKey` on the row; Bound rows pass their key). Switching Material alone also brings in that material family's lights (`lightsForMaterialSwitch`). Design notes: `_local/INSPECTOR_DESIGN.md`.
 

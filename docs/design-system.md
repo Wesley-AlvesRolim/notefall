@@ -1,6 +1,8 @@
 # notefall design system
 
-How notefall's interface looks and behaves, and how to build UI that fits. Read this before adding or changing anything outside the 3D canvas. The code is the source of truth for values; this document says what they are for and the rules for using them.
+How notefall's interface looks and behaves, and how to build UI that fits. Read this before adding or changing anything outside the 3D canvas.
+
+**This document holds names, purposes and rules — never values.** Colours, sizes, durations and positions live only in code (`src/ui/kit/tokens.css`, `tailwind.config.js`, `GEOMETRY` in `src/ui/kit/Surface.tsx`). When a value changes, change the code; this document stays true. When a rule changes, change it here.
 
 notefall makes falling-notes piano videos. The picture is the product: falling notes, a lit keyboard, particles. Every rule below exists to keep the interface quiet around that picture while staying clear enough for a long editing session.
 
@@ -31,7 +33,7 @@ notefall makes falling-notes piano videos. The picture is the product: falling n
 
 ## Layout
 
-Everything floats over a full-window canvas (the 16:9 video is letterboxed in the middle). Positions come from `GEOMETRY` in `src/ui/kit/Surface.tsx`; use it, not literals.
+Everything floats over a full-window canvas (the 16:9 video is letterboxed in the middle). Positions and heights come from `GEOMETRY` (`EDGE`, `BAR`, `PILL`, `PILL_BOTTOM`, `PANEL`, `GAP`); use it, not literals.
 
 ```
 ┌ song island ──────────────┐   loading island    ┌ input island ───────────────┐
@@ -46,11 +48,11 @@ Everything floats over a full-window canvas (the 16:9 video is letterboxed in th
 
 | Surface | Position | Notes |
 |---|---|---|
-| Song island | top-left, `EDGE` (16) from the edges, height `BAR` (52) | Wordmark = the app menu (shortcuts, language, report a bug, request a feature, GitHub, analytics switch, build). Then File, the song name (rename inline, 6px dot when unsaved), Undo, Redo. |
+| Song island | top-left, `EDGE` from the edges, height `BAR` | Wordmark = the app menu (shortcuts, language, report a bug, request a feature, GitHub, analytics switch, build). Then File, the song name (rename inline, a small dot when unsaved), Undo, Redo. |
 | Input island | top-right | MIDI device menu, Record + ▾ (takes list, count-in switch at its top), divider, Export (the one primary button). |
-| Transport pill | bottom-centre, `PILL_BOTTOM` (20) from the bottom, height `PILL` (60) | Back to start, −10 s, play (40px white disc), +10 s, time, scrubber, total │ speed, volume, loop, reset camera, fullscreen │ Customize, Timeline. |
-| Customize panel | right, top 80 (= 16 + 52 + 12), bottom 92 (= 20 + 60 + 12), width `PANEL` (344) | Opens from the pill. Tabs + search, sections, footer with "Reset to defaults" and close. |
-| Timeline | left 16, bottom 92, right 16 (or left of Customize when open) | Floating, never docked full-width. Starts closed; ⌘B or the pill toggles it. |
+| Transport pill | bottom-centre, `PILL_BOTTOM` from the bottom, height `PILL` | Back to start, −10 s, play (the white disc), +10 s, time, scrubber, total │ speed, volume, loop, reset camera, fullscreen │ Customize, Timeline. |
+| Customize panel | right edge, from under the top islands to above the pill (`GAP` between), width `PANEL` | Opens from the pill. Tabs + search, sections, footer with "Reset to defaults" and close. |
+| Timeline | left edge, above the pill, up to the right edge (or to Customize when it's open) | Floating, never docked full-width. Starts closed; ⌘B or the pill toggles it. |
 | Selection card | beside the selected notes, never over them, above the timeline / pill, left of Customize | See [Editing notes](#editing-notes). |
 | Toast | centred, just above the pill | One at a time. |
 | Loading island | top-centre | "Loading piano sounds" + progress. The app stays usable. |
@@ -59,40 +61,40 @@ Everything floats over a full-window canvas (the 16:9 video is letterboxed in th
 
 **Behaviour of the chrome**
 
-- While playing, the islands and the pill fade out after 2 s without pointer movement (`src/ui/shell/idle.ts`); any move or tap brings them back. They never fade under an open menu, popover or dialog.
+- While playing, the islands and the pill fade out after a short idle without pointer movement (`src/ui/shell/idle.ts`); any move or tap brings them back. They never fade under an open menu, popover or dialog.
 - While the mouse is over the Customize panel the islands and pill step aside (playing or paused), so the picture can be judged while tuning; they come back when the pointer leaves.
 - Fullscreen fullscreens the app root, so all chrome comes along.
 - Never stack glass on glass. Menus, pickers and dialogs sit beside their trigger, not over another glass surface. Popovers near the bottom keep clear of the pill (`containerPadding`).
-- The minimum supported viewport is 1024 px; below it `UnsupportedScreen` is shown. Narrow layouts (phone / tablet) are not designed yet: when they are, the pill stays at the bottom and panels become sheets that slide up from it, with every primary control at `touch-min` (44px) or larger.
+- Below the minimum supported width (`App.tsx`) `UnsupportedScreen` is shown. Narrow layouts (phone / tablet) are not designed yet: when they are, the pill stays at the bottom and panels become sheets that slide up from it, with every primary control at least `touch-min`.
 
 ---
 
 ## Tokens
 
-Use the Tailwind names in components. Raw colour values (`#…`, `rgba(…)`, `neutral-*`, `sky-*`…) don't belong in UI code.
+Use the Tailwind names in components. Raw colour values (`#…`, `rgba(…)`, `neutral-*`, `sky-*`…) don't belong in UI code. Values: `src/ui/kit/tokens.css`.
 
 ### Colour
 
-| Token | Tailwind | Value | Use |
-|---|---|---|---|
-| `--canvas` | `bg-canvas` | `#05060a` | Behind everything; letterbox bars. Never a UI surface. |
-| `--glass-fill` | `bg-glass` (via `nf-glass`) | `rgba(16,17,20,.58)` | The UI material: islands, panels, the pill. |
-| `--glass-fill-strong` | `bg-glass-strong` (via `nf-glass-strong`) | `rgba(16,17,20,.82)` | Surfaces that are read: menus, dialogs, pickers, toasts, tooltips, the selection card. |
-| `--glass-fill-solid` | `bg-glass-solid` | `#15161a` | Fallback with no `backdrop-filter` or reduced transparency (automatic). |
-| `--glass-edge` | `border-glass-edge`, `bg-glass-edge` | `rgba(255,255,255,.10)` | 1px edge of glass; dividers inside a surface. |
-| `--ink` | `text-ink`, `bg-ink` | `#f3f2ee` | Text and icons people act on; primary fill; slider fill and knobs; focus ring. |
-| `--ink-muted` | `text-ink-muted` | 66% ink | Labels, secondary text, inactive tabs. |
-| `--ink-faint` | `text-ink-faint` | 44% ink | Hints, range ends, shortcut hints only. Never for something the user must read to act. |
-| `--on-ink` | `text-on-ink` | `#0e0f11` | Text / icons on an ink fill. |
-| `--fill-hover` | `bg-fill-hover` | 7% white | Hover wash. |
-| `--fill-selected` | `bg-fill-selected` | 13% white | Pressed toggles, active tab / segment, focused menu row. |
-| `--fill-field` | `bg-fill-field` | 7% white | Value fields, selects, segmented controls. |
-| `--fill-track` | `bg-fill-track` | 16% white | Unfilled slider / scrubber track. |
-| `--fill-well` | `bg-fill-well` | 32% black | Wells that hold a picture (preset chips, image picker). |
-| `--record` | `bg-record` | `#ff5a4f` | The record dot. Nothing else. |
-| `--danger` | `text-danger` | `#ff8b80` | Text / icon of destructive actions (Delete, Remove audio, Clear recent). Never a fill. |
-| `--scrim` | `bg-scrim` | `rgba(5,6,10,.45)` | Behind modal dialogs and the file-drop overlay. |
-| `--logo-note` | — | `#5ad7ff` | The falling note in the logo. Brand only, never UI. |
+| Token | Tailwind | Use |
+|---|---|---|
+| `--canvas` | `bg-canvas` | Behind everything; letterbox bars. Never a UI surface. |
+| `--glass-fill` | `bg-glass` (via `nf-glass`) | The UI material: islands, panels, the pill. |
+| `--glass-fill-strong` | `bg-glass-strong` (via `nf-glass-strong`) | Surfaces that are read: menus, dialogs, pickers, toasts, tooltips, the selection card. |
+| `--glass-fill-solid` | `bg-glass-solid` | Fallback with no `backdrop-filter` or reduced transparency (automatic). |
+| `--glass-edge` | `border-glass-edge`, `bg-glass-edge` | 1px edge of glass; dividers inside a surface. |
+| `--ink` | `text-ink`, `bg-ink` | Text and icons people act on; primary fill; slider fill and knobs; focus ring. |
+| `--ink-muted` | `text-ink-muted` | Labels, secondary text, inactive tabs. |
+| `--ink-faint` | `text-ink-faint` | Hints, range ends, shortcut hints only. Never for something the user must read to act. |
+| `--on-ink` | `text-on-ink` | Text / icons on an ink fill. |
+| `--fill-hover` | `bg-fill-hover` | Hover wash. |
+| `--fill-selected` | `bg-fill-selected` | Pressed toggles, active tab / segment, focused menu row. |
+| `--fill-field` | `bg-fill-field` | Value fields, selects, segmented controls. |
+| `--fill-track` | `bg-fill-track` | Unfilled slider / scrubber track. |
+| `--fill-well` | `bg-fill-well` | Wells that hold a picture (preset chips, image picker). |
+| `--record` | `bg-record` | The record dot. Nothing else. |
+| `--danger` | `text-danger` | Text / icon of destructive actions (Delete, Remove audio, Clear recent). Never a fill. |
+| `--scrim` | `bg-scrim` | Behind modal dialogs and the file-drop overlay. |
+| `--logo-note` | — | The falling note in the logo. Brand only, never UI. |
 
 The user's note colours are the only hues on screen. Preset thumbnails, the gradient bar and the colour picker's "In this song" row show them as content.
 
@@ -100,27 +102,27 @@ The user's note colours are the only hues on screen. Preset thumbnails, the grad
 
 One family: **Geist** (`@fontsource-variable/geist`), falling back to Hiragino Sans / Noto Sans JP for Japanese. Numbers use tabular figures (set globally). No monospace, no second display face.
 
-| Tailwind | Size / line / weight | Use |
-|---|---|---|
-| `text-display` | 18 / 24 / 600 | Dialog and sheet titles. |
-| `text-title` | 15 / 20 / 600 | The wordmark. |
-| `text-heading` | 13 / 18 / 600 | Section and panel headings. |
-| `text-label` | 13 / 18 / 500 | Button and tab labels. |
-| `text-body` | 13 / 18 / 400 | The base: labels, values, names, times. |
-| `text-caption` | 12 / 16 / 400 | The floor: hints, range ends, preset names. Nothing is smaller. |
+| Tailwind | Use |
+|---|---|
+| `text-display` | Dialog and sheet titles. |
+| `text-title` | The wordmark. |
+| `text-heading` | Section and panel headings. |
+| `text-label` | Button and tab labels. |
+| `text-body` | The base: labels, values, names, times. |
+| `text-caption` | The floor (12px): hints, range ends, preset names. Nothing is smaller. |
 
-The base 13px is set on `body`, not `html`, so `rem` stays 16px and Tailwind's spacing is untouched.
+The base size is set on `body`, not `html`, so `rem` stays 16px and Tailwind's spacing is untouched.
 
 ### Spacing, radius, size, shadow
 
-- **Spacing** is Tailwind's 4px scale: `0.5` (2) between tabs / segments, `1` (4) between buttons in an island, `1.5` (6) island padding, `2` (8) label to control, `3` (12) between fields and between stacked surfaces, `4` (16) screen margin and panel inset, `5` (20) pill offset, `6` (24) dialog inset.
-- **Radius**: `rounded-round` islands, the pill, buttons, switches, toasts · `rounded-panel` (18) panels, the selection card, dialogs · `rounded-tab` (9) tabs, preset chips · `rounded-field` (8) fields, selects, segments, lanes. Menus use 14.
-- **Size**: `h-control-sm` 28 compact controls · `h-control` 36 text buttons · `h-icon-btn` 40 icon buttons · `h-play` 40 play · `h-bar` 52 top islands · `h-pill` 60 the pill · `w-panel` 344 Customize · `w-card` 252 the selection card · `touch-min` 44.
+- **Spacing** is Tailwind's default 4px scale: `0.5` between tabs / segments, `1` between buttons in an island, `1.5` island padding, `2` label to control, `3` between fields and between stacked surfaces (`GAP`), `4` screen margin and panel inset, `5` pill offset, `6` dialog inset.
+- **Radius**: `rounded-round` islands, the pill, buttons, switches, toasts · `rounded-panel` panels, the selection card, dialogs · `rounded-tab` tabs, preset chips · `rounded-field` fields, selects, segments, lanes. Menus use the kit `Popover`'s radius.
+- **Size**: `h-control-sm` compact controls · `h-control` text buttons · `h-icon-btn` icon buttons · `h-play` play · `h-bar` top islands · `h-pill` the pill · `w-panel` Customize · `w-card` the selection card · `touch-min` minimum touch target.
 - **Shadow**: `shadow-glass` (built into `nf-glass`), `shadow-knob` for slider knobs and gradient stops.
 
 ### Glass
 
-One material, applied with the class `nf-glass` (or `nf-glass-strong`): fill + `backdrop-filter: blur(36px) saturate(1.5)` + 1px edge + `shadow-glass`. It falls back to the solid fill automatically. `backdrop-filter` re-blurs the WebGL canvas every frame, so keep the number of glass surfaces on screen small and measure frame time when adding one.
+One material, applied with the class `nf-glass` (or `nf-glass-strong`): fill + `backdrop-filter` blur and saturation (`--glass-blur`) + 1px edge + `shadow-glass`. It falls back to the solid fill automatically. `backdrop-filter` re-blurs the WebGL canvas every frame, so keep the number of glass surfaces on screen small and measure frame time when adding one.
 
 ---
 
@@ -130,12 +132,12 @@ Crisp and short. Things that open come in from where they were triggered with a 
 
 | Class / helper | What |
 |---|---|
-| `nf-press` | Press feedback (scale 0.97, 160 ms). Every kit button has it. |
-| `nf-pop` | Popovers, menus, selects: grow from the trigger (`--trigger-anchor-point`), 170 ms in / 110 ms out. Built into the kit `Popover`. |
-| `nf-tip` | Tooltips, 125 ms. Built into `Tooltip`. |
+| `nf-press` | Press feedback (a slight shrink). Every kit button has it. |
+| `nf-pop` | Popovers, menus, selects: grow from the trigger (`--trigger-anchor-point`), leave faster than they came. Built into the kit `Popover`. |
+| `nf-tip` | Tooltips, quicker still. Built into `Tooltip`. |
 | `nf-modal`, `nf-scrim-anim` | Dialogs stay centred and scale in; the scrim fades. Built into `Dialog`. |
 | `nf-enter-right`, `nf-enter-up`, `nf-enter-fade` + `nf-leaving` with `usePresence(open)` | Enter / exit of panels, toasts, cards. `usePresence` keeps the element mounted while it fades out. |
-| Easing tokens | `--ease-out` `cubic-bezier(.23,1,.32,1)`, `--ease-in-out`, `--ease-drawer`. |
+| Easing tokens | `--ease-out` (default for UI), `--ease-in-out` (things moving on screen), `--ease-drawer`. |
 
 Rules: UI animation stays under 300 ms; never animate something triggered from the keyboard many times a day; selected-state backgrounds slide between options (tabs, segmented controls) rather than jump; `prefers-reduced-motion` keeps fades and drops movement.
 
@@ -143,7 +145,7 @@ Rules: UI animation stays under 300 ms; never animate something triggered from t
 
 ## Interaction
 
-- **Focus ring**: 2px `ink`, offset 2px, via the class `nf-focus`. On react-aria controls it shows only for keyboard focus (`data-focus-visible`). A control pressed with the mouse doesn't keep focus (`useReleaseFocusAfterPointer`, mounted in `Layout`), so the next key goes to the app's shortcuts and the PC-keyboard piano and no ring appears. Text fields, sliders, menus and dialogs keep their focus.
+- **Focus ring**: the `ink` ring from the class `nf-focus`. On react-aria controls it shows only for keyboard focus (`data-focus-visible`). A control pressed with the mouse doesn't keep focus (`useReleaseFocusAfterPointer`, mounted in `Layout`), so the next key goes to the app's shortcuts and the PC-keyboard piano and no ring appears. Text fields, sliders, menus and dialogs keep their focus.
 - **States**: hover `fill-hover`; pressed / open `fill-selected` (`aria-pressed`, `aria-expanded`, `data-selected`); disabled 40% opacity.
 - **Shortcuts**: global ones live in `src/ui/useGlobalShortcuts.ts` and are listed in the shortcut sheet (`?`). Letter keys play notes on the PC-keyboard piano, so don't add letter shortcuts. Inputs stop propagation so typing never triggers shortcuts.
 - **Mouse on notes** follows FL Studio's piano roll and does not change: click selects and drags, double-click selects, right-click deletes, right-drag erases, ⌥-click splits, ⌘-click adds to the selection, ⌘-drag selects a range, drag an edge to resize, wheel scrubs time. There is no note context menu.
@@ -230,7 +232,7 @@ A settings tab is a stack of `Section`s (heading, optional feature switch via `e
 
 ## Icons
 
-- 24px grid, 1.6px round stroke, `currentColor`, filled only where a solid reads better (play, pause, keyframe). Shown at 20px in icon buttons, 17px in text buttons, 16px in menus.
+- 24px grid, 1.6px round stroke, `currentColor`, filled only where a solid reads better (play, pause, keyframe). The kit's buttons and menu rows size them.
 - Add icons to the end of `src/ui/kit/icons.tsx` in the same style. Icons for app-specific actions always come with a text label.
 
 ---
@@ -247,5 +249,5 @@ A settings tab is a stack of `Section`s (heading, optional feature switch via `e
 ## Brand assets
 
 - **Logo**: `LogoMark` (`src/ui/kit/icons.tsx`), also `public/favicon.svg`. Three keys in perspective with one falling note in `--logo-note`.
-- **Share image**: `public/og-image.png` (1200 × 630) — a real render in a blue gradient colourway, the wordmark and "Load a MIDI, fix the notes, export the video. Free, no sign-up." in the dark area above the keys. Keep share images and promo stills as real renders, never drawn imitations of notes.
+- **Share image**: `public/og-image.png` — a real render in a blue gradient colourway, with the wordmark and the tagline in the dark area above the keys (the tagline and descriptions live in `index.html`). Keep share images and promo stills as real renders, never drawn imitations of notes.
 - **Fallback screens** (`ScreenFrame`): the same blue render as the backdrop (`src/ui/assets/backdrop-{wide,tall}.jpg`), a glass card over it.
