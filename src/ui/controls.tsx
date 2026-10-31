@@ -23,7 +23,6 @@ import {
   Input,
   Label,
   Slider,
-  SliderThumb,
   SliderTrack,
 } from 'react-aria-components'
 import clsx from 'clsx'
@@ -31,7 +30,7 @@ import { useTranslation } from 'react-i18next'
 import { defaultSettings, useStore, type Settings } from '../store'
 import { isAnimatableKey, resolveSettingsAt } from '../midi/settingsKeyframes'
 import { collectSongColors } from './look/songColors'
-import { Disclosure, GEOMETRY, Icon, Menu, MenuItem, MenuSeparator, Popover, SegmentedControl, Select, Switch } from './kit'
+import { Disclosure, GEOMETRY, Icon, KnobThumb, Menu, MenuItem, MenuSeparator, Popover, SegmentedControl, Select, Switch } from './kit'
 
 /**
  * Value an Inspector control should DISPLAY: the SELECTED pin's
@@ -624,12 +623,12 @@ export function SliderRow({ label, value, min, max, step = 0.01, onChange, forma
       <SliderTrack ref={trackRef} className="relative h-5 w-full cursor-pointer">
         {({ state }) => (
           <>
-            <div className="absolute inset-x-0 top-2 h-1 rounded-[2px] bg-fill-track" />
+            <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-[2px] bg-fill-track" />
             <div
-              className="absolute left-0 top-2 h-1 rounded-[2px] bg-ink"
+              className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-[2px] bg-ink"
               style={{ width: `${state.getThumbPercent(0) * 100}%` }}
             />
-            <SliderThumb className="nf-focus top-[2px] h-4 w-4 rounded-full bg-ink shadow-knob outline-none" />
+            <KnobThumb />
           </>
         )}
       </SliderTrack>
@@ -1243,7 +1242,7 @@ function Band({ label, value, min, max, step, trackHeight, defaultValue, onChang
                   className="absolute left-1/2 w-1 -translate-x-1/2 rounded-[2px] bg-ink"
                   style={fillStyle}
                 />
-                <SliderThumb className="nf-focus left-1/2 h-3.5 w-3.5 rounded-full bg-ink shadow-knob outline-none" />
+                <KnobThumb vertical small />
               </>
             )
           }}

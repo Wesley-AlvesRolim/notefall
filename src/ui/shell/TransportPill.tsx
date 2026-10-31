@@ -2,13 +2,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useUNSAFE_PortalContext } from 'react-aria'
-import { Slider, SliderThumb, SliderTrack } from 'react-aria-components'
+import { Slider, SliderTrack } from 'react-aria-components'
 import clsx from 'clsx'
 import { defaultSettings, useStore } from '../../store'
 import { audioEngine } from '../../audio/engine'
 import { pauseSong, playSong } from '../../audio/playback'
 import { useCurrentTime } from '../../audio/useCurrentTime'
-import { Button, Divider, GEOMETRY, Icon, IconButton, ToggleButton, Tooltip } from '../kit'
+import { Button, Divider, GEOMETRY, Icon, IconButton, KnobThumb, ToggleButton, Tooltip } from '../kit'
 import { useChromeHidden, useIdle } from './idle'
 import { toggleFullscreen, useIsFullscreen } from './fullscreen'
 import { MOD } from './platform'
@@ -215,12 +215,12 @@ function HoverSlider({
               <SliderTrack className="relative h-7 w-full cursor-pointer">
                 {({ state }) => (
                   <>
-                    <div className="absolute inset-x-0 top-3 h-1 rounded-[2px] bg-fill-track" />
+                    <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-[2px] bg-fill-track" />
                     <div
-                      className="absolute left-0 top-3 h-1 rounded-[2px] bg-ink"
+                      className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-[2px] bg-ink"
                       style={{ width: `${state.getThumbPercent(0) * 100}%` }}
                     />
-                    <SliderThumb className="nf-focus top-3.5 h-3.5 w-3.5 rounded-full bg-ink outline-none" />
+                    <KnobThumb small />
                   </>
                 )}
               </SliderTrack>

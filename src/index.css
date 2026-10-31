@@ -10,11 +10,15 @@ html, body, #root {
   margin: 0;
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 18px;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   background: var(--canvas);
+}
+
+/* Base text is 13px, set on body so `rem` (Tailwind's spacing unit) stays 16px. */
+body {
+  font-size: 13px;
+  line-height: 18px;
 }
 
 html, body {

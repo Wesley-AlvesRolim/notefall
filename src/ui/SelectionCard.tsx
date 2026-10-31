@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Slider, SliderThumb, SliderTrack } from 'react-aria-components'
+import { Slider, SliderTrack } from 'react-aria-components'
 import { useStore } from '../store'
 import { previewNote } from '../audio/preview'
 import { deleteNotes, setNotesVelocity } from '../midi/edit'
 import { midiToName } from '../midi/noteName'
 import { selectionScreenRect } from '../scene/selectionBounds'
 import { notifyNotesDeleted } from './editor/deleteToast'
-import { Button, GEOMETRY, Icon, Panel } from './kit'
+import { Button, GEOMETRY, Icon, KnobThumb, Panel } from './kit'
 import { useShell } from './shell/uiState'
 
 const CARD_W = 252
@@ -233,24 +233,19 @@ export function SelectionCard({ wrapEl }: { wrapEl: HTMLElement | null }) {
                 const pct = (v: number) => ((v - 1) / 126) * 100
                 return (
                   <>
-                    <div className="absolute inset-x-0 top-2 h-1 rounded-sm bg-fill-track" />
+                    <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-sm bg-fill-track" />
                     {mixed ? (
                       <div
-                        className="absolute top-2 h-1 rounded-sm bg-ink-muted"
+                        className="absolute top-1/2 h-1 -translate-y-1/2 rounded-sm bg-ink-muted"
                         style={{ left: `${pct(lo)}%`, width: `${pct(hi) - pct(lo)}%` }}
                       />
                     ) : (
                       <div
-                        className="absolute left-0 top-2 h-1 rounded-sm bg-ink"
+                        className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-sm bg-ink"
                         style={{ width: `${state.getThumbPercent(0) * 100}%` }}
                       />
                     )}
-                    <SliderThumb
-                      className={
-                        'top-[10px] h-4 w-4 rounded-round bg-ink shadow-[var(--shadow-knob)] nf-focus outline-none' +
-                        (mixed ? ' opacity-0 data-[dragging]:opacity-100' : '')
-                      }
-                    />
+                    <KnobThumb className={mixed ? 'opacity-0 data-[dragging]:opacity-100' : undefined} />
                   </>
                 )
               }}

@@ -8,6 +8,7 @@ import {
   RadioGroup,
   Select as AriaSelect,
   SelectValue,
+  SliderThumb,
   Switch as AriaSwitch,
   type Key,
 } from 'react-aria-components'
@@ -224,5 +225,40 @@ export function Divider({ vertical, className }: { vertical?: boolean; className
     <span aria-hidden className={clsx('mx-1.5 h-[22px] w-px flex-none bg-glass-edge', className)} />
   ) : (
     <div aria-hidden className={clsx('h-px w-full bg-glass-edge', className)} />
+  )
+}
+
+/**
+ * Slider knob for react-aria `SliderThumb`. The thumb itself is a 24px transparent hit area
+ * centred on the track (react-aria translates it by -50%/-50%); the visible 16px ink dot grows
+ * a little on hover and while dragging. Place the track's centre line at the thumb's `top`.
+ */
+export function KnobThumb({
+  vertical,
+  small,
+  className,
+}: {
+  vertical?: boolean
+  small?: boolean
+  className?: string
+}) {
+  return (
+    <SliderThumb
+      className={clsx(
+        'group/knob grid h-6 w-6 cursor-grab place-items-center outline-none data-[dragging]:cursor-grabbing',
+        vertical ? 'left-1/2' : 'top-1/2',
+        className,
+      )}
+    >
+      <span
+        className={clsx(
+          'block rounded-full bg-ink shadow-knob transition-transform duration-150 ease-out',
+          'group-data-[hovered]/knob:scale-110 group-data-[dragging]/knob:scale-[1.18]',
+          'group-data-[focus-visible]/knob:outline group-data-[focus-visible]/knob:outline-2 group-data-[focus-visible]/knob:outline-offset-2 group-data-[focus-visible]/knob:outline-[var(--focus)]',
+          'motion-reduce:transition-none',
+          small ? 'h-3.5 w-3.5' : 'h-4 w-4',
+        )}
+      />
+    </SliderThumb>
   )
 }
