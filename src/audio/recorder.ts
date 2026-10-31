@@ -24,7 +24,11 @@ type RecState = 'idle' | 'recording'
 type RecEvent =
   | { type: 'noteOn'; midi: number; velocity: number; t: number }
   | { type: 'noteOff'; midi: number; t: number }
-  | { type: 'pedal'; down: boolean; t: number }
+  // Sustain. `value` 0..1 (half pedal kept); takes stored before it existed
+  // only have `down`.
+  | { type: 'pedal'; value?: number; down?: boolean; t: number }
+  // Sostenuto (66) / soft (67).
+  | { type: 'cc'; number: number; value: number; t: number }
 
 export type Recording = {
   id: string
@@ -95,8 +99,10 @@ class RecorderManager {
         this.currentEvents.push({ type: 'noteOn', midi: e.midi, velocity: e.velocity, t })
       } else if (e.type === 'noteOff') {
         this.currentEvents.push({ type: 'noteOff', midi: e.midi, t })
+      } else if (e.type === 'pedal') {
+        this.currentEvents.push({ type: 'pedal', value: e.value, t })
       } else {
-        this.currentEvents.push({ type: 'pedal', down: e.down, t })
+        this.currentEvents.push({ type: 'cc', number: e.number, value: e.value, t })
       }
     })
     this.notify()
@@ -242,8 +248,10 @@ class RecorderManager {
           finishNote(e.midi, existing.vel, existing.t, e.t)
           open.delete(e.midi)
         }
+      } else if (e.type === 'pedal') {
+        track.addCC({ number: 64, time: e.t, value: e.value ?? (e.down ? 1 : 0) })
       } else {
-        track.addCC({ number: 64, time: e.t, value: e.down ? 1 : 0 })
+        track.addCC({ number: e.number, time: e.t, value: e.value })
       }
     }
     for (const [m, { vel, t }] of open) {

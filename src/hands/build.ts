@@ -65,7 +65,8 @@ export function buildSongHandMotion(song: ParsedSong, map: HandsTimeMap, opts: H
     ...getTuning<ReachOptions>('reach'),
   })
   const plan = assignFingers(notes, reach.hands, getTuning<FingeringOptions>('fingering'))
-  const pedal = pedalRanges(song.pedals.map((p) => ({ time: tl(p.time), value: p.value })))
+  // song pedal values are 0..1, the lab's pedalRanges thresholds raw CC (>= 64)
+  const pedal = pedalRanges(song.pedals.map((p) => ({ time: tl(p.time), value: p.value * 127 })))
   const motion = buildHandMotion(notes, plan, { ...tm, humanize: opts.humanize }, pedal)
   lastBuild.ms = performance.now() - t0
   lastBuild.notes = notes.length

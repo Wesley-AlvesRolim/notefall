@@ -1,10 +1,11 @@
 import { Midi } from '@tonejs/midi'
-import type { ParsedSong, NoteEvent, PedalEvent, TrackInfo } from './types'
+import { KEPT_CONTROLS, type ControlEvent, type ParsedSong, type NoteEvent, type PedalEvent, type TrackInfo } from './types'
 
 export async function parseMidi(file: ArrayBuffer, name: string): Promise<ParsedSong> {
   const midi = new Midi(file)
   const notes: NoteEvent[] = []
   const pedals: PedalEvent[] = []
+  const controls: ControlEvent[] = []
   const tracks: TrackInfo[] = []
   let id = 0
 
@@ -25,6 +26,11 @@ export async function parseMidi(file: ArrayBuffer, name: string): Promise<Parsed
         pedals.push({ time: cc.time, value: cc.value })
       })
     }
+    for (const number of KEPT_CONTROLS) {
+      for (const cc of track.controlChanges[number] ?? []) {
+        controls.push({ number, time: cc.time, value: cc.value })
+      }
+    }
     // SMF track names are often empty or whitespace; fall back to a
     // synthetic "Track N" label so the per-track UI has something to
     // render. The index stays in lockstep with `NoteEvent.track`.
@@ -37,12 +43,14 @@ export async function parseMidi(file: ArrayBuffer, name: string): Promise<Parsed
 
   notes.sort((a, b) => a.time - b.time)
   pedals.sort((a, b) => a.time - b.time)
+  controls.sort((a, b) => a.time - b.time)
 
   return {
     name,
     duration: midi.duration,
     notes,
     pedals,
+    controls,
     tracks,
   }
 }

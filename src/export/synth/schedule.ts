@@ -3,7 +3,7 @@ import { midiToTimeline } from '../../midi/speedMap'
 import type { Settings } from '../../store'
 import { evaluateVelocityCurve } from '../../audio/velocityCurve'
 import { LOOKAHEAD, STOP_BUFFER } from './consts'
-import { buildPedalRanges, findRangeContaining } from './pedal'
+import { pedalReleaseTime } from '../../audio/pedalDepth'
 import type { ExportTimeline } from '../timeline'
 import type { OfflinePiano, UserAudioTrack } from './types'
 
@@ -52,11 +52,8 @@ export function scheduleSongNotes(
   // Pedal handling. Mirror the engine: when settings.pedalEnabled is off,
   // ignore the song's pedal track entirely (notes release at their
   // natural offTime). Pedal events are stored in MIDI-time, so the
-  // ranges are still in MIDI-time and get shifted at the per-note
-  // comparison site below.
-  const pedalRanges = settings.pedalEnabled
-    ? buildPedalRanges(song.pedals, totalDuration - midiOffset)
-    : []
+  // release is computed in MIDI-time and mapped at the per-note site below.
+  const pedalEnd = totalDuration - midiOffset
 
   for (const n of song.notes) {
     // Trim filter — match the engine's tick semantics so a rendered
@@ -73,11 +70,13 @@ export function scheduleSongNotes(
     // to the linear `n.time + midiOffset` of before.
     const onTime = midiOffset + midiToTimeline(speedMap, n.time) + LOOKAHEAD
     // Clamp the natural note-off to the trim end (MIDI-time), then
-    // optionally extend via pedal sustain (still MIDI-time), and
+    // optionally extend via the pedal (half-pedal aware, `audio/pedalDepth.ts`) (still MIDI-time), and
     // finally map to timeline-time.
     const naturalOff = Math.min(n.time + n.duration, midiTrimEnd)
-    const range = findRangeContaining(pedalRanges, naturalOff)
-    const offMidi = Math.min(range ? range.end : naturalOff, midiTrimEnd)
+    const sustained = settings.pedalEnabled
+      ? pedalReleaseTime(song.pedals, naturalOff, pedalEnd)
+      : naturalOff
+    const offMidi = Math.min(sustained, midiTrimEnd)
     const actualOff = midiOffset + midiToTimeline(speedMap, offMidi)
 
     const stopFn = piano.start(playedMidi, shaped, onTime, `s${n.id}`)

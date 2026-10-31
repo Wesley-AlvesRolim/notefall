@@ -15,6 +15,7 @@ import {
 } from './sampler'
 import { now } from './clock'
 import { devNoAudio } from '../dev/mode'
+import { dampRate, pedalLift } from './pedalDepth'
 import {
   DEFAULT_VELOCITY_CURVE,
   clampVelocityCurve,
@@ -98,7 +99,10 @@ export type LiveInputListener = (
   event:
     | { type: 'noteOn'; midi: number; velocity: number; time: number }
     | { type: 'noteOff'; midi: number; time: number }
-    | { type: 'pedal'; down: boolean; time: number },
+    /** Sustain (CC64), `value` 0..1 as sent (half-pedal depth kept). */
+    | { type: 'pedal'; value: number; time: number }
+    /** Other pedal CCs (66 sostenuto, 67 soft): recorded, not sounded. */
+    | { type: 'control'; number: number; value: number; time: number },
 ) => void
 
 /**
@@ -149,22 +153,27 @@ export class AudioEngine {
 
   private noteIdx = 0
   private pedalIdx = 0
-  private pedalDown = false // raw MIDI pedal state at current song time
+  private pedalValue = 0 // raw CC64 value (0..1) at the current song time
+  // MIDI-time up to which song-held notes have been damped (see `pedalDepth.ts`).
+  private songDampAt = 0
   // Live pedal from the user's physical MIDI device. Independent of the
   // song's pedal events and of `pedalEnabled` (the user's physical pedal
   // should always work even when the song's pedal track is muted).
-  private livePedalDown = false
+  private livePedalValue = 0
+  private liveDampAt = 0
 
   // notes currently sounding (key still held)
   private active = new Map<number, ActiveNote>()
   // notes whose key was released but a pedal is holding the dampers up.
   // `source` records WHICH pedal is sustaining the note so we can release
   // only the right entries when one of the pedals goes up while the other
-  // stays down.
+  // stays down. `damp` is the half-pedal damping accumulated so far; the
+  // note is released when it reaches 1 (`pedalDepth.ts`).
   private pedalHeld: Array<{
     midi: number
     stop: (time?: number) => void
     source: 'song' | 'live'
+    damp: number
   }> = []
 
   private listeners = new Set<KeyEventListener>()
@@ -621,14 +630,19 @@ export class AudioEngine {
   }
 
   /**
-   * Live pedal state from the user's MIDI device. Calls from the MIDI input
-   * layer when CC#64 crosses the 64-value threshold.
+   * Live sustain pedal from the user's MIDI device (CC#64, 0..1). A partial
+   * value is a half pedal: held notes fade out sooner (`pedalDepth.ts`).
    */
-  setLivePedalDown(down: boolean): void {
-    if (this.livePedalDown === down) return
-    this.livePedalDown = down
-    if (!down) this.flushPedalHeld('live')
-    this.emitLive({ type: 'pedal', down, time: now() })
+  setLivePedal(value: number): void {
+    if (this.livePedalValue === value) return
+    this.livePedalValue = value
+    if (pedalLift(value) === 0) this.flushPedalHeld('live')
+    this.emitLive({ type: 'pedal', value, time: now() })
+  }
+
+  /** Other live pedal CCs (sostenuto / soft): passed to the recorder only. */
+  setLiveControl(number: number, value: number): void {
+    this.emitLive({ type: 'control', number, value, time: now() })
   }
 
   setLoop(loop: boolean): void {
@@ -641,7 +655,7 @@ export class AudioEngine {
     this.song = song
     this.noteIdx = 0
     this.pedalIdx = 0
-    this.pedalDown = false
+    this.pedalValue = 0
     this.offsetAtStart = 0
     this.startedAt = now()
     this.playing = false
@@ -696,7 +710,7 @@ export class AudioEngine {
     this.song = null
     this.noteIdx = 0
     this.pedalIdx = 0
-    this.pedalDown = false
+    this.pedalValue = 0
     this.offsetAtStart = 0
     this.startedAt = now()
     this.playing = false
@@ -734,7 +748,7 @@ export class AudioEngine {
     this.offsetAtStart = 0
     this.noteIdx = 0
     this.pedalIdx = 0
-    this.pedalDown = false
+    this.pedalValue = 0
     this.releaseAll()
     this.stopBackgroundTicker()
     this.stopUserAudioSource()
@@ -910,7 +924,27 @@ export class AudioEngine {
   }
 
   isPedalDown(): boolean {
-    return this.pedalDown && this.pedalEnabled
+    return this.pedalValue >= 0.5 && this.pedalEnabled
+  }
+
+  /** Damper lift of the song pedal as it acts on playback (0 when muted). */
+  private songPedalLift(): number {
+    return this.pedalEnabled ? pedalLift(this.pedalValue) : 0
+  }
+
+  /** Advance half-pedal damping of one source's held notes by `dt` seconds. */
+  private dampPedalHeld(source: 'song' | 'live', dt: number, lift: number): void {
+    if (this.pedalHeld.length === 0) return
+    const rate = dampRate(lift)
+    if (rate === 0) return
+    const stopTime = (this.piano?.context.currentTime ?? 0) + STOP_BUFFER
+    this.pedalHeld = this.pedalHeld.filter((h) => {
+      if (h.source !== source) return true
+      if (rate !== Infinity) h.damp += rate * Math.max(0, dt)
+      if (rate !== Infinity && h.damp < 1) return true
+      h.stop(stopTime)
+      return false
+    })
   }
 
   /**
@@ -940,10 +974,10 @@ export class AudioEngine {
         // since the physical pedal is the more direct controller. The song
         // pedal only counts while playing: paused, `pedalDown` is frozen at
         // the playhead's CC64 state and no pedal-up would ever flush it.
-        if (this.livePedalDown) {
-          this.pedalHeld.push({ midi, stop: stopFn, source: 'live' })
-        } else if (this.playing && this.pedalEnabled && this.pedalDown) {
-          this.pedalHeld.push({ midi, stop: stopFn, source: 'song' })
+        if (pedalLift(this.livePedalValue) > 0) {
+          this.pedalHeld.push({ midi, stop: stopFn, source: 'live', damp: 0 })
+        } else if (this.playing && this.songPedalLift() > 0) {
+          this.pedalHeld.push({ midi, stop: stopFn, source: 'song', damp: 0 })
         } else {
           stopFn(stopTime)
         }
@@ -1097,18 +1131,22 @@ export class AudioEngine {
     this.noteIdx = ni
 
     let pi = 0
-    let pedalDown = false
+    let pedalValue = 0
     while (pi < this.song.pedals.length && this.song.pedals[pi].time <= midiSongTime) {
-      pedalDown = this.song.pedals[pi].value >= 0.5
+      pedalValue = this.song.pedals[pi].value
       pi++
     }
     this.pedalIdx = pi
-    this.pedalDown = pedalDown
+    this.pedalValue = pedalValue
+    this.songDampAt = midiSongTime
   }
 
   /** Called every frame from the visual loop, plus from the background-tab worker. */
   tick(): void {
     this.cleanupLiveNotes()
+    const wall = now()
+    this.dampPedalHeld('live', Math.min(0.25, wall - this.liveDampAt), pedalLift(this.livePedalValue))
+    this.liveDampAt = wall
     if (!this.song || !this.playing) return
     // In silent mode (export pass) we operate without a sampler — the
     // tick still walks the song to fire listener events for the
@@ -1135,17 +1173,18 @@ export class AudioEngine {
       songTime - this.midiOffsetSec,
     )
 
-    // process pedal events
+    // process pedal events, damping song-held notes piecewise between them
+    // (a pedal drop to no lift releases them at once)
     while (this.pedalIdx < this.song.pedals.length && this.song.pedals[this.pedalIdx].time <= midiSongTime) {
       const ev = this.song.pedals[this.pedalIdx]
-      const wasDown = this.pedalDown
-      this.pedalDown = ev.value >= 0.5
-      // pedal lifted: release all pedal-held notes
-      if (wasDown && !this.pedalDown && this.pedalEnabled) {
-        this.flushPedalHeld()
-      }
+      this.dampPedalHeld('song', ev.time - this.songDampAt, this.songPedalLift())
+      this.songDampAt = ev.time
+      this.pedalValue = ev.value
+      this.dampPedalHeld('song', 0, this.songPedalLift())
       this.pedalIdx++
     }
+    this.dampPedalHeld('song', midiSongTime - this.songDampAt, this.songPedalLift())
+    this.songDampAt = midiSongTime
 
     // process note ons. Schedule a small lookahead in the AudioContext clock
     // so the sample starts on a clean buffer boundary instead of mid-quantum
@@ -1201,8 +1240,8 @@ export class AudioEngine {
       // a.endTime is stored in MIDI-time (`n.time + n.duration`), so
       // compare against the MIDI-time cursor.
       if (a.endTime <= midiSongTime) {
-        if (!this.silent && this.pedalEnabled && this.pedalDown) {
-          this.pedalHeld.push({ midi: a.midi, stop: a.stop, source: 'song' })
+        if (!this.silent && this.songPedalLift() > 0) {
+          this.pedalHeld.push({ midi: a.midi, stop: a.stop, source: 'song', damp: 0 })
         } else {
           a.stop(stopTime)
         }
@@ -1277,7 +1316,7 @@ export class AudioEngine {
     this.offsetAtStart = 0
     this.noteIdx = 0
     this.pedalIdx = 0
-    this.pedalDown = false
+    this.pedalValue = 0
   }
 
   /**
@@ -1299,7 +1338,7 @@ export class AudioEngine {
     this.offsetAtStart = 0
     this.noteIdx = 0
     this.pedalIdx = 0
-    this.pedalDown = false
+    this.pedalValue = 0
   }
 }
 

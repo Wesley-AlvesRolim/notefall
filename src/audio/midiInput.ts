@@ -134,11 +134,15 @@ class MidiInputManager {
     } else if (status === 0x80 && data.length >= 3) {
       this.noteOff(data[1])
     } else if (status === 0xb0 && data.length >= 3) {
-      // Control Change. CC#64 = sustain pedal. MIDI convention: ≥64 = down.
+      // Control Change. CC#64 = sustain pedal, passed on as 0..1 so a
+      // half pedal keeps its depth. CC#66 sostenuto / CC#67 soft are only
+      // recorded (the sampler has no response to them).
       const cc = data[1]
-      const value = data[2]
+      const value = data[2] / 127
       if (cc === 64) {
-        audioEngine.setLivePedalDown(value >= 64)
+        audioEngine.setLivePedal(value)
+      } else if (cc === 66 || cc === 67) {
+        audioEngine.setLiveControl(cc, value)
       }
     }
     // Pitch bend, channel pressure, program change, etc. are ignored — a
@@ -173,7 +177,7 @@ class MidiInputManager {
   private releaseAll(): void {
     for (const release of this.activeNotes.values()) release()
     this.activeNotes.clear()
-    audioEngine.setLivePedalDown(false)
+    audioEngine.setLivePedal(0)
   }
 }
 
