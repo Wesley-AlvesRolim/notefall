@@ -1091,6 +1091,11 @@ type AppState = {
   toggleSelection: (id: number) => void
   // Convenience for clicking on empty space.
   clearSelection: () => void
+  // The selection the selection card was opened for (double-click on a note), or null. The card shows only while
+  // `selection` is still this very Set, so any selection change closes it.
+  selectionCardFor: Set<number> | null
+  openSelectionCard: () => void
+  closeSelectionCard: () => void
 
   // Snapshot stack for undo. Each entry captures the *before* state of one
   // domain (song notes or inspector settings); undo restores it. Capped at
@@ -1364,6 +1369,9 @@ export const useStore = create<AppState>((set) => ({
     }),
   clearSelection: () =>
     set((state) => (state.selection.size === 0 ? state : { selection: new Set() })),
+  selectionCardFor: null,
+  openSelectionCard: () => set((state) => ({ selectionCardFor: state.selection })),
+  closeSelectionCard: () => set((state) => (state.selectionCardFor === null ? state : { selectionCardFor: null })),
 
   editHistory: [],
   editFuture: [],

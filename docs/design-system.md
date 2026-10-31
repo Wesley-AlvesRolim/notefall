@@ -149,7 +149,7 @@ Rules: UI animation stays under 300 ms; never animate something triggered from t
 - **Focus ring**: the `ink` ring from the class `nf-focus`. On react-aria controls it shows only for keyboard focus (`data-focus-visible`). A control pressed with the mouse doesn't keep focus (`useReleaseFocusAfterPointer`, mounted in `Layout`), so the next key goes to the app's shortcuts and the PC-keyboard piano and no ring appears. Text fields, sliders, menus and dialogs keep their focus.
 - **States**: hover `fill-hover`; pressed / open `fill-selected` (`aria-pressed`, `aria-expanded`, `data-selected`); disabled 40% opacity.
 - **Shortcuts**: global ones live in `src/ui/useGlobalShortcuts.ts` and are listed in the shortcut sheet (`?`). Letter keys play notes on the PC-keyboard piano, so don't add letter shortcuts. Inputs stop propagation so typing never triggers shortcuts.
-- **Mouse on notes** follows FL Studio's piano roll and does not change: click selects and drags, double-click selects, right-click deletes, right-drag erases, ⌥-click splits, ⌘-click adds to the selection, ⌘-drag selects a range, drag an edge to resize, wheel scrubs time. There is no note context menu.
+- **Mouse on notes** follows FL Studio's piano roll and does not change: click selects and drags, double-click opens the selection card, right-click deletes, right-drag erases, ⌥-click splits, ⌘-click adds to the selection, ⌘-drag selects a range, drag an edge to resize, wheel scrubs time. There is no note context menu.
 
 ---
 
@@ -206,9 +206,9 @@ A settings tab is a stack of `Section`s (heading, optional feature switch via `e
 
 ## Editing notes
 
-- While paused, selected notes get the **selection card** beside them: velocity (a value and a slider), hand (Left / Right), finger (1–5), and Delete.
+- While paused, double-clicking a note opens the **selection card** beside the selection (a plain click, a new note or a range selection doesn't, so editing isn't covered by it): velocity (a value and a slider), hand (Left / Right), finger (1–5), and Delete.
 - Mixed selections: velocity shows the range ("64–92") and a band on the track; dragging shifts every note by the same amount and keeps their differences, typing sets all. Hand and finger select nothing, ring the values in use and say "Mixed"; choosing one sets every selected note. Pressing the selected hand or finger again clears it (unassigned).
-- A click anywhere off the card closes it (clears the selection): on the islands, the timeline, Customize, a key, or the canvas below the hit line. On the canvas above the hit line the editor's own rules apply (a note click selects, an empty click adds a note).
+- A press anywhere off the card closes it, and so does any change of selection; the notes stay selected.
 - Hand and finger are note data, saved in the project, and the virtual hands (alpha) play with them. How they look is set in Customize: Coloring → By hand (left / right / unassigned colours) and Note labels → Show: pitch, finger or both (the finger sits at the keyboard end).
 - Deletes don't show a toast; ⌘Z undoes them.
 

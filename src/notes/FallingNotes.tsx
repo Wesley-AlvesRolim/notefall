@@ -1769,12 +1769,12 @@ export function FallingNotes() {
     beginDrag(e.point.clone(), { x: native.clientX, y: native.clientY }, noteId)
   }
 
-  // Double-click → open the per-note context menu at the cursor. The two
+  // Double-click → open the selection card for the selection. The two
   // pointerdowns that precede the dblclick already select the note (via
-  // the regular click handler), so by the time we open the menu the
-  // selection is up to date. We still defensively replace selection here
-  // in case some intermediate event (e.g. ctrl-click toggle) cleared it
-  // between the first and second click.
+  // the regular click handler; a note inside a multi-selection keeps the
+  // whole selection). We still defensively replace selection here in case
+  // some intermediate event (e.g. ctrl-click toggle) cleared it between
+  // the first and second click.
   const onDoubleClickNote = (e: ThreeEvent<MouseEvent>) => {
     if (transport === 'playing') return
     if (e.point.y < NOTE_HIT_Y) return
@@ -1789,10 +1789,10 @@ export function FallingNotes() {
     if (noteId === undefined || noteId < 0) return
     const state = useStore.getState()
     if (!state.song) return
-    // Double-click just selects the note; the SelectionCard appears beside it.
     if (!state.selection.has(noteId)) {
       state.replaceSelection([noteId])
     }
+    useStore.getState().openSelectionCard()
   }
 
   return (

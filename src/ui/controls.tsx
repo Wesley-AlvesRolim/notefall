@@ -26,6 +26,7 @@ import {
   SliderTrack,
 } from 'react-aria-components'
 import clsx from 'clsx'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { defaultSettings, useStore, type Settings } from '../store'
 import { isAnimatableKey, resolveSettingsAt } from '../midi/settingsKeyframes'
@@ -273,6 +274,32 @@ function SliderContextMenu({
     }
   }, [mode])
 
+  // While this menu is open the page below the popover takes no pointer events, so a right-click on another bar would
+  // get the browser's menu. Hand it to the bar under the cursor instead: close this menu and replay the right-click there.
+  useEffect(() => {
+    const onContextMenu = (e: MouseEvent) => {
+      if (e.target instanceof Element && e.target.closest('[data-value-menu-popover]')) {
+        e.preventDefault()
+        return
+      }
+      // by geometry: while the popover is open the page below it doesn't take pointer events (elementsFromPoint misses it)
+      const host = [...document.querySelectorAll<HTMLElement>('[data-value-menu]')].find((el) => {
+        const r = el.getBoundingClientRect()
+        return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom
+      })
+      if (!host) return
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+      const { clientX, clientY } = e
+      requestAnimationFrame(() =>
+        host.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY })),
+      )
+    }
+    window.addEventListener('contextmenu', onContextMenu, true)
+    return () => window.removeEventListener('contextmenu', onContextMenu, true)
+  }, [onClose])
+
   const clamp = (v: number) => Math.max(min, Math.min(max, v))
   const commit = () => {
     const parsed = parseFloat(text)
@@ -310,11 +337,16 @@ function SliderContextMenu({
 
   return (
     <>
-      <span
-        ref={anchorRef}
-        aria-hidden
-        style={{ position: 'fixed', left: x, top: y, width: 0, height: 0, pointerEvents: 'none' }}
-      />
+      {/* Portalled out of the panel: its backdrop-filter makes it the containing block of `position: fixed`
+          children, which put the menu a panel-offset away from the cursor. */}
+      {createPortal(
+        <span
+          ref={anchorRef}
+          aria-hidden
+          style={{ position: 'fixed', left: x, top: y, width: 0, height: 0, pointerEvents: 'none' }}
+        />,
+        document.fullscreenElement ?? document.body,
+      )}
       <Popover
         triggerRef={anchorRef}
         isOpen
@@ -324,6 +356,7 @@ function SliderContextMenu({
         placement="bottom start"
         offset={2}
         className="rounded-[14px]"
+        data-value-menu-popover
       >
         {mode === 'menu' ? (
           <Menu aria-label={t('slider.value')} autoFocus="first" onAction={onAction}>
@@ -452,6 +485,7 @@ function useSliderTrackGestures({
       if (e.ctrlKey && latest.current.defaultValue !== undefined) return
       setMenu({ x: e.clientX, y: e.clientY })
     }
+    el.dataset.valueMenu = ''
     el.addEventListener('pointerdown', downHandler, true)
     el.addEventListener('contextmenu', ctxHandler)
     return () => {
