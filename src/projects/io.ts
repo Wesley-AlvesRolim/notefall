@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate'
 import { AUDIO_EXTENSIONS, isAudioName } from '../audio/userAudio'
+import { isSoundfontName, SOUNDFONT_EXTENSIONS } from '../audio/soundfont/store'
 import {
   PROJECT_FILE_DESCRIPTION,
   PROJECT_FILE_EXTENSION,
@@ -85,6 +86,7 @@ export function pack(project: Project): Blob {
   const userAudioRef = project.userAudio
     ? `user-audio${extFromAudioMime(project.userAudio.mime)}`
     : null
+  const soundfontRef = project.soundfont ? 'soundfont.sf2' : null
   const manifest: ProjectManifest = {
     appVersion: __APP_VERSION__,
     name: project.name,
@@ -116,6 +118,10 @@ export function pack(project: Project): Blob {
             fileName: project.userAudio.fileName,
           }
         : null,
+    soundfont:
+      project.soundfont && soundfontRef
+        ? { ref: soundfontRef, mime: 'audio/x-soundfont', fileName: project.soundfont.fileName }
+        : null,
     ...(project.noteHands && project.noteHands.length > 0 ? { noteHands: project.noteHands } : {}),
   }
   const files: Zippable = {
@@ -132,6 +138,9 @@ export function pack(project: Project): Blob {
   }
   if (project.userAudio && userAudioRef) {
     files[`assets/${userAudioRef}`] = new Uint8Array(project.userAudio.bytes)
+  }
+  if (project.soundfont && soundfontRef) {
+    files[`assets/${soundfontRef}`] = new Uint8Array(project.soundfont.bytes)
   }
   const zipped = zipSync(files)
   // Copy into a fresh ArrayBuffer so Blob's typing is satisfied regardless
@@ -226,6 +235,16 @@ export async function unpack(buf: ArrayBuffer): Promise<Project> {
     // timeline.
   }
 
+  let soundfont: Project['soundfont'] = null
+  if (manifest.soundfont) {
+    const sfBytes = files[`assets/${manifest.soundfont.ref}`]
+    if (sfBytes) {
+      soundfont = { bytes: detach(sfBytes), fileName: manifest.soundfont.fileName }
+    }
+    // Same lenient policy as the other assets: a missing SoundFont falls
+    // back to the built-in piano instead of failing the project.
+  }
+
   return {
     name: manifest.name,
     createdAt: manifest.createdAt,
@@ -235,6 +254,7 @@ export async function unpack(buf: ArrayBuffer): Promise<Project> {
     customTexture,
     stageBackground,
     userAudio,
+    soundfont,
     noteHands: Array.isArray(manifest.noteHands) ? manifest.noteHands : null,
   }
 }
@@ -271,9 +291,15 @@ const ACCEPT_TYPES = [
 // purely by the extension list.
 const OPEN_ACCEPT_TYPES = [
   {
-    description: 'notefall project, MIDI or audio',
+    description: 'notefall project, MIDI, audio or SoundFont',
     accept: {
-      [PICKER_MIME]: [PROJECT_FILE_EXTENSION, '.mid', '.midi', ...AUDIO_EXTENSIONS],
+      [PICKER_MIME]: [
+        PROJECT_FILE_EXTENSION,
+        '.mid',
+        '.midi',
+        ...AUDIO_EXTENSIONS,
+        ...SOUNDFONT_EXTENSIONS,
+      ],
     },
   },
 ]
@@ -298,7 +324,8 @@ export async function showOpen(): Promise<{ buf: ArrayBuffer; ref: FileRef } | n
     // MIDI / audio files don't get a write handle stored — there's no
     // Save path back to them, so a handle would be misleading. Project
     // files keep theirs for in-place Cmd+S.
-    const isProject = !isMidiName(file.name) && !isAudioName(file.name)
+    const isProject =
+      !isMidiName(file.name) && !isAudioName(file.name) && !isSoundfontName(file.name)
     return {
       buf: await file.arrayBuffer(),
       ref: { name: file.name, handle: isProject ? handle : null },
@@ -309,7 +336,7 @@ export async function showOpen(): Promise<{ buf: ArrayBuffer; ref: FileRef } | n
   return new Promise((resolve, reject) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = `${PROJECT_FILE_EXTENSION},.mid,.midi,audio/midi,audio/x-midi,${AUDIO_EXTENSIONS.join(',')}`
+    input.accept = `${PROJECT_FILE_EXTENSION},.mid,.midi,audio/midi,audio/x-midi,${AUDIO_EXTENSIONS.join(',')},${SOUNDFONT_EXTENSIONS.join(',')}`
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) {

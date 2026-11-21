@@ -1,3 +1,4 @@
+import type { PianoSource } from '../audio/pianoSource'
 import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
 import { VirtualClock, resetActiveClock, setActiveClock } from '../audio/clock'
@@ -45,6 +46,8 @@ export type VideoRenderOptions = {
    * `audio === null` (no audio track wanted).
    */
   userAudio?: UserAudioTrack | null
+  /** Sample set the audio track is rendered with. Default: the built-in piano. */
+  pianoSource?: PianoSource
   signal?: AbortSignal
   onProgress?: (p: VideoRenderProgress) => void
 }
@@ -76,7 +79,7 @@ export async function renderSongVideo(
   settings: Settings,
   options: VideoRenderOptions,
 ): Promise<Blob> {
-  const { codec, width, height, fps, videoBitrateKbps, audio, userAudio, signal, onProgress } = options
+  const { codec, width, height, fps, videoBitrateKbps, audio, userAudio, pianoSource, signal, onProgress } = options
   if (signal?.aborted) throw new VideoRenderAborted()
   const onAbort = () => new VideoRenderAborted()
 
@@ -151,6 +154,7 @@ export async function renderSongVideo(
           },
           signal,
           userAudio ?? null,
+          pianoSource,
         )
       : null
     // Attach a no-op rejection handler so an early abort doesn't

@@ -24,6 +24,7 @@ import {
   type VelocityCurve,
 } from './velocityCurve'
 import { DEFAULT_VELOCITY_COMPENSATION } from './salamanderDescriptor'
+import { SALAMANDER_SOURCE, type PianoSource } from './pianoSource'
 
 type ActiveNote = {
   id: number
@@ -209,6 +210,11 @@ export class AudioEngine {
   // sampler finishes loading) all share this single promise instead of
   // each kicking off their own ~60 MB sample download.
   private initPromise: Promise<void> | null = null
+  // Which sample set `init()` builds the piano from, and which one the
+  // current piano was actually built from (they differ while a swap is due).
+  private source: PianoSource = SALAMANDER_SOURCE
+  private pianoSource: PianoSource | null = null
+  private sourceGen = 0
 
   // ── User-provided accompaniment audio (WAV / MP3 / etc.) ──
   // The decoded buffer + sync offset + volume; the buffer is also used by
@@ -247,7 +253,9 @@ export class AudioEngine {
     if (this.initPromise) return this.initPromise
     this.initPromise = (async () => {
       try {
-        this.piano = await createPiano(undefined, onProgress)
+        const source = this.source
+        this.piano = await createPiano(undefined, onProgress, { source })
+        this.pianoSource = source
         this.piano.setVolume(this.effectiveSamplerVolume())
         this.piano.setReverbSize(this.reverbSize)
         this.piano.setReverbDecayTime(this.reverbDecayTime)
@@ -267,6 +275,30 @@ export class AudioEngine {
       }
     })()
     return this.initPromise
+  }
+
+  /**
+   * Change the piano's sample set. Before the first `init()` this only
+   * records the choice; once a piano exists it is released and rebuilt
+   * from the new source (every setting is replayed by `init()`), so the
+   * engine is not ready until the new samples are in. A later call
+   * supersedes an earlier one that is still loading.
+   */
+  async setInstrument(
+    source: PianoSource,
+    onProgress?: (p: LoadProgress) => void,
+  ): Promise<void> {
+    this.source = source
+    const gen = ++this.sourceGen
+    if (this.initPromise) await this.initPromise.catch(() => {})
+    if (gen !== this.sourceGen) return
+    const old = this.piano
+    if (!old || this.pianoSource === this.source) return
+    this.releaseAll()
+    this.piano = null
+    this.pianoSource = null
+    old.dispose()
+    await this.init(onProgress)
   }
 
   isReady(): boolean {

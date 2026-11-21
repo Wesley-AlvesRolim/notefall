@@ -59,6 +59,7 @@
     "couldNotLoadMidiTitle": "Não foi possível carregar o MIDI",
     "couldNotLoadMidiMessage": "Não foi possível interpretar \"{{name}}\".\n\n{{detail}}",
     "couldNotLoadAudioTitle": "Não foi possível carregar o áudio",
+    "couldNotLoadSoundfontTitle": "Não foi possível carregar o SoundFont",
     "unsupportedTitle": "Tipo de arquivo não suportado",
     "unsupportedMessage": "\"{{name}}\" não está em um formato suportado. Solte um projeto .nfz, um arquivo .mid / .midi ou um áudio .mp3 / .wav.",
     "title": "Solte para abrir",
@@ -94,6 +95,9 @@
     "couldNotLoadAudioTitle": "Não foi possível carregar o áudio",
     "couldNotLoadAudioMessage": "Não foi possível decodificar \"{{name}}\".\n\n{{detail}}",
     "notAudioFile": "\"{{name}}\" não é um arquivo de áudio. Escolha um arquivo MP3, WAV, OGG, M4A, AAC, FLAC ou WebM.",
+    "couldNotLoadSoundfontTitle": "Não foi possível carregar o SoundFont",
+    "couldNotLoadSoundfontMessage": "Não foi possível ler \"{{name}}\" como SoundFont.\n\n{{detail}}",
+    "notSoundfontFile": "\"{{name}}\" não é um SoundFont. Escolha um arquivo .sf2.",
     "somethingWentWrong": "Algo deu errado"
   },
   "feedback": {

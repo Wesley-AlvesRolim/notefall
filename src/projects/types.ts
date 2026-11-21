@@ -79,6 +79,12 @@ export type ProjectManifest = {
    * normal settings persistence path.
    */
   userAudio?: AssetRef | null
+  /**
+   * User-loaded SoundFont (`.sf2`) that replaces the built-in piano. The
+   * chosen preset lives in `settings.soundfontPreset`. Optional so older
+   * `.nfz` files load unchanged.
+   */
+  soundfont?: AssetRef | null
   /** Hand / finger assignments of the song's notes (see `midi/noteHands.ts`). Absent = none. */
   noteHands?: NoteHandEntry[]
 }
@@ -101,6 +107,8 @@ export type Project = {
   stageBackground: { bytes: ArrayBuffer; mime: string; fileName: string } | null
   /** Bytes of the user-provided accompaniment audio. null when not in use. */
   userAudio: { bytes: ArrayBuffer; mime: string; fileName: string } | null
+  /** Bytes of the user-loaded SoundFont. null when the built-in piano is used. */
+  soundfont: { bytes: ArrayBuffer; fileName: string } | null
   noteHands: NoteHandEntry[] | null
 }
 

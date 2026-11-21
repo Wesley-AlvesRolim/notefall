@@ -1,3 +1,4 @@
+import type { PianoSource } from '../../audio/pianoSource'
 import type { Settings } from '../../store'
 import { createPiano } from '../../audio/sampler'
 import { raceWithAbort } from '../async'
@@ -28,6 +29,7 @@ export async function loadOfflinePiano(
   gain: number,
   onProgress?: (p: AudioRenderProgress) => void,
   signal?: AbortSignal,
+  source?: PianoSource,
 ): Promise<OfflinePiano> {
   onProgress?.({ phase: 'loading', loaded: 0, total: 1 })
   // Race against the abort signal so Cancel is responsive even during
@@ -39,7 +41,7 @@ export async function loadOfflinePiano(
       (p) => {
         onProgress?.({ phase: 'loading', loaded: p.loaded, total: p.total })
       },
-      { offline: true },
+      { offline: true, source },
     ),
     signal,
     () => new AudioRenderAborted(),

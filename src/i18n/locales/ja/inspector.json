@@ -146,6 +146,16 @@
     "perNoteVariation": "ノートごとのばらつき",
     "contrast": "コントラスト"
   },
+  "soundfont": {
+    "title": "ピアノの音",
+    "builtIn": "内蔵グランドピアノ",
+    "loading": "サウンドフォントを読み込み中…",
+    "load": "サウンドフォントを読み込む…",
+    "replace": "置き換える…",
+    "remove": "削除",
+    "preset": "プリセット",
+    "loadErrorTitle": "サウンドフォントを読み込めませんでした"
+  },
   "backgroundImage": {
     "title": "背景画像",
     "selectColor": "背景色",

@@ -30,6 +30,7 @@ import {
 } from '../projects/actions'
 import { getRecent, subscribeRecent } from '../projects/recent'
 import { useUserAudio } from '../audio/userAudio'
+import { currentPianoSource } from '../audio/soundfont/sync'
 import { exportSongToWav } from '../export/exportAudio'
 import { playExportCompleteChime } from '../audio/exportChime'
 import {
@@ -369,11 +370,15 @@ export function Toolbar() {
             }
           : null
 
+      // The piano sound the session is using (a loaded SoundFont, or the built-in one).
+      const pianoSource = currentPianoSource()
+
       if (isAudioOnly) {
         const result = await exportSongToWav(song, useStore.getState().settings, {
           fileName,
           signal: abort.signal,
           userAudio: userAudioForExport,
+          pianoSource,
           onProgress: (p) => {
             if (p.phase === 'loading') {
               const fraction = p.total > 0 ? p.loaded / p.total : 0
@@ -416,6 +421,7 @@ export function Toolbar() {
           videoBitrateKbps,
           audio: includeAudio ? audioConfigFor(values.codec) : null,
           userAudio: includeAudio ? userAudioForExport : null,
+          pianoSource,
           fileName,
           signal: abort.signal,
           onProgress: (p) => {

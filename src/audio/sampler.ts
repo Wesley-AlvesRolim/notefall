@@ -5,6 +5,8 @@ import {
   velocityGroupVolumes,
 } from './salamanderDescriptor'
 import { createSampleStorage } from './sampleCache'
+import { SALAMANDER_SOURCE, type PianoSource } from './pianoSource'
+import { soundfontToPreset } from './soundfont/toPreset'
 import * as Tone from 'tone'
 
 /**
@@ -157,6 +159,8 @@ export type CreatePianoOptions = {
    * every note is dispatched immediately. The realtime engine leaves it off.
    */
   offline?: boolean
+  /** The sample set to play. Default: the built-in Salamander piano. */
+  source?: PianoSource
 }
 
 export async function createPiano(
@@ -269,13 +273,28 @@ export async function createPiano(
   // so the click-on-first-frame problem that older 4-layer piano
   // sets had doesn't apply here — we don't need a fade-in storage
   // wrapper.
-  const piano = await createVoiceEngine(context, {
-    preset: buildSalamanderDescriptor(SAMPLES_BASE_URL),
-    destination: masterGain,
-    storage: createSampleStorage(),
-    offline: options?.offline,
-    onProgress,
-  })
+  const source = options?.source ?? SALAMANDER_SOURCE
+  let piano
+  if (source.kind === 'sf2') {
+    // A SoundFont's samples are already in memory: build the buffers and
+    // the preset from them, with nothing to download.
+    const { preset, buffers } = soundfontToPreset(source.file, source.presetKey, context)
+    piano = await createVoiceEngine(context, {
+      preset,
+      buffers,
+      destination: masterGain,
+      offline: options?.offline,
+    })
+    onProgress?.({ loaded: 1, total: 1 })
+  } else {
+    piano = await createVoiceEngine(context, {
+      preset: buildSalamanderDescriptor(SAMPLES_BASE_URL),
+      destination: masterGain,
+      storage: createSampleStorage(),
+      offline: options?.offline,
+      onProgress,
+    })
+  }
 
   // Per-voice options applied at start time. Held as closure variables and
   // mutated by setters so changes reach subsequent notes without rebuilding
@@ -372,6 +391,9 @@ export async function createPiano(
       node.gain.setTargetAtTime(v, now, 0.02)
     },
     setVelocityCompensation(compensation) {
+      // The compensation is tuned to Salamander's 16 velocity layers; a
+      // SoundFont brings its own dynamics.
+      if (source.kind !== 'salamander') return
       const c = Math.max(0, Math.min(1, compensation))
       piano.setGroupVolumes(velocityGroupVolumes(c))
     },

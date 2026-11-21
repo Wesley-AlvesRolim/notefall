@@ -540,6 +540,10 @@ export type Settings = {
   userAudioOffsetSec: number
   // Linear gain on the user audio output (post-decode). 1 = unity.
   userAudioVolume: number
+  // Which preset of the loaded SoundFont (`bank:program`) plays the piano.
+  // null = the file's default (a piano if it has one). The file itself is a
+  // project asset (`audio/soundfont`), not a setting.
+  soundfontPreset: string | null
   // Sync offset for the MIDI track in seconds — the song's t=0 plays
   // at this many seconds into the timeline. Lets the user drag the
   // MIDI clip along the timeline like the audio clip. Negative values
@@ -782,6 +786,7 @@ export const defaultSettings: Settings = {
   transpose: 0,
   userAudioOffsetSec: 0,
   userAudioVolume: 1.0,
+  soundfontPreset: null,
   midiOffsetSec: 0,
   midiTrimStartSec: 0,
   midiTrimEndSec: null,
@@ -988,6 +993,8 @@ const RESET_PRESERVED_KEYS = [
   'userAudioOffsetSec',
   'userAudioTrimStartSec',
   'userAudioTrimEndSec',
+  // The loaded SoundFont's chosen preset (the file itself is a project asset)
+  'soundfontPreset',
   // Per-clip audio, controlled from the timeline lanes
   'userAudioVolume',
   'midiVolume',

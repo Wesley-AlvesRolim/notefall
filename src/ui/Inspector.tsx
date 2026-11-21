@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
 import { useStore, defaultSettings, type Settings } from '../store'
 import { audioEngine } from '../audio/engine'
+import { useSoundfont } from '../audio/soundfont/store'
+import { chosenPresetKey } from '../audio/soundfont/sync'
+import { pickAndImportSoundfont } from '../projects/actions'
 import {
   BoundColorRow,
   BoundSliderRow,
@@ -1205,6 +1208,74 @@ function TabPanel({ title, active, children }: { title: string; active: boolean;
 }
 
 
+/** The piano's sound: the built-in grand, or a SoundFont the user loaded (plus which of its presets plays). */
+function SoundfontControls() {
+  const { t } = useTranslation('inspector')
+  const fileName = useSoundfont((s) => s.fileName)
+  const file = useSoundfont((s) => s.file)
+  const loading = useSoundfont((s) => s.loading)
+  const error = useSoundfont((s) => s.error)
+  const clear = useSoundfont((s) => s.clear)
+  const chosen = useStore((s) => s.settings.soundfontPreset)
+
+  const pick = async () => {
+    const result = await pickAndImportSoundfont()
+    if (result.kind === 'error') {
+      await showAlert({
+        title: result.title ?? t('soundfont.loadErrorTitle'),
+        message: result.message,
+        tone: 'error',
+      })
+    }
+  }
+
+  return (
+    <>
+      <SearchableBlock label={t('soundfont.title')}>
+        <div className="grid gap-1.5">
+          <span className="select-none truncate text-ink-muted">{t('soundfont.title')}</span>
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate" title={fileName ?? undefined}>
+              {loading ? t('soundfont.loading') : (fileName ?? t('soundfont.builtIn'))}
+            </span>
+            <Button variant="quiet" size="sm" isDisabled={loading} onPress={() => void pick()}>
+              {fileName ? t('soundfont.replace') : t('soundfont.load')}
+            </Button>
+            {fileName && (
+              <Button variant="quiet" size="sm" isDisabled={loading} onPress={clear}>
+                {t('soundfont.remove')}
+              </Button>
+            )}
+          </div>
+          {error && <p className="text-caption text-danger">{error}</p>}
+        </div>
+      </SearchableBlock>
+      {file && file.presets.length > 1 && (
+        <SelectRow
+          label={t('soundfont.preset')}
+          value={chosenPresetKey(file, chosen)}
+          options={file.presets.map((p) => ({
+            value: p.key,
+            label: p.bank === 0 ? p.name : `${p.name} · ${p.bank}:${p.program}`,
+          }))}
+          onChange={(v) => atomicUpdate({ soundfontPreset: v })}
+          scopeKey="soundfontPreset"
+        />
+      )}
+    </>
+  )
+}
+
+/** Velocity compensation is tuned to the built-in piano's layers; a SoundFont brings its own dynamics. */
+function VelocityCompensationRow() {
+  const { t } = useTranslation('inspector')
+  const customSound = useSoundfont((s) => s.file !== null)
+  if (customSound) return null
+  return (
+    <BoundSliderRow label={t('row.velocityCompensation')} settingKey="velocityCompensation" min={0} max={1} step={0.05} />
+  )
+}
+
 /** Why the hands are missing, when their motion could not be loaded (progress shows in the loading island). */
 function HandsStatusLine() {
   const { t } = useTranslation('inspector')
@@ -1501,6 +1572,7 @@ function LookPanel({ leaving }: { leaving: boolean }) {
 
             <TabPanel title={t('tab.sound')} active={tab === 'sound'}>
               <Section title={t('section.audio')}>
+                <SoundfontControls />
                 <BoundSwitchRow label={t('row.pedalEnabled')} settingKey="pedalEnabled" />
                 <BoundSliderRow label={t('row.transpose')} settingKey="transpose" min={-24} max={24} step={1} />
                 <BoundSliderRow label={t('row.release')} settingKey="releaseTime" min={0.01} max={1.5} step={0.01} />
@@ -1508,7 +1580,7 @@ function LookPanel({ leaving }: { leaving: boolean }) {
                 <Detail id="audio">
                   <BoundSliderRow label={t('row.detune')} settingKey="samplerDetune" min={-100} max={100} step={1} />
                   <VelocityCurveEditor />
-                  <BoundSliderRow label={t('row.velocityCompensation')} settingKey="velocityCompensation" min={0} max={1} step={0.05} />
+                  <VelocityCompensationRow />
                 </Detail>
               </Section>
               <Section title={t('section.reverb')} enabledKey="reverbEnabled">

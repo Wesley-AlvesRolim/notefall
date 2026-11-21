@@ -146,6 +146,16 @@
     "perNoteVariation": "Variação por nota",
     "contrast": "Contraste"
   },
+  "soundfont": {
+    "title": "Som do piano",
+    "builtIn": "Piano de cauda integrado",
+    "loading": "Lendo o SoundFont…",
+    "load": "Carregar SoundFont…",
+    "replace": "Substituir…",
+    "remove": "Remover",
+    "preset": "Predefinição",
+    "loadErrorTitle": "Não foi possível carregar o SoundFont"
+  },
   "backgroundImage": {
     "title": "Imagem de fundo",
     "selectColor": "Cor de fundo",

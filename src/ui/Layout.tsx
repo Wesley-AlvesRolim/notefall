@@ -18,8 +18,10 @@ import { useStore } from '../store'
 import { audioEngine } from '../audio/engine'
 import { midiInput } from '../audio/midiInput'
 import { isAudioName, useUserAudio } from '../audio/userAudio'
+import { isSoundfontName } from '../audio/soundfont/store'
+import { startSoundfontSync } from '../audio/soundfont/sync'
 import { parseMidi } from '../midi/parse'
-import { importUserAudio, openProjectFromFile } from '../projects/actions'
+import { importSoundfont, importUserAudio, openProjectFromFile } from '../projects/actions'
 import { PROJECT_FILE_EXTENSION } from '../projects/types'
 import { showAlert } from './confirm'
 import { useGlobalShortcuts } from './useGlobalShortcuts'
@@ -195,6 +197,9 @@ export function Layout() {
 
   // User audio buffer is kept outside the main store (heavy AudioBuffer);
   // subscribe to it directly so Layout doesn't re-render on settings.
+  // The piano follows the loaded SoundFont (and its chosen preset).
+  useEffect(() => startSoundfontSync(), [])
+
   const userAudioBuffer = useUserAudio((s) => s.buffer)
   useEffect(() => {
     audioEngine.setUserAudio(userAudioBuffer)
@@ -281,6 +286,18 @@ export function Layout() {
           if (result.kind === 'error') {
             void showAlert({
               title: result.title ?? t('drop.couldNotLoadAudioTitle'),
+              message: result.message,
+              tone: 'error',
+            })
+          }
+          return
+        }
+        if (isSoundfontName(fileItem.name)) {
+          const file = await fileItem.getFile()
+          const result = await importSoundfont(file)
+          if (result.kind === 'error') {
+            void showAlert({
+              title: result.title ?? t('drop.couldNotLoadSoundfontTitle'),
               message: result.message,
               tone: 'error',
             })

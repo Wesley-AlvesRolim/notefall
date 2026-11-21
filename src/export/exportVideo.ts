@@ -1,3 +1,4 @@
+import type { PianoSource } from '../audio/pianoSource'
 import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
 import {
@@ -103,6 +104,8 @@ export type VideoExportOptions = {
   audio: AudioTrackConfig
   /** Optional accompaniment buffer mixed into the audio track. */
   userAudio?: UserAudioTrack | null
+  /** Sample set the audio track is rendered with. Default: the built-in piano. */
+  pianoSource?: PianoSource
   fileName?: string
   signal?: AbortSignal
   onProgress?: (p: VideoRenderProgress) => void
@@ -123,6 +126,7 @@ export async function exportSongToVideo(
     videoBitrateKbps: options.videoBitrateKbps,
     audio: options.audio,
     userAudio: options.userAudio ?? null,
+    pianoSource: options.pianoSource,
     signal: options.signal,
     onProgress: options.onProgress,
   }

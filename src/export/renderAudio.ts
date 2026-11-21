@@ -1,3 +1,4 @@
+import type { PianoSource } from '../audio/pianoSource'
 import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
 import { raceWithAbort } from './async'
@@ -32,6 +33,7 @@ export async function renderSongAudio(
   onProgress?: (p: AudioRenderProgress) => void,
   signal?: AbortSignal,
   userAudio?: UserAudioTrack | null,
+  pianoSource?: PianoSource,
 ): Promise<AudioBuffer> {
   if (signal?.aborted) throw new AudioRenderAborted()
   const timeline = computeExportTimeline(song, settings, userAudio ?? null)
@@ -58,7 +60,7 @@ export async function renderSongAudio(
   // faster, and audibly identical to the muted render.
   let piano: OfflinePiano | null = null
   if (samplerGain > 0) {
-    piano = await loadOfflinePiano(ctx, settings, samplerGain, onProgress, signal)
+    piano = await loadOfflinePiano(ctx, settings, samplerGain, onProgress, signal, pianoSource)
   } else {
     // Emit a synthetic "loaded" pulse so progress UI doesn't sit on
     // 0/1 — the modal's audio-fraction calculation expects to see

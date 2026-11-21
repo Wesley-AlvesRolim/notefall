@@ -1,4 +1,5 @@
 import { audioBufferToWav } from './wav'
+import type { PianoSource } from '../audio/pianoSource'
 import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
 import { AudioRenderAborted } from './errors'
@@ -28,6 +29,8 @@ export async function exportSongToWav(
     onProgress?: (p: AudioRenderProgress) => void
     signal?: AbortSignal
     userAudio?: UserAudioTrack | null
+    /** Sample set to render with. Default: the built-in piano. */
+    pianoSource?: PianoSource
   },
 ): Promise<AudioExportResult> {
   try {
@@ -38,6 +41,7 @@ export async function exportSongToWav(
       options?.onProgress,
       options?.signal,
       options?.userAudio ?? null,
+      options?.pianoSource,
     )
     if (options?.signal?.aborted) return { kind: 'cancelled' }
     const blob = audioBufferToWav(buffer)

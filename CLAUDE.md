@@ -7,6 +7,7 @@ Browser-based piano visualizer. Notes fall onto an 88-key keyboard while a MIDI 
 - Vite + React 18 + TypeScript
 - `@react-three/fiber` + `drei` + `@react-three/postprocessing` (Bloom)
 - `smplr` 1.x for sampled playback (Salamander Grand Piano V3 samples, served from R2), reached only through `audio/instrument/smplrBackend.ts`
+- `soundfont2` parses user `.sf2` files (lazy, only imported by `audio/soundfont/parser.ts`)
 - `@tonejs/midi` for parse/serialize; `tone` only for AudioContext lifecycle
 - `react-aria-components` + Tailwind for UI; `zustand` for state
 - IndexedDB for recordings; Web MIDI API for hardware input
@@ -72,6 +73,8 @@ Loads **Salamander Grand Piano V3** (close mic, CC-BY 3.0; 30 sampled keys × 16
 **smoothRelease vs smplr's release.** smplr 1.x's `Voice.stop` is `cancelScheduledValues(t)`, `linearRampToValueAtTime(levelAtT, t)`, `linearRampToValueAtTime(0, stopAt)`; `smoothRelease.ts` records a non-zero ramp target like a `setValueAtTime`, so that final ramp to 0 is still recognised (rerouted to an exponential `setTargetAtTime`, or captured by `holdRelease` for the half-pedal hold). Re-check this when upgrading smplr: if the sequence changes, releases turn linear and held voices stop at once, with no error.
 
 `createPiano(context, onProgress, options)` accepts any `BaseAudioContext` — the realtime engine passes Tone's `rawContext`, the offline exporter passes a fresh `OfflineAudioContext`. Same effect-chain wiring (master → 6-band EQ → split → dry / pre-delay → reverb → wet) is used in both paths so render parity is automatic.
+
+**User SoundFont** (`audio/soundfont/`). Sound tab → "Piano sound" loads an `.sf2` (picker, File → Open…, or a drop) in place of Salamander; the file is a project asset (`assets/soundfont.sf2`, kept in memory in `useSoundfont` like `useUserAudio`, restored by `applyOpenedProject`, cleared by New / by opening a project without one) and `settings.soundfontPreset` (`bank:program`, null = `defaultPresetKey`: a bank-0 program 0–7 piano, else the first) picks the preset (a Select when the file has more than one). `parser.ts` is the only file importing `soundfont2` and fills the app-owned `SoundfontFile` (generators resolved by name, address offsets summed); `toPreset.ts` turns one preset into an `InstrumentPreset` + decoded buffers — what smplr's own `sf2InstrumentToPreset` skips: velocity ranges, `overridingRootKey`, coarse / fine tune + `pitchCorrection` (cents), attenuation (cB → dB), `sampleModes` loop (1 / 3) with the loop address offsets, sample start offset, pan (stereo pairs arrive as panned mono zones) and the volume envelope (attack / hold / decay / sustain; the release stays the app's Release), instrument values overridden per zone over the global zone with the preset's generators added on top, and a 1.5 ms fade-in on every buffer. Not mapped: filter, LFOs / mod envelope, exclusive classes, scale tuning. `createPiano(…, { source })` takes a `PianoSource` (`pianoSource.ts`); velocity compensation applies to Salamander only. `AudioEngine.setInstrument(source)` records the choice until the piano has been built once (nothing loads before the first play / key press), then releases everything, disposes and rebuilds through `init()` (settings replayed), a later call superseding one still loading. `soundfont/sync.ts` (`startSoundfontSync`, mounted in `Layout`) drives it from the SoundFont store + `soundfontPreset` with the loading island meanwhile; a file that parses but can't be built is dropped with an alert, sending the piano back to Salamander. Exports pass `currentPianoSource()` through `renderSongAudio` / `renderSongVideo` → `loadOfflinePiano`.
 
 **FadeInStorage** is critical — smplr's `Voice` sets `envelope.gain.value = 1` instantly (no attack), so any sample whose first frame isn't zero clicks on attack. We intercept the storage layer, decode, apply 1.5 ms linear fade-in, re-encode WAV, hand back to smplr.
 
@@ -183,10 +186,12 @@ Per-key glow uses **reference-counted `held[]`** (not a flag) — back-to-back r
 ```
 my-project.nfz  (zip)
 ├ manifest.json   { appVersion, name, createdAt, updatedAt, settings,
-│                   songRef, customTexture: { ref, mime, fileName } | null }
+│                   songRef, customTexture: { ref, mime, fileName } | null,
+│                   soundfont?: { ref, mime, fileName } | null }
 └ assets/
    ├ song.mid
-   └ note-texture.<ext>
+   ├ note-texture.<ext>
+   └ soundfont.sf2   (optional: the user's piano SoundFont)
 ```
 Zip wrapper present from day 1 even with only `manifest.json`, so audio-sync (future) won't fork the format.
 

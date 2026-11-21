@@ -6,6 +6,7 @@ import { applyNoteHands, collectNoteHands } from '../midi/noteHands'
 import { useCustomTexture } from '../notes/customTexture'
 import { useStageBackground } from '../scene/stageBackground'
 import { AUDIO_EXTENSIONS, isAudioName, useUserAudio } from '../audio/userAudio'
+import { isSoundfontName, SOUNDFONT_EXTENSIONS, useSoundfont } from '../audio/soundfont/store'
 import { useStore } from '../store'
 import { track } from '../usage'
 import type { SongSource } from '../usage/events'
@@ -87,6 +88,7 @@ function buildProjectFromState(name: string): Project {
   const tex = useCustomTexture.getState()
   const background = useStageBackground.getState()
   const audio = useUserAudio.getState()
+  const sf = useSoundfont.getState()
   const now = Date.now()
   return {
     // User-edited project name takes precedence over the on-disk
@@ -127,6 +129,7 @@ function buildProjectFromState(name: string): Project {
             fileName: audio.fileName,
           }
         : null,
+    soundfont: sf.fileBytes && sf.fileName ? { bytes: sf.fileBytes, fileName: sf.fileName } : null,
   }
 }
 
@@ -276,6 +279,26 @@ async function applyOpenedProject(
     useUserAudio.getState().clearFromLoad()
   }
 
+  // The project's piano SoundFont. Cleared first so a corrupt one falls
+  // back to the built-in piano instead of keeping the previous project's.
+  useSoundfont.getState().clearFromLoad()
+  if (project.soundfont) {
+    void useSoundfont
+      .getState()
+      .setFromBytes(project.soundfont.bytes, project.soundfont.fileName)
+      .catch((e) => {
+        track('error_surfaced', { context: 'soundfont' })
+        void showAlert({
+          title: i18n.t('dialogs:actions.couldNotLoadSoundfontTitle'),
+          message: i18n.t('dialogs:actions.couldNotLoadSoundfontMessage', {
+            name: project.soundfont?.fileName ?? '',
+            detail: describeError(e),
+          }),
+          tone: 'error',
+        })
+      })
+  }
+
   // Move-to-top in the recents list. No-op on browsers without FSA
   // (ref.handle === null), see `recent.ts`. Skipped entirely for demo
   // loads (ref === null) — bundled demos aren't user files and
@@ -311,6 +334,10 @@ export async function openProject(): Promise<ActionResult> {
   // therefore runs after the pick (we only know the type then).
   if (isAudioName(opened.ref.name)) {
     return importUserAudio(new File([opened.buf], opened.ref.name))
+  }
+  // A SoundFont likewise changes only the piano's sound, not the session.
+  if (isSoundfontName(opened.ref.name)) {
+    return importSoundfont(new File([opened.buf], opened.ref.name))
   }
 
   const proceed = await confirmDiscardIfDirty(
@@ -497,6 +524,8 @@ export async function newProject(): Promise<ActionResult> {
   // Same for accompaniment audio — a fresh project starts with no
   // user audio attached.
   useUserAudio.getState().clearFromLoad()
+  // And the piano goes back to the built-in one.
+  useSoundfont.getState().clearFromLoad()
   track('project_new')
   return { kind: 'ok' }
 }
@@ -527,6 +556,49 @@ export async function pickAndImportUserAudio(): Promise<ActionResult> {
   })
   if (!file) return { kind: 'cancelled' }
   return importUserAudio(file)
+}
+
+/** Pick a `.sf2` file and use it as the piano sound. Same picker approach as `pickAndImportUserAudio`. */
+export async function pickAndImportSoundfont(): Promise<ActionResult> {
+  const file = await new Promise<File | null>((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = SOUNDFONT_EXTENSIONS.join(',')
+    input.onchange = () => resolve(input.files?.[0] ?? null)
+    input.click()
+  })
+  if (!file) return { kind: 'cancelled' }
+  return importSoundfont(file)
+}
+
+/**
+ * Use a SoundFont as the piano sound. Like audio it changes only the
+ * session's sound, so it skips the discard prompt; the project is marked
+ * dirty. The engine picks it up through `soundfont/sync.ts`.
+ */
+export async function importSoundfont(file: File): Promise<ActionResult> {
+  if (!isSoundfontName(file.name)) {
+    return {
+      kind: 'error',
+      title: i18n.t('dialogs:actions.couldNotLoadSoundfontTitle'),
+      message: i18n.t('dialogs:actions.notSoundfontFile', { name: file.name }),
+    }
+  }
+  try {
+    await useSoundfont.getState().setFromFile(file)
+  } catch (e) {
+    track('error_surfaced', { context: 'import_soundfont' })
+    return {
+      kind: 'error',
+      title: i18n.t('dialogs:actions.couldNotLoadSoundfontTitle'),
+      message: i18n.t('dialogs:actions.couldNotLoadSoundfontMessage', {
+        name: file.name,
+        detail: describeError(e),
+      }),
+    }
+  }
+  track('soundfont_imported')
+  return { kind: 'ok' }
 }
 
 export async function importUserAudio(file: File): Promise<ActionResult> {

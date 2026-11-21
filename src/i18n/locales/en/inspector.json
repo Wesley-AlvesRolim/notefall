@@ -146,6 +146,16 @@
     "perNoteVariation": "Per-note variation",
     "contrast": "Contrast"
   },
+  "soundfont": {
+    "title": "Piano sound",
+    "builtIn": "Built-in grand piano",
+    "loading": "Reading SoundFont…",
+    "load": "Load SoundFont…",
+    "replace": "Replace…",
+    "remove": "Remove",
+    "preset": "Preset",
+    "loadErrorTitle": "Could not load SoundFont"
+  },
   "backgroundImage": {
     "title": "Background image",
     "selectColor": "Background color",

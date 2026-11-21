@@ -59,6 +59,7 @@
     "couldNotLoadMidiTitle": "MIDIを読み込めませんでした",
     "couldNotLoadMidiMessage": "「{{name}}」を解析できませんでした。\n\n{{detail}}",
     "couldNotLoadAudioTitle": "音声を読み込めませんでした",
+    "couldNotLoadSoundfontTitle": "サウンドフォントを読み込めませんでした",
     "unsupportedTitle": "未対応のファイル形式です",
     "unsupportedMessage": "「{{name}}」は対応していない形式です。.nfz プロジェクト、.mid / .midi、または .mp3 / .wav の音声ファイルをドロップしてください。",
     "title": "ドロップして開く",
@@ -94,6 +95,9 @@
     "couldNotLoadAudioTitle": "音声を読み込めませんでした",
     "couldNotLoadAudioMessage": "「{{name}}」をデコードできませんでした。\n\n{{detail}}",
     "notAudioFile": "「{{name}}」はオーディオファイルではありません。MP3・WAV・OGG・M4A・AAC・FLAC・WebM のファイルを選んでください。",
+    "couldNotLoadSoundfontTitle": "サウンドフォントを読み込めませんでした",
+    "couldNotLoadSoundfontMessage": "「{{name}}」をサウンドフォントとして読み込めませんでした。\n\n{{detail}}",
+    "notSoundfontFile": "「{{name}}」はサウンドフォントではありません。.sf2 ファイルを選んでください。",
     "somethingWentWrong": "問題が発生しました"
   },
   "feedback": {
