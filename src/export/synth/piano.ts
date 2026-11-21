@@ -1,4 +1,3 @@
-import { Scheduler } from 'smplr'
 import type { Settings } from '../../store'
 import { createPiano } from '../../audio/sampler'
 import { raceWithAbort } from '../async'
@@ -40,9 +39,7 @@ export async function loadOfflinePiano(
       (p) => {
         onProgress?.({ phase: 'loading', loaded: p.loaded, total: p.total })
       },
-      {
-        scheduler: new Scheduler(ctx, { lookaheadMs: Number.POSITIVE_INFINITY }),
-      },
+      { offline: true },
     ),
     signal,
     () => new AudioRenderAborted(),

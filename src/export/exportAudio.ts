@@ -1,4 +1,4 @@
-import { audioBufferToWav } from 'smplr'
+import { audioBufferToWav } from './wav'
 import type { ParsedSong } from '../midi/types'
 import type { Settings } from '../store'
 import { AudioRenderAborted } from './errors'

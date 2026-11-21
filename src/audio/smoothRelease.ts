@@ -4,11 +4,15 @@
  *
  * Why this exists:
  *
- *   smplr's `Voice.stop` runs this exact sequence to fade a voice:
+ *   smplr's `Voice.stop` (1.x) runs this exact sequence to fade a voice:
  *
  *     envelope.gain.cancelScheduledValues(t)
- *     envelope.gain.setValueAtTime(1, t)
+ *     envelope.gain.linearRampToValueAtTime(levelAtT, t)
  *     envelope.gain.linearRampToValueAtTime(0, stopAt)
+ *
+ *   (0.x set the starting level with `setValueAtTime(1, t)` instead; a
+ *   non-zero ramp target is recorded the same way as a `setValueAtTime`
+ *   so both sequences are recognised.)
  *
  *   The linear ramp from 1 → 0 in dB-domain looks abrupt: a linear
  *   amplitude curve drops 6 dB only after half the duration, then
@@ -20,12 +24,12 @@
  *
  *   This module patches `AudioParam.prototype.linearRampToValueAtTime`
  *   so that **only when the target is exactly 0 and a non-zero
- *   `setValueAtTime` happened earlier on the same param**, the call
- *   is rerouted to `setTargetAtTime(0, startTime, duration/5)` — an
+ *   `setValueAtTime` (or non-zero ramp) happened earlier on the same
+ *   param**, the call is rerouted to `setTargetAtTime(0, startTime, duration/5)` — an
  *   exponential approach that hits ~0.7 % gain (effectively silent)
  *   by `endTime` and trails off naturally past that.
  *
- *   The guard "target === 0 AND last setValueAtTime > 0" is specific
+ *   The guard "target === 0 AND last set value / ramp > 0" is specific
  *   enough to match smplr's release pattern without breaking other
  *   `linearRampToValueAtTime(0, …)` users (we don't have any
  *   ourselves — `exportChime` ramps to a non-zero peak then uses
@@ -61,7 +65,11 @@ function install(): void {
     value: number,
     endTime: number,
   ) {
-    if (value === 0) {
+    if (value > 0) {
+      // A non-zero ramp leaves the param at `value` from `endTime` on, so it
+      // starts a release just like a `setValueAtTime` does.
+      lastSetValue.set(this, { value, time: endTime })
+    } else if (value === 0) {
       const last = lastSetValue.get(this)
       if (last && last.value > 0 && endTime > last.time) {
         // Inside `holdRelease`: hand the envelope to the caller instead.

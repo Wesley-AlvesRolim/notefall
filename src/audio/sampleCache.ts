@@ -1,4 +1,4 @@
-import { HttpStorage, type Storage, type StorageResponse } from 'smplr'
+import type { SampleResponse, SampleStorage } from './instrument/types'
 
 /**
  * Persistent on-disk sample cache backed by the Cache Storage API.
@@ -14,7 +14,7 @@ import { HttpStorage, type Storage, type StorageResponse } from 'smplr'
  * Versioned cache name (`v2` and up) lets us invalidate on a code
  * deploy if we discover poisoned caches from older builds.
  *
- * Falls back to plain HttpStorage if Cache Storage isn't available
+ * Falls back to a plain `fetch` if Cache Storage isn't available
  * (e.g. third-party iframe, very old browser).
  */
 
@@ -51,10 +51,10 @@ let loggedMiss = false
  * to `cache.put` worked in Chrome but failed silently in some
  * other browsers, leaving the cache permanently empty.
  */
-class StatusFilteredCacheStorage implements Storage {
+class StatusFilteredCacheStorage implements SampleStorage {
   constructor(private readonly cacheName: string) {}
 
-  async fetch(url: string): Promise<StorageResponse> {
+  async fetch(url: string): Promise<SampleResponse> {
     const cache = isSampleCacheAvailable()
       ? await caches.open(this.cacheName).catch(() => null)
       : null
@@ -98,10 +98,10 @@ class StatusFilteredCacheStorage implements Storage {
   }
 }
 
-/** Returns the Cache Storage-backed Storage for use with smplr's Smplr
- *  constructor, or the plain HttpStorage fallback. */
-export function createSampleStorage(): Storage {
-  if (!isSampleCacheAvailable()) return HttpStorage
+/** Returns the Cache Storage-backed sample storage, or a plain `fetch`
+ *  when Cache Storage isn't available. */
+export function createSampleStorage(): SampleStorage {
+  if (!isSampleCacheAvailable()) return { fetch: (url) => fetch(url) }
   // Best-effort cleanup of older cache versions so they don't
   // silently consume disk forever. Fire-and-forget.
   void purgeLegacyCaches()
@@ -153,6 +153,3 @@ export async function clearSampleCache(): Promise<void> {
     }
   }
 }
-
-/** Re-export StorageResponse so callers don't need to import smplr directly. */
-export type { StorageResponse }

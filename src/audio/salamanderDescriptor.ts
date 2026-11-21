@@ -1,7 +1,7 @@
-import type { SmplrGroup, SmplrJson, SmplrRegion } from 'smplr'
+import type { InstrumentPreset, PresetGroup, PresetRegion } from './instrument/types'
 
 /**
- * Builds a `SmplrJson` descriptor for Salamander Grand Piano V3
+ * Builds an `InstrumentPreset` for Salamander Grand Piano V3
  * (Alexander Holm, CC-BY 3.0), close-mic position only.
  *
  * The original release ships as SFZ + OGG samples; we encode the same
@@ -22,12 +22,12 @@ import type { SmplrGroup, SmplrJson, SmplrRegion } from 'smplr'
  *     the one-time ~77 MB download invisible on subsequent loads.
  *
  * Velocity compensation. smplr applies `(v/127)^2` gain to every
- * voice (see `midiVelToGain` in smplr/dist/index.js) AND uses the
+ * voice (its `midiVelToGain`) AND uses the
  * same velocity to pick the velocity layer. Salamander's 16 layers
  * are already pre-recorded at velocity-appropriate dynamic levels —
  * the quadratic gain compounds on top, so soft layers come out far
- * too quiet. smplr ignores SFZ-style `ampVelCurve` at playback time,
- * so the only lever we have is per-group `volume` (dB). We add a
+ * too quiet. smplr has no velocity-curve setting, so the only lever
+ * we have is per-group `volume` (dB). We add a
  * positive dB offset to each layer that cancels HALF of smplr's
  * quadratic attenuation at the layer's centre velocity (equivalent
  * to SFZ `amp_veltrack ≈ 50`). The recorded per-layer amplitudes
@@ -100,8 +100,8 @@ function computeKeyRanges(): Array<{
 
 /**
  * Default value used to seed a new piano build. Changes at runtime go
- * through `setGroupVolumeCompensation` which mutates the live
- * descriptor (smplr re-reads `group.volume` on every `start()`).
+ * through `velocityGroupVolumes` + `SampleVoiceEngine.setGroupVolumes`
+ * (smplr re-reads `group.volume` on every `start()`).
  */
 export const DEFAULT_VELOCITY_COMPENSATION = 0.80
 
@@ -123,9 +123,9 @@ function computeLayerVolumeDb(layer: number, compensation: number): number {
 export function buildSalamanderDescriptor(
   baseUrl: string,
   compensation: number = DEFAULT_VELOCITY_COMPENSATION,
-): SmplrJson {
+): InstrumentPreset {
   const keyRanges = computeKeyRanges()
-  const groups: SmplrGroup[] = []
+  const groups: PresetGroup[] = []
   for (let layer = 1; layer <= VELOCITY_LAYERS; layer++) {
     // Evenly partition velocity 1..127 across the 16 layers.
     // smplr's velRange is inclusive at both ends.
@@ -137,7 +137,7 @@ export function buildSalamanderDescriptor(
     // and leave the in-between semitones silent. `pitch` tells smplr
     // what native pitch the buffer was recorded at so the pitch-
     // shift for keys inside `keyRange` is computed correctly.
-    const regions: SmplrRegion[] = keyRanges.map((k) => ({
+    const regions: PresetRegion[] = keyRanges.map((k) => ({
       sample: `${k.name}v${layer}`,
       pitch: k.midi,
       keyRange: k.range,
@@ -149,11 +149,9 @@ export function buildSalamanderDescriptor(
     })
   }
   return {
-    meta: {
-      name: 'Salamander Grand Piano V3 (close)',
-      license: 'CC-BY 3.0',
-      source: 'https://github.com/sgossner/Salamander-Grand-Piano',
-    },
+    name: 'Salamander Grand Piano V3 (close)',
+    license: 'CC-BY 3.0',
+    source: 'https://github.com/sgossner/Salamander-Grand-Piano',
     samples: {
       baseUrl,
       formats: ['ogg'],
@@ -163,18 +161,13 @@ export function buildSalamanderDescriptor(
 }
 
 /**
- * Mutate the per-group `volume` of an already-built descriptor.
- * smplr's `RegionMatcher` keeps each group by reference (`groupRef`),
- * and `Smplr.start()` calls `resolveParams` which re-reads
- * `group.volume` on every voice, so subsequent notes pick up the new
- * value without reloading samples or reconstructing the instrument.
- * Currently-sounding voices keep their previously-set gain.
+ * The per-group `volume` (dB) for every velocity layer at a compensation
+ * level, in group order (the order `buildSalamanderDescriptor` emits).
  */
-export function applyVelocityCompensation(
-  descriptor: SmplrJson,
-  compensation: number,
-): void {
-  for (let i = 0; i < descriptor.groups.length; i++) {
-    descriptor.groups[i].volume = computeLayerVolumeDb(i + 1, compensation)
+export function velocityGroupVolumes(compensation: number): number[] {
+  const out: number[] = []
+  for (let layer = 1; layer <= VELOCITY_LAYERS; layer++) {
+    out.push(computeLayerVolumeDb(layer, compensation))
   }
+  return out
 }

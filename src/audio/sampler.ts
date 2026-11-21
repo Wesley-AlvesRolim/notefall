@@ -1,18 +1,9 @@
+import { createVoiceEngine } from './instrument/smplrBackend'
+import type { LoadProgress, VoiceStop } from './instrument/types'
 import {
-  Smplr,
-  Scheduler,
-  type StopFn,
-} from 'smplr'
-import {
-  applyVelocityCompensation,
   buildSalamanderDescriptor,
+  velocityGroupVolumes,
 } from './salamanderDescriptor'
-// Side-effect import: patches AudioParam.prototype.linearRampToValueAtTime
-// so smplr's hardcoded linear release becomes an exponential decay.
-// MUST be imported before any Smplr instance is created; placing it
-// here (top of sampler.ts) guarantees that since createPiano is the
-// only construction site.
-import './smoothRelease'
 import { createSampleStorage } from './sampleCache'
 import * as Tone from 'tone'
 
@@ -43,17 +34,17 @@ const SAMPLES_BASE_URL =
     ? '/samples-cdn/salamander-v3-close'
     : 'https://samples.notefall.app/salamander-v3-close')
 
-export type LoadProgress = { loaded: number; total: number }
+export type { LoadProgress }
 
 export type PianoInstrument = {
   readonly context: BaseAudioContext
   /**
    * Schedule a note. `atAudioTime` is in the AudioContext clock; default = now.
-   * `stopId` should be unique per voice so the returned StopFn only stops THIS
-   * voice — smplr's default stopId is the midi number, which makes
+   * `stopId` should be unique per voice so the returned stop only ends THIS
+   * voice — the default stopId is the midi number, which makes
    * back-to-back notes of the same pitch interfere with each other.
    */
-  start(midi: number, velocity: number, atAudioTime?: number, stopId?: string): StopFn
+  start(midi: number, velocity: number, atAudioTime?: number, stopId?: string): VoiceStop
   stopAll(): void
   /** Master output gain. Linear scale: 0 = silent, 1 = unity, >1 = boost. */
   setVolume(value: number): void
@@ -85,8 +76,7 @@ export type PianoInstrument = {
    * bass register so chords don't muddy. */
   setReverbLowCut(hz: number): void
   /**
-   * Release/decay time applied when a held note is stopped. Maps to smplr's
-   * `decayTime` start option. Smaller values = sharper cutoff; larger = the
+   * Release/decay time applied when a held note is stopped. Smaller values = sharper cutoff; larger = the
    * note rings out longer. Affects all notes triggered after the call.
    */
   setReleaseTime(seconds: number): void
@@ -96,10 +86,10 @@ export type PianoInstrument = {
    * low → high; see EQ_BAND_FREQUENCIES for centers. */
   setEqBand(index: number, db: number): void
   /**
-   * Adjust how much of smplr's built-in quadratic velocity-to-gain
+   * Adjust how much of the sampler's built-in quadratic velocity-to-gain
    * curve we cancel out via the per-layer group `volume`. See
-   * `salamanderDescriptor.applyVelocityCompensation`. 0 = leave
-   * smplr's default attenuation in place; 1 = neutralise it
+   * `salamanderDescriptor.velocityGroupVolumes`. 0 = leave
+   * the default attenuation in place; 1 = neutralise it
    * entirely. Changes apply to subsequent voices only.
    */
   setVelocityCompensation(compensation: number): void
@@ -161,17 +151,12 @@ export function createImpulseResponse(
  */
 export type CreatePianoOptions = {
   /**
-   * Override smplr's note Scheduler. The default `Scheduler` polls a
-   * `setInterval` to dispatch queued events whose time exceeds the
-   * lookahead window (~100 ms by default) — dead in an
-   * `OfflineAudioContext`, where `currentTime` jumps from 0 to the
-   * buffer length over a single `startRendering()` call and the
-   * interval never gets to fire. Pass a Scheduler with a very large
-   * `lookaheadMs` (e.g. `Number.POSITIVE_INFINITY`) so EVERY scheduled
-   * event satisfies the synchronous-dispatch branch of `schedule()`.
-   * The realtime engine leaves this undefined and gets the default.
+   * Build for an `OfflineAudioContext`. Its `currentTime` jumps from 0 to
+   * the buffer length over one `startRendering()` call, so the timer that
+   * normally dispatches queued notes never gets to fire; with this set,
+   * every note is dispatched immediately. The realtime engine leaves it off.
    */
-  scheduler?: Scheduler
+  offline?: boolean
 }
 
 export async function createPiano(
@@ -280,32 +265,17 @@ export async function createPiano(
   hiCut.connect(wetGain)
   wetGain.connect(context.destination)
 
-  // smplr's signature is typed against AudioContext, but it only calls
-  // BaseAudioContext APIs (AudioBufferSourceNode, GainNode). The cast lets
-  // us share createPiano between the realtime engine and the offline
-  // exporter without duplicating the effect-chain wiring.
-  //
   // Salamander samples are pro-recorded with a zero-amplitude head,
   // so the click-on-first-frame problem that older 4-layer piano
   // sets had doesn't apply here — we don't need a fade-in storage
   // wrapper.
-  // Hold a reference to the descriptor so `setVelocityCompensation`
-  // can mutate per-group `volume` later — smplr re-reads these on
-  // every `piano.start()` (RegionMatcher stores `groupRef`).
-  const descriptor = buildSalamanderDescriptor(SAMPLES_BASE_URL)
-  const piano = new Smplr(
-    context as AudioContext,
-    descriptor,
-    {
-      destination: masterGain,
-      storage: createSampleStorage(),
-      velocity: 100,
-      scheduler: options?.scheduler,
-      onLoadProgress: (p) =>
-        onProgress?.({ loaded: p.loaded, total: p.total }),
-    },
-  )
-  await piano.load
+  const piano = await createVoiceEngine(context, {
+    preset: buildSalamanderDescriptor(SAMPLES_BASE_URL),
+    destination: masterGain,
+    storage: createSampleStorage(),
+    offline: options?.offline,
+    onProgress,
+  })
 
   // Per-voice options applied at start time. Held as closure variables and
   // mutated by setters so changes reach subsequent notes without rebuilding
@@ -322,18 +292,16 @@ export async function createPiano(
     context,
     start(midi, velocity, atAudioTime, stopId) {
       return piano.start({
-        note: midi,
+        midi,
         velocity: Math.max(1, Math.min(127, Math.round(velocity * 127))),
         time: atAudioTime,
         stopId,
-        // Per-note release. smplr's NoteEvent.ampRelease maps to the voice's
-        // amplitude envelope release time (seconds).
-        ampRelease: releaseTime,
+        release: releaseTime,
         detune: detuneCents,
       })
     },
     stopAll() {
-      piano.stop()
+      piano.stopAll()
     },
     setVolume(value) {
       // Clamp to non-negative; >1 is allowed for boost (caller's choice).
@@ -405,7 +373,7 @@ export async function createPiano(
     },
     setVelocityCompensation(compensation) {
       const c = Math.max(0, Math.min(1, compensation))
-      applyVelocityCompensation(descriptor, c)
+      piano.setGroupVolumes(velocityGroupVolumes(c))
     },
     dispose() {
       if (disposed) return
@@ -427,7 +395,7 @@ export async function createPiano(
         }
       }
       try {
-        piano.disconnect()
+        piano.dispose()
       } catch {
         /* ignore */
       }
